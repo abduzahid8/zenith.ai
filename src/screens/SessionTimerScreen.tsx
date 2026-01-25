@@ -54,7 +54,16 @@ const TaskProgressIcon = ({ number }: { number: number }) => (
 export const SessionTimerScreen: React.FC = () => {
     const router = useRouter();
     const [streakDays] = useState(4);
-    const [activeView, setActiveView] = useState<'timer' | 'list' | 'ai-chat'>('timer');
+    const [activeView, setActiveView] = useState<'timer' | 'list' | 'ai-chat' | 'summary'>('timer');
+
+    useEffect(() => {
+        Animated.timing(toggleAnim, {
+            toValue: activeView === 'timer' ? 0 : 1,
+            duration: 300,
+            useNativeDriver: true,
+            easing: (t) => t * (2 - t), // easeOutQuad
+        }).start();
+    }, [activeView]);
 
     // Helper to switch to AI Chat with animation
     const handleAICoachClick = () => {
@@ -85,7 +94,12 @@ export const SessionTimerScreen: React.FC = () => {
 
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const progressAnim = useRef(new Animated.Value(1)).current;
+    const toggleAnim = useRef(new Animated.Value(0)).current; // 0 = timer, 1 = list
     const [progressValue, setProgressValue] = useState(1);
+
+    // Animation values for flying buttons
+    const task1Anim = useRef(new Animated.Value(0)).current; // 0 = hidden/start pos, 1 = visible/end pos
+    const task2Anim = useRef(new Animated.Value(0)).current;
 
     // Circle config
     const size = scale(310);
@@ -103,6 +117,30 @@ export const SessionTimerScreen: React.FC = () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
     }, []);
+
+    // Effect to trigger animations when summary expands
+    useEffect(() => {
+        if (isSummaryExpanded) {
+            // Reset to 0 first just in case
+            task1Anim.setValue(0);
+            task2Anim.setValue(0);
+
+            Animated.stagger(150, [
+                Animated.spring(task1Anim, {
+                    toValue: 1,
+                    friction: 6,
+                    tension: 50,
+                    useNativeDriver: true,
+                }),
+                Animated.spring(task2Anim, {
+                    toValue: 1,
+                    friction: 6,
+                    tension: 50,
+                    useNativeDriver: true,
+                })
+            ]).start();
+        }
+    }, [isSummaryExpanded]);
 
     // Calculate strokeDashoffset based on progress
     const strokeDashoffset = circumference * (1 - progressValue);
@@ -166,9 +204,9 @@ export const SessionTimerScreen: React.FC = () => {
         if (intervalRef.current) clearInterval(intervalRef.current);
         progressAnim.stopAnimation();
 
-        // Show second picture page (List View)
+        // Show Summary View
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setActiveView('list');
+        setActiveView('summary');
         setIsSummaryExpanded(true);
     };
 
@@ -201,46 +239,64 @@ export const SessionTimerScreen: React.FC = () => {
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <Text style={styles.fireIcon}>🔥</Text>
                     </View>
+                    <TouchableOpacity onPress={handleAICoachClick} style={{ padding: scale(4) }}>
+                        <MaterialCommunityIcons name="lightbulb-on-outline" size={scale(24)} color="#000" />
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.menuButton}>
                         <Feather name="menu" size={scale(24)} color="#000" />
                     </TouchableOpacity>
                 </View>
             </View>
 
-            {/* Toggles Row - Common */}
-            <View style={styles.togglesRow}>
-                <TouchableOpacity
-                    style={[
-                        styles.toggleButton,
-                        { backgroundColor: activeView === 'timer' ? COLORS.toggleActiveBg : COLORS.toggleInactiveBg }
-                    ]}
-                    onPress={() => setActiveView('timer')}
-                >
-                    <MaterialCommunityIcons
-                        name="clock-outline"
-                        size={scale(32)}
-                        color={COLORS.iconBlack}
-                    />
-                </TouchableOpacity>
+            {/* Toggles Row - Common (Hidden in Summary) */}
+            {activeView !== 'summary' && (
+                <View style={styles.togglesRow}>
+                    <View style={{ flexDirection: 'row', gap: scale(20), position: 'relative' }}>
+                        {/* Sliding Indicator */}
+                        {hasStarted && (
+                            <Animated.View
+                                style={[
+                                    styles.slidingIndicator,
+                                    {
+                                        transform: [{
+                                            translateX: toggleAnim.interpolate({
+                                                inputRange: [0, 1],
+                                                outputRange: [0, scale(95)] // 75 + 20
+                                            })
+                                        }]
+                                    }
+                                ]}
+                            />
+                        )}
 
-                {/* List Toggle - Only visible after start */}
-                {hasStarted && (
-                    <TouchableOpacity
-                        style={[
-                            styles.toggleButton,
-                            { backgroundColor: activeView === 'list' ? COLORS.toggleActiveBg : COLORS.toggleInactiveBg }
-                        ]}
-                        onPress={() => setActiveView('list')}
-                    >
-                        <MaterialCommunityIcons
-                            // Updated icon to match screenshot (List with checks)
-                            name="format-list-checks"
-                            size={scale(32)}
-                            color={COLORS.iconBlack}
-                        />
-                    </TouchableOpacity>
-                )}
-            </View>
+                        <TouchableOpacity
+                            style={[styles.toggleButton, { backgroundColor: hasStarted ? 'transparent' : (activeView === 'timer' ? COLORS.toggleActiveBg : COLORS.toggleInactiveBg) }]}
+                            onPress={() => setActiveView('timer')}
+                        >
+                            <MaterialCommunityIcons
+                                name="clock-outline"
+                                size={scale(32)}
+                                color={COLORS.iconBlack}
+                            />
+                        </TouchableOpacity>
+
+                        {/* List Toggle - Only visible after start */}
+                        {hasStarted && (
+                            <TouchableOpacity
+                                style={[styles.toggleButton, { backgroundColor: 'transparent' }]}
+                                onPress={() => setActiveView('list')}
+                            >
+                                <MaterialCommunityIcons
+                                    // Updated icon to match screenshot (List with checks)
+                                    name="format-list-checks"
+                                    size={scale(32)}
+                                    color={COLORS.iconBlack}
+                                />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+            )}
 
             {activeView === 'timer' ? (
                 /* Timer View Logic */
@@ -315,39 +371,7 @@ export const SessionTimerScreen: React.FC = () => {
                 /* Summary / List View */
                 <View style={styles.listContainer}>
                     {/* Buttons 3 & 4 (Top Row) */}
-                    <View style={styles.listControlRow}>
-                        <View style={{ height: scale(50), width: activeView === 'list' ? scale(240) : scale(70) }}>
-                            <TouchableOpacity
-                                style={[
-                                    styles.thirdButtonNew,
-                                    {
-                                        width: '100%',
-                                        backgroundColor: activeView === 'list' ? '#C2C2C2' : '#E2E2E2'
-                                    }
-                                ]}
-                                onPress={handleListClick}
-                                activeOpacity={0.8}
-                            >
-                                <MaterialCommunityIcons name="format-list-checks" size={scale(24)} color="#000" />
-                            </TouchableOpacity>
-                        </View>
 
-                        <View style={{ height: scale(50), width: activeView === 'ai-chat' ? scale(240) : scale(70) }}>
-                            <TouchableOpacity
-                                style={[
-                                    styles.fourthButtonNew,
-                                    {
-                                        width: '100%',
-                                        backgroundColor: activeView === 'ai-chat' ? '#C2C2C2' : '#E2E2E2'
-                                    }
-                                ]}
-                                onPress={handleAICoachClick}
-                                activeOpacity={0.8}
-                            >
-                                <MaterialCommunityIcons name="lightbulb-on-outline" size={scale(24)} color="#000" />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
 
                     {activeView === 'list' ? (
                         <View style={{ flex: 1, width: '100%', alignItems: 'center' }}>
@@ -371,6 +395,97 @@ export const SessionTimerScreen: React.FC = () => {
                                 {/* Width limited text per spec */}
                                 <Text style={[styles.taskText, { maxWidth: scale(263) }]}>Сыграть 2 партии без отвлечений</Text>
                             </TouchableOpacity>
+
+                            <View style={styles.continueButtonWrapper}>
+                                <TouchableOpacity
+                                    style={styles.continueButton}
+                                    onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setActiveView('timer'); }}
+                                >
+                                    <Text style={styles.continueButtonText}>Продолжить</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    ) : activeView === 'summary' ? (
+                        // Summary View (Triggered by Stop Button)
+                        <View style={{ flex: 1, width: '100%', alignItems: 'center' }}>
+                            <TouchableOpacity
+                                style={styles.summaryCard}
+                                activeOpacity={0.9}
+                                onPress={() => setIsSummaryExpanded(!isSummaryExpanded)}
+                            >
+                                <View style={styles.summaryHeader}>
+                                    <Text style={styles.summaryTimeText}>16:25</Text>
+                                    <Text style={styles.summaryLabelText}>Время выполнения{'\n'}заданий</Text>
+                                    <View style={styles.summaryChevron}>
+                                        <Feather name={isSummaryExpanded ? "chevron-up" : "chevron-down"} size={scale(24)} color="#000" />
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+
+                            {/* Expanded Content (Tasks) - Outside Card */}
+                            {isSummaryExpanded && (
+                                <View style={styles.expandedList}>
+                                    {/* Task 1 */}
+                                    <Animated.View
+                                        style={[
+                                            styles.expandedRow,
+                                            {
+                                                opacity: task1Anim,
+                                                transform: [
+                                                    {
+                                                        translateY: task1Anim.interpolate({
+                                                            inputRange: [0, 1],
+                                                            outputRange: [-30, 0]
+                                                        })
+                                                    },
+                                                    {
+                                                        scale: task1Anim.interpolate({
+                                                            inputRange: [0, 1],
+                                                            outputRange: [0.9, 1]
+                                                        })
+                                                    }
+                                                ]
+                                            }
+                                        ]}
+                                    >
+                                        <TaskProgressIcon number={1} />
+                                        <View>
+                                            <Text style={styles.expandedTime}>6:11</Text>
+                                            <Text style={styles.expandedLabel}>Время выполнения{'\n'}1 задачи</Text>
+                                        </View>
+                                    </Animated.View>
+
+                                    {/* Task 2 */}
+                                    <Animated.View
+                                        style={[
+                                            styles.expandedRow,
+                                            {
+                                                opacity: task2Anim,
+                                                transform: [
+                                                    {
+                                                        translateY: task2Anim.interpolate({
+                                                            inputRange: [0, 1],
+                                                            outputRange: [-30, 0]
+                                                        })
+                                                    },
+                                                    {
+                                                        scale: task2Anim.interpolate({
+                                                            inputRange: [0, 1],
+                                                            outputRange: [0.9, 1]
+                                                        })
+                                                    }
+                                                ]
+                                            }
+                                        ]}
+                                    >
+                                        <TaskProgressIcon number={2} />
+                                        <View>
+                                            <Text style={styles.expandedTime}>10:14</Text>
+                                            <Text style={styles.expandedLabel}>Время выполнения{'\n'}2 задачи</Text>
+                                        </View>
+                                    </Animated.View>
+                                </View>
+                            )}
 
                             <View style={styles.continueButtonWrapper}>
                                 <TouchableOpacity
@@ -483,6 +598,27 @@ const styles = StyleSheet.create({
         borderRadius: scale(25),
         justifyContent: 'center',
         alignItems: 'center',
+        zIndex: 1,
+    },
+    slidingIndicator: {
+        position: 'absolute',
+        top: 0,
+        left: 0, // Assuming justifyContent: center groups them, we might need to adjust left if gap is involved.
+        // Actually, styles.togglesRow uses justifyContent: 'center'. We need to be careful with absolute positioning inside a centered flex container.
+        // It's safer to put the indicator inside the first button's position relative to a wrapper?
+        // OR: Since we know the width, we can assume relative to the container? No, container width is dynamic content width.
+        // Let's rely on the fact that if we start at 0, that's the start of the content area?
+        // Wait, 'flexDirection: row, justifyContent: center' puts content in the middle. 'absolute top:0 left:0' puts it at the top-left of the CONTAINER (styles.togglesRow).
+        // Does the container span full width? It has no width set, so it's a block (full width).
+        // So left:0 is the left edge of screen (roughly).
+        // BUT the buttons are centered.
+        // FIX: We need a wrapper View around the buttons that has 'flexDirection: row' inside the centered container?
+        // Actually, simpler: Make togglesRow 'alignSelf: center' or wrap contents in a View that fits content.
+        width: scale(75),
+        height: scale(75),
+        borderRadius: scale(25),
+        backgroundColor: COLORS.toggleActiveBg,
+        zIndex: 0,
     },
 
     // Timer
@@ -616,10 +752,10 @@ const styles = StyleSheet.create({
         color: '#000',
     },
     expandedLabel: {
-        fontFamily: 'Geometria', // Assuming available or fallback
-        fontSize: scale(24),
+        fontFamily: 'Gramatika-Regular', // Changed from Geometria to match usage
+        fontSize: scale(18), // Reduced from 24
         fontWeight: '300',
-        lineHeight: scale(28),
+        lineHeight: scale(22), // Adjusted
         color: '#000',
     },
     summaryHeader: {
