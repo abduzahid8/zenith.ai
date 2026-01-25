@@ -131,7 +131,11 @@ export const WeeklyPlanScreen: React.FC = () => {
 
                     {/* Action Buttons */}
                     <View style={styles.actionButtonsRow}>
-                        <TouchableOpacity style={styles.actionButton} activeOpacity={0.8}>
+                        <TouchableOpacity
+                            style={styles.actionButton}
+                            activeOpacity={0.8}
+                            onPress={() => router.push('/session-timer')}
+                        >
                             <Text style={styles.actionButtonText}>Начать занятие</Text>
                         </TouchableOpacity>
 
@@ -148,7 +152,7 @@ export const WeeklyPlanScreen: React.FC = () => {
                     <Ionicons name="home-outline" size={scale(28)} color="#A3A3A3" />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.navItem} onPress={handleNavigateStatistics}>
-                    <Ionicons name="bar-chart-outline" size={scale(28)} color="#A3A3A3" />
+                    <Ionicons name="bar-chart" size={scale(28)} color="#A3A3A3" />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.navItem} onPress={handleNavigateAICoach}>
                     <MaterialCommunityIcons name="lightbulb-outline" size={scale(28)} color="#A3A3A3" />
@@ -298,13 +302,13 @@ const styles = StyleSheet.create({
     },
     actionButton: {
         paddingVertical: scale(10),
-        paddingHorizontal: scale(20),
+        paddingHorizontal: scale(19),
         backgroundColor: '#C2C2C2',
         borderRadius: scale(30),
     },
     actionButtonText: {
         fontFamily: 'Gramatika-Bold',
-        fontSize: scale(20),
+        fontSize: scale(18),
         lineHeight: scale(25),
         color: '#000',
     },
@@ -316,6 +320,7 @@ const styles = StyleSheet.create({
         height: scale(60),
         marginHorizontal: scale(16),
         marginBottom: scale(16),
+        marginTop: 'auto', // Push to bottom
         borderRadius: scale(47),
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
         shadowColor: '#000',
@@ -325,10 +330,6 @@ const styles = StyleSheet.create({
         elevation: 3,
         borderWidth: 1,
         borderColor: 'rgba(0,0,0,0.05)',
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
     },
     navItem: {
         padding: scale(12),
