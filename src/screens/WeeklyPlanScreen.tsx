@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle, G, Defs, Filter, FeFlood, FeColorMatrix, FeOffset, FeGaussianBlur, FeComposite, FeBlend } from 'react-native-svg';
 import { colors } from '../theme';
+import { MenuDrawer } from '../components/MenuDrawer';
 
 // Scale from Figma (402x874) to device
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -57,6 +58,7 @@ export const WeeklyPlanScreen: React.FC = () => {
     const router = useRouter();
     const [streakDays] = useState(4);
     const [activeTab, setActiveTab] = useState<'day' | 'week'>('day');
+    const [menuVisible, setMenuVisible] = useState(false);
 
     const handleNavigateHome = () => {
         router.replace('/home');
@@ -81,7 +83,7 @@ export const WeeklyPlanScreen: React.FC = () => {
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
                     </View>
-                    <TouchableOpacity style={styles.menuButton}>
+                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
                         <SettingsIcon />
                     </TouchableOpacity>
                 </View>
@@ -161,6 +163,9 @@ export const WeeklyPlanScreen: React.FC = () => {
                     <MaterialCommunityIcons name="calendar-text" size={scale(28)} color="#000" />
                 </TouchableOpacity>
             </View>
+
+            {/* Menu Drawer */}
+            <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />
         </SafeAreaView>
     );
 };

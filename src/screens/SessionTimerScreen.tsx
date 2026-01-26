@@ -14,6 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import Svg, { Circle, G, Path } from 'react-native-svg';
+import { MenuDrawer } from '../components/MenuDrawer';
 
 // Screen Dimensions
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -56,6 +57,7 @@ export const SessionTimerScreen: React.FC = () => {
     const [streakDays] = useState(4);
     const [activeView, setActiveView] = useState<'timer' | 'list' | 'ai-chat' | 'summary'>('timer');
     const [activeCategory, setActiveCategory] = useState<'tasks' | 'ai'>('tasks');
+    const [menuVisible, setMenuVisible] = useState(false);
 
     useEffect(() => {
         Animated.timing(toggleAnim, {
@@ -283,7 +285,7 @@ export const SessionTimerScreen: React.FC = () => {
                     <TouchableOpacity onPress={handleAICoachClick} style={{ padding: scale(4) }}>
                         <MaterialCommunityIcons name="lightbulb-on-outline" size={scale(24)} color="#000" />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.menuButton}>
+                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
                         <Feather name="menu" size={scale(24)} color="#000" />
                     </TouchableOpacity>
                 </View>
@@ -645,6 +647,9 @@ export const SessionTimerScreen: React.FC = () => {
                     </View>
                 </View>
             </Modal>
+
+            {/* Menu Drawer */}
+            <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />
 
         </SafeAreaView >
     );

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path, G, Defs, RadialGradient, Stop, ClipPath, Rect } from 'react-native-svg';
 import { colors } from '../theme';
+import { MenuDrawer } from '../components/MenuDrawer';
 
 // Scale from Figma (402x874) to device
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -90,6 +91,7 @@ const TelegramIcon = () => (
 export const StatisticsScreen: React.FC = () => {
     const router = useRouter();
     const [streakDays] = React.useState(4);
+    const [menuVisible, setMenuVisible] = useState(false);
 
     const handleNavigateHome = () => {
         router.replace('/home');
@@ -111,7 +113,7 @@ export const StatisticsScreen: React.FC = () => {
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
                     </View>
-                    <TouchableOpacity style={styles.menuButton}>
+                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
                         <Feather name="menu" size={scale(24)} color="#000" />
                     </TouchableOpacity>
                 </View>
@@ -191,6 +193,9 @@ export const StatisticsScreen: React.FC = () => {
                     <MaterialCommunityIcons name="calendar-text" size={scale(28)} color="#A3A3A3" />
                 </TouchableOpacity>
             </View>
+
+            {/* Menu Drawer */}
+            <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />
         </SafeAreaView>
     );
 };

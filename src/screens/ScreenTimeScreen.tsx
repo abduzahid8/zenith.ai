@@ -7,44 +7,67 @@ import {
     StatusBar,
     TouchableOpacity,
     ScrollView,
+    Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius } from '../theme';
-import { scaleWidth, scaleHeight, scaleFont } from '../theme/responsive';
+import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { colors } from '../theme';
+import { WeeklyBarChart } from '../components/WeeklyBarChart';
+import { MenuDrawer } from '../components/MenuDrawer';
 
-interface AppUsage {
-    name: string;
-    icon: string;
-    changePercent: number;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const FIGMA_WIDTH = 402;
+const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
+
+// Fire emoji component
+const FireIcon = () => (
+    <Text style={{ fontSize: scale(24) }}>🔥</Text>
+);
+
+interface WeeklyData {
+    day: string;
+    value: number;
 }
 
-const mockAppUsage: AppUsage[] = [
-    { name: 'Instagram', icon: 'logo-instagram', changePercent: -21 },
-    { name: 'Chess.com', icon: 'game-controller', changePercent: 34 },
-    { name: 'Telegram', icon: 'paper-plane', changePercent: -10 },
+const mockWeeklyData: WeeklyData[] = [
+    { day: 'Пн', value: 3 },
+    { day: 'Вт', value: 5 },
+    { day: 'Ср', value: 3 },
+    { day: 'Чт', value: 1 },
+    { day: 'Пт', value: 2 },
+    { day: 'Сб', value: 4 },
+    { day: 'Вс', value: 2 },
 ];
 
 export const ScreenTimeScreen: React.FC = () => {
     const router = useRouter();
+    const [streakDays] = useState(4);
+    const [menuVisible, setMenuVisible] = useState(false);
     const [totalChange] = useState(-24);
-    const [period] = useState('неделю');
+    const [weeklyTime] = useState('12ч 22 мин');
 
-    const handleBack = () => {
-        router.back();
+    const handleShare = () => {
+        // TODO: Implement share functionality
+        console.log('Share pressed');
     };
 
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
-            {/* Header */}
+            {/* Header - Streak counter and menu */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Экранное время</Text>
-                <View style={styles.placeholder} />
+                <View style={styles.headerLeft} />
+                <View style={styles.headerRight}>
+                    {/* Figma: font-size: 24px, font-weight: 700, line-height: 21px */}
+                    <View style={styles.streakContainer}>
+                        <Text style={styles.streakNumber}>{streakDays}</Text>
+                        <FireIcon />
+                    </View>
+                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
+                        <Feather name="menu" size={scale(24)} color="#000" />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <ScrollView
@@ -52,60 +75,52 @@ export const ScreenTimeScreen: React.FC = () => {
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Total change card */}
-                <View style={styles.totalCard}>
-                    <Text
-                        style={[
-                            styles.totalChange,
-                            { color: totalChange < 0 ? colors.success : colors.error },
-                        ]}
-                    >
+                {/* Weekly Bar Chart */}
+                <WeeklyBarChart
+                    data={mockWeeklyData}
+                    changePercent={totalChange}
+                    periodLabel={`за последнюю\nнеделю`}
+                />
+
+                {/* Share/Upload Button - Figma: 362x50, border-radius: 30px, background: #E0E0E0 */}
+                <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
+                    <Ionicons name="arrow-up" size={scale(24)} color="#000" />
+                </TouchableOpacity>
+
+                {/* Stats Card - Figma: padding: 25px, border-radius: 25px, background: #E0E0E0 */}
+                <View style={styles.statsCard}>
+                    {/* Figma: -24% with border-radius: 25px, background: #E0E0E0 */}
+                    <Text style={styles.statsPercent}>
                         {totalChange > 0 ? '+' : ''}{totalChange}%
                     </Text>
-                    <Text style={styles.totalPeriod}>
-                        за последнюю{'\n'}{period}
-                    </Text>
-                </View>
+                    {/* Figma: font-family: Geometria, font-size: 20px, font-weight: 300, line-height: 22px */}
+                    <Text style={styles.statsLabel}>экранного времени</Text>
 
-                {/* Explanation */}
-                <Text style={styles.explanation}>
-                    Ты проводишь меньше времени в приложениях, отвлекающих от развития. Продолжай в том же духе! 🎯
-                </Text>
-
-                {/* App breakdown */}
-                <Text style={styles.sectionTitle}>По приложениям</Text>
-
-                {mockAppUsage.map((app, index) => (
-                    <View key={index} style={styles.appRow}>
-                        <View style={styles.appInfo}>
-                            <View style={styles.appIconContainer}>
-                                <Ionicons
-                                    name={app.icon as keyof typeof Ionicons.glyphMap}
-                                    size={24}
-                                    color={colors.text}
-                                />
-                            </View>
-                            <Text style={styles.appName}>{app.name}</Text>
-                        </View>
-                        <Text
-                            style={[
-                                styles.appChange,
-                                { color: app.changePercent < 0 ? colors.success : colors.error },
-                            ]}
-                        >
-                            {app.changePercent > 0 ? '+' : ''}{app.changePercent}%
-                        </Text>
-                    </View>
-                ))}
-
-                {/* Info note */}
-                <View style={styles.infoNote}>
-                    <Ionicons name="information-circle-outline" size={20} color={colors.textSecondary} />
-                    <Text style={styles.infoText}>
-                        Данные обновляются автоматически на основе использования устройства
-                    </Text>
+                    {/* Figma: font-family: Geometria, font-size: 18px, font-weight: 500, line-height: 20px, letter-spacing: -1px */}
+                    <Text style={styles.timeLabel}>Экранное время за{'\n'}неделю:</Text>
+                    {/* Figma: font-family: Gramatika, font-size: 26px, font-weight: 700, line-height: 22px */}
+                    <Text style={styles.timeValue}>{weeklyTime}</Text>
                 </View>
             </ScrollView>
+
+            {/* Bottom Navigation */}
+            <View style={styles.bottomNav}>
+                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/home')}>
+                    <Ionicons name="home-outline" size={scale(28)} color="#A3A3A3" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/statistics')}>
+                    <Ionicons name="bar-chart" size={scale(28)} color="#000" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/ai-coach-chat')}>
+                    <MaterialCommunityIcons name="lightbulb-outline" size={scale(28)} color="#A3A3A3" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.navItem}>
+                    <MaterialCommunityIcons name="calendar-text" size={scale(28)} color="#A3A3A3" />
+                </TouchableOpacity>
+            </View>
+
+            {/* Menu Drawer */}
+            <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />
         </SafeAreaView>
     );
 };
@@ -119,103 +134,113 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: scaleWidth(spacing.lg),
-        paddingVertical: scaleHeight(spacing.md),
-        borderBottomWidth: 1,
-        borderBottomColor: colors.surfaceLight,
+        paddingHorizontal: scale(24),
+        paddingTop: scale(16),
+        paddingBottom: scale(16),
     },
-    backButton: {
-        padding: scaleWidth(8),
+    headerLeft: {
+        flex: 1,
     },
-    headerTitle: {
-        fontFamily: typography.h3.fontFamily,
-        fontSize: scaleFont(18),
-        color: colors.text,
+    headerRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: scale(8),
     },
-    placeholder: {
-        width: scaleWidth(40),
+    streakContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    // Figma: font-size: 24px, font-weight: 700, line-height: 21px
+    streakNumber: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(24),
+        color: '#000',
+        lineHeight: scale(21),
+    },
+    menuButton: {
+        padding: scale(4),
     },
     scrollView: {
         flex: 1,
     },
     scrollContent: {
-        paddingHorizontal: scaleWidth(spacing.lg),
-        paddingVertical: scaleHeight(spacing.lg),
+        paddingVertical: scale(8),
+        paddingBottom: scale(24),
     },
-    totalCard: {
-        backgroundColor: colors.surfaceLight,
-        borderRadius: borderRadius.md,
-        padding: scaleWidth(spacing.xl),
-        alignItems: 'center',
-        marginBottom: scaleHeight(spacing.lg),
-    },
-    totalChange: {
-        fontFamily: typography.h1.fontFamily,
-        fontSize: scaleFont(56),
-        marginBottom: scaleHeight(spacing.sm),
-    },
-    totalPeriod: {
-        fontFamily: typography.body.fontFamily,
-        fontSize: scaleFont(16),
-        color: colors.textSecondary,
-        textAlign: 'center',
-    },
-    explanation: {
-        fontFamily: typography.body.fontFamily,
-        fontSize: scaleFont(16),
-        color: colors.text,
-        lineHeight: scaleHeight(24),
-        marginBottom: scaleHeight(spacing.xl),
-    },
-    sectionTitle: {
-        fontFamily: typography.h3.fontFamily,
-        fontSize: scaleFont(18),
-        color: colors.text,
-        marginBottom: scaleHeight(spacing.md),
-    },
-    appRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: colors.surfaceLight,
-        borderRadius: borderRadius.md,
-        padding: scaleWidth(spacing.md),
-        marginBottom: scaleHeight(spacing.sm),
-    },
-    appInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    appIconContainer: {
-        width: scaleWidth(40),
-        height: scaleWidth(40),
-        borderRadius: scaleWidth(10),
-        backgroundColor: colors.background,
+    // Figma: width: 362px, height: 50px, border-radius: 30px, background: #E0E0E0
+    shareButton: {
+        alignSelf: 'center',
+        width: scale(362),
+        height: scale(50),
+        backgroundColor: '#E0E0E0',
+        borderRadius: scale(30),
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: scaleWidth(spacing.md),
+        marginTop: scale(16),
+        marginBottom: scale(16),
     },
-    appName: {
-        fontFamily: typography.body.fontFamily,
-        fontSize: scaleFont(16),
-        color: colors.text,
+    // Figma: padding: 25px 145px 27px 20px, border-radius: 30px, gap: 15px
+    statsCard: {
+        alignSelf: 'center',
+        width: scale(362),
+        backgroundColor: '#E0E0E0',
+        borderRadius: scale(30),
+        paddingTop: scale(6),
+        paddingBottom: scale(6),
+        paddingLeft: scale(20),
+        paddingRight: scale(145),
+        gap: scale(5), // Reduced for compact look
     },
-    appChange: {
-        fontFamily: typography.h3.fontFamily,
-        fontSize: scaleFont(18),
+    // Figma: border-radius: 25px, background: #E0E0E0 (inherits from card)
+    statsPercent: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(48),
+        color: '#000',
+        marginBottom: scale(4),
     },
-    infoNote: {
+    // Figma: font-family: Geometria, font-size: 20px, font-weight: 300, line-height: 22px
+    statsLabel: {
+        fontFamily: 'Gramatika-Light',
+        fontSize: scale(20),
+        color: '#000',
+        lineHeight: scale(22),
+        marginBottom: scale(15),
+    },
+    // Figma: font-family: Geometria, font-size: 18px, font-weight: 500, line-height: 20px, letter-spacing: -1px
+    timeLabel: {
+        fontFamily: 'Gramatika-Medium',
+        fontSize: scale(18),
+        color: '#000',
+        lineHeight: scale(20),
+        letterSpacing: -1,
+    },
+    // Figma: font-family: Gramatika, font-size: 26px, font-weight: 700, line-height: 22px
+    timeValue: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(26),
+        color: '#000',
+        lineHeight: scale(22),
+        marginTop: scale(8),
+    },
+    bottomNav: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
-        marginTop: scaleHeight(spacing.xl),
-        gap: scaleWidth(8),
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        height: scale(60),
+        marginHorizontal: scale(16),
+        marginBottom: scale(16),
+        borderRadius: scale(47),
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
     },
-    infoText: {
-        flex: 1,
-        fontFamily: typography.bodySmall.fontFamily,
-        fontSize: scaleFont(13),
-        color: colors.textSecondary,
-        lineHeight: scaleHeight(18),
+    navItem: {
+        padding: scale(12),
     },
 });
 

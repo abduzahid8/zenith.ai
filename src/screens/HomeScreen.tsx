@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import { useAuthStore } from '../store/authStore';
+import { MenuDrawer } from '../components/MenuDrawer';
 
 // Scale from Figma (402x874) to device
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -36,6 +37,7 @@ export const HomeScreen: React.FC = () => {
     const { selectedHobby, isPremium } = useAuthStore();
     const [greeting, setGreeting] = useState('Привет');
     const [streakDays] = useState(4);
+    const [menuVisible, setMenuVisible] = useState(false);
 
     // Set greeting based on time of day
     useEffect(() => {
@@ -78,7 +80,7 @@ export const HomeScreen: React.FC = () => {
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
                     </View>
-                    <TouchableOpacity style={styles.menuButton}>
+                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
                         <Feather name="menu" size={scale(24)} color="#000" />
                     </TouchableOpacity>
                 </View>
@@ -141,6 +143,9 @@ export const HomeScreen: React.FC = () => {
                     <MaterialCommunityIcons name="calendar-text" size={scale(28)} color="#A3A3A3" />
                 </TouchableOpacity>
             </View>
+
+            {/* Menu Drawer */}
+            <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />
         </SafeAreaView>
     );
 };
