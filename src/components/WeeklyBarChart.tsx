@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Image } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FIGMA_WIDTH = 402;
@@ -19,12 +20,46 @@ interface WeeklyBarChartProps {
 const defaultData: DayData[] = [
     { day: 'Пн', value: 3 },
     { day: 'Вт', value: 5 },
-    { day: 'Ср', value: 3 },
-    { day: 'Чт', value: 1 },
+    { day: 'Ср', value: 4 },
+    { day: 'Чт', value: 1.5 },
     { day: 'Пт', value: 2 },
-    { day: 'Сб', value: 4 },
-    { day: 'Вс', value: 2 },
+    { day: 'Сб', value: 5 },
+    { day: 'Вс', value: 3 },
 ];
+
+// Color palette for bars - matching Figma goal design
+const barColors = [
+    '#5ECFCF', // Пн - teal/cyan
+    '#37A0EF', // Вт - dark blue
+    '#7EC8FF', // Ср - medium/light blue  
+    '#37A0EF', // Чт - dark blue
+    '#5ECFCF', // Пт - teal/cyan
+    '#37A0EF', // Сб - dark blue
+    '#7EC8FF', // Вс - medium/light blue
+];
+
+// Green trend arrow SVG component
+const TrendArrowUp = ({ size = 24 }: { size?: number }) => (
+    <Svg width={scale(size)} height={scale(size)} viewBox="0 0 24 24" fill="none">
+        <Path
+            d="M4 14L10 8L14 12L20 6"
+            stroke="#13E659"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+        <Path
+            d="M14 6H20V12"
+            stroke="#13E659"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+    </Svg>
+);
+
+// Grid image for chart background
+const gridImage = require('../../frame auth/Group 39.png');
 
 export const WeeklyBarChart: React.FC<WeeklyBarChartProps> = ({
     data = defaultData,
@@ -33,71 +68,67 @@ export const WeeklyBarChart: React.FC<WeeklyBarChartProps> = ({
 }) => {
     const maxValue = 7;
     const yAxisLabels = ['7+', '6', '5', '4', '3', '2', '1'];
-    const isNegative = changePercent < 0;
+    const chartHeight = scale(200); // Height for actual chart bars area
 
     return (
         <View style={styles.container}>
-            {/* Main chart container with border */}
+            {/* Main chart container - Figma: 362x304, border-radius: 30, background: #D6DEF8 */}
             <View style={styles.chartContainer}>
+                {/* Grid Background Image - at container level for 100% coverage */}
+                <Image
+                    source={gridImage}
+                    style={styles.gridImage}
+                    resizeMode="cover"
+                />
+
                 {/* Stats badge in top right */}
                 <View style={styles.statsBadge}>
                     <View style={styles.statsBadgeRow}>
                         <Text style={styles.statsPercent}>
                             {changePercent > 0 ? '+' : ''}{changePercent}%
                         </Text>
-                        <Text style={styles.statsArrow}> 📈</Text>
+                        <TrendArrowUp size={28} />
                     </View>
                     <Text style={styles.statsPeriod}>{periodLabel}</Text>
                 </View>
 
-                {/* Y-axis - smaller font */}
-                <View style={styles.yAxis}>
-                    {yAxisLabels.map((label, index) => (
-                        <Text key={index} style={styles.yAxisLabel}>{label}</Text>
-                    ))}
-                </View>
-
-                {/* Chart area with bars */}
-                <View style={styles.chartArea}>
-                    {/* Grid Lines (Horizontal & Vertical) */}
-                    <View style={styles.gridContainer}>
-                        {/* Horizontal Lines */}
-                        <View style={styles.horizontalLines}>
-                            {yAxisLabels.map((_, index) => (
-                                <View key={`h-${index}`} style={styles.gridLineRow}>
-                                    <View style={styles.gridLine} />
-                                </View>
-                            ))}
-                        </View>
-                        {/* Vertical Lines - one for each day + 1 for end */}
-                        <View style={styles.verticalLines}>
-                            {Array.from({ length: 8 }).map((_, index) => (
-                                <View key={`v-${index}`} style={styles.verticalLineColumn}>
-                                    <View style={styles.verticalLine} />
-                                </View>
-                            ))}
-                        </View>
+                {/* Chart content wrapper */}
+                <View style={styles.chartContent}>
+                    {/* Y-axis labels */}
+                    <View style={styles.yAxis}>
+                        {yAxisLabels.map((label, index) => (
+                            <View key={index} style={label === '7+' ? styles.yAxisLabelWideWrapper : styles.yAxisLabelWrapper}>
+                                <Text
+                                    style={label === '7+' ? styles.yAxisLabelWide : styles.yAxisLabel}
+                                >
+                                    {label}
+                                </Text>
+                            </View>
+                        ))}
                     </View>
 
-                    {/* Bars */}
-                    <View style={styles.barsContainer}>
-                        {data.map((item, index) => {
-                            const heightPercent = Math.min((item.value / maxValue) * 100, 100);
-                            return (
-                                <View key={index} style={styles.barWrapper}>
-                                    <View style={styles.barColumn}>
-                                        <View style={{ flex: (100 - heightPercent) / 100 }} />
+                    {/* Bars area */}
+                    <View style={styles.barsArea}>
+                        {/* Bars container */}
+                        <View style={styles.barsContainer}>
+                            {data.map((item, index) => {
+                                const barHeight = (item.value / maxValue) * chartHeight;
+                                return (
+                                    <View key={index} style={styles.barWrapper}>
                                         <View
                                             style={[
                                                 styles.bar,
-                                                { flex: heightPercent / 100 }
+                                                {
+                                                    height: barHeight,
+                                                    backgroundColor: barColors[index % barColors.length],
+                                                }
                                             ]}
                                         />
+                                        <Text style={styles.dayLabel}>{item.day}</Text>
                                     </View>
-                                    <Text style={styles.dayLabel}>{item.day}</Text>
-                                </View>
-                            );
-                        })}
+                                );
+                            })}
+                        </View>
                     </View>
                 </View>
             </View>
@@ -110,146 +141,141 @@ const styles = StyleSheet.create({
         width: '100%',
         paddingHorizontal: scale(20),
     },
+    // Figma: width: 362px, height: 304px, border-radius: 30px, background: #D6DEF8
     chartContainer: {
-        backgroundColor: '#E0E0E0', // Figma exact
+        backgroundColor: '#D6DEF8',
         borderRadius: scale(30),
-        padding: scale(10),
-        paddingTop: scale(20),
-        paddingLeft: scale(10),
-        paddingRight: scale(10),
-        flexDirection: 'row',
-        height: scale(304), // Figma: 304px
+        height: scale(304),
         alignSelf: 'center',
-        width: scale(362), // Figma: 362px
+        width: scale(362),
         overflow: 'hidden',
+        position: 'relative',
+    },
+    gridImage: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100%',
+        height: '100%',
+        borderRadius: scale(30),
     },
     statsBadge: {
         position: 'absolute',
         top: scale(12),
         right: scale(14),
         alignItems: 'flex-end',
+        zIndex: 10,
     },
     statsBadgeRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: scale(4),
     },
-    // Figma: fontSize: 20, fontWeight: 700, color: black
     statsPercent: {
         fontFamily: 'Gramatika-Bold',
         fontSize: scale(20),
-        lineHeight: scale(40),
-        color: '#000', // Figma: black
+        lineHeight: scale(28),
+        color: '#000',
     },
-    statsArrow: {
-        fontSize: scale(16),
-    },
-    // Figma: fontSize: 14, fontWeight: 300, lineHeight: 13
     statsPeriod: {
         fontFamily: 'Gramatika-Light',
         fontSize: scale(14),
         color: '#000',
         textAlign: 'right',
-        lineHeight: scale(13),
+        lineHeight: scale(16),
+        fontStyle: 'italic',
     },
+    chartContent: {
+        flex: 1,
+        flexDirection: 'row',
+        paddingTop: scale(50),
+        paddingLeft: scale(10),
+        paddingRight: scale(10),
+        paddingBottom: 0,
+    },
+    // Y-axis on the left - absolute positioned
     yAxis: {
-        width: scale(20),
-        paddingTop: scale(35),
-        paddingBottom: scale(28),
+        position: 'absolute',
+        left: scale(10),
+        top: scale(50),
+        bottom: scale(20),
+        width: scale(25),
         justifyContent: 'space-between',
     },
-    // Figma: font-size: 14px, font-weight: 300, line-height: 22px
+    // Wrappers to enforce the exact layout position (10px wide)
+    yAxisLabelWrapper: {
+        width: scale(10),
+        height: scale(15),
+        overflow: 'visible', // Allow absolute text to go outside
+        justifyContent: 'center',
+    },
+    yAxisLabelWideWrapper: {
+        width: scale(20),
+        height: scale(15),
+        overflow: 'visible',
+        justifyContent: 'center',
+    },
+    // Text anchored to the right - width is large to fit any content
     yAxisLabel: {
-        fontFamily: 'Gramatika-Light', // Geometria 300 fallback
+        fontFamily: 'Geometria-Light',
         fontSize: scale(14),
-        color: '#000',
+        color: '#2E2E43',
         textAlign: 'right',
         lineHeight: scale(22),
+        position: 'absolute',
+        right: 0, // Anchored to right edge
+        width: scale(100), // Much wider than needed
+        height: scale(22), // Proper line height
+        top: scale(-3), // Slight adjustment for line-height centering if needed, or 0
     },
-    chartArea: {
+    // 7+ label - same style
+    yAxisLabelWide: {
+        fontFamily: 'Geometria-Light',
+        fontSize: scale(14),
+        color: '#2E2E43',
+        textAlign: 'right',
+        lineHeight: scale(22),
+        position: 'absolute',
+        right: 0,
+        width: scale(100),
+        height: scale(22),
+        top: scale(-3),
+    },
+    // Bars area - takes remaining space, bars at bottom
+    barsArea: {
         flex: 1,
-        position: 'relative',
-        marginTop: scale(35),
-        marginBottom: scale(6),
-        marginLeft: scale(8),
+        justifyContent: 'flex-end',
     },
-    gridContainer: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: scale(22),
-    },
-    horizontalLines: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        justifyContent: 'space-between',
-    },
-    verticalLines: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-    },
-    verticalLineColumn: {
-        height: '100%',
-        alignItems: 'center',
-        width: 1, // Minimize width impact
-    },
-    gridLineRow: {
-        width: '100%',
-    },
-    gridLine: {
-        width: '100%',
-        height: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.10)', // Figma exact
-    },
-    verticalLine: {
-        width: 1,
-        height: '100%',
-        backgroundColor: 'rgba(0, 0, 0, 0.10)', // Figma exact
-    },
+    // Bars container with gap
     barsContainer: {
-        flex: 1,
         flexDirection: 'row',
-        justifyContent: 'flex-start',
+        justifyContent: 'center',
         alignItems: 'flex-end',
-        paddingBottom: scale(25),
-        gap: scale(10), // Figma: gap: 10
-        height: '100%',
+        gap: scale(10),
+        marginLeft: scale(10),
     },
     barWrapper: {
         alignItems: 'center',
-        flex: 1,
-        height: '100%',
+        position: 'relative',
     },
-    barColumn: {
-        width: scale(35), // Figma: 35px
-        flexDirection: 'column',
-        alignItems: 'center',
-        height: '100%', // CRITICAL: needed for flex bars to work
-    },
-    // Figma: border-radius: 8px 8px 0 0, width: 35px
+    // Figma: width: 35px, border-radius: 8px 8px 0 0, background: #37A0EF
     bar: {
         width: scale(35),
-        backgroundColor: '#9C9C9C',
         borderTopLeftRadius: scale(8),
         borderTopRightRadius: scale(8),
         borderBottomLeftRadius: 0,
         borderBottomRightRadius: 0,
+        backgroundColor: '#37A0EF',
         minHeight: scale(8),
     },
     dayLabel: {
         fontFamily: 'Gramatika-Regular',
         fontSize: scale(10),
-        color: '#666',
+        color: '#2E2E43',
         position: 'absolute',
-        bottom: scale(-18),
+        bottom: scale(5),
     },
 });
 
