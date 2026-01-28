@@ -68,6 +68,7 @@ export default function RootLayout() {
                     />
                     <Stack.Screen name="screen-time" />
                     <Stack.Screen name="weekly-plan" />
+                    <Stack.Screen name="main-tabs" options={{ animation: 'none' }} />
                 </Stack>
             </SafeAreaProvider>
         </GestureHandlerRootView>

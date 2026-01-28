@@ -47,13 +47,13 @@ export const SubscriptionScreen: React.FC = () => {
             setPremium(true);
         }
         completeOnboarding();
-        router.replace('/home');
+        router.replace('/main-tabs');
     };
 
     const handleSkip = () => {
         setPremium(false);
         completeOnboarding();
-        router.replace('/home');
+        router.replace('/main-tabs');
     };
 
     return (
