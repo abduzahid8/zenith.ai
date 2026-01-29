@@ -23,7 +23,7 @@ import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path, Circle } from 'react-native-svg';
 import PagerView from 'react-native-pager-view';
 import { colors } from '../theme';
-import { MenuDrawer } from '../components/MenuDrawer';
+import { MenuDrawer } from '../components/NavigationSidebar';
 import { WeeklyBarChart } from '../components/WeeklyBarChart';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');

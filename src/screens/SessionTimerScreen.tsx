@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import Svg, { Circle, G, Path } from 'react-native-svg';
-import { MenuDrawer } from '../components/MenuDrawer';
+import { MenuDrawer } from '../components/NavigationSidebar';
 
 // Screen Dimensions
 const { width: SCREEN_WIDTH } = Dimensions.get('window');

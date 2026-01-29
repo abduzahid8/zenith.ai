@@ -15,6 +15,7 @@ export default function RootLayout() {
         'Gramatika-Regular': require('../assets/fonts/GramatikaTrial-Regular-BF65dea4c5a77e9.otf'),
         'Gramatika-Light': require('../assets/fonts/GramatikaTrial-Light-BF65dea4c59cf23.otf'),
         'Gramatika-ExtraLight': require('../assets/fonts/GramatikaTrial-ExtraLight-BF65dea4c5b0dc5.otf'),
+        'Geometria-Light': require('../assets/fonts/Geometria-Light.ttf'),
     });
 
     useEffect(() => {

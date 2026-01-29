@@ -13,7 +13,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import { useAuthStore } from '../store/authStore';
-import { MenuDrawer } from '../components/MenuDrawer';
+import { MenuDrawer } from '../components/NavigationSidebar';
 
 // Scale from Figma (402x874) to device
 const { width: SCREEN_WIDTH } = Dimensions.get('window');

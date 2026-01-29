@@ -14,7 +14,7 @@ import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import { colors } from '../theme';
 import { WeeklyBarChart } from '../components/WeeklyBarChart';
-import { MenuDrawer } from '../components/MenuDrawer';
+import { MenuDrawer } from '../components/NavigationSidebar';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FIGMA_WIDTH = 402;

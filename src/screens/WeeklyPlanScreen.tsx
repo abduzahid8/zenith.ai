@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle, G, Defs, Filter, FeFlood, FeColorMatrix, FeOffset, FeGaussianBlur, FeComposite, FeBlend } from 'react-native-svg';
 import { colors } from '../theme';
-import { MenuDrawer } from '../components/MenuDrawer';
+import { MenuDrawer } from '../components/NavigationSidebar';
 
 // Scale from Figma (402x874) to device
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
