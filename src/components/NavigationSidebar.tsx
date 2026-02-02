@@ -13,7 +13,7 @@ import {
     Ionicons
 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, getSubscriptionDisplayText } from '../store/authStore';
 
 // Scale from Figma (402x874) to device
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -34,7 +34,11 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
     activeItem = 'основное',
 }) => {
     const router = useRouter();
-    const { signOut } = useAuthStore();
+    const { signOut, userName, subscriptionLevel } = useAuthStore();
+
+    // Get display values
+    const displayName = userName || 'Пользователь';
+    const displaySubscription = getSubscriptionDisplayText(subscriptionLevel);
     const slideAnim = useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -75,7 +79,12 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                 }),
             ]).start();
         }
-    }, [visible]);
+        // Cleanup: stop animations when component unmounts or visibility changes
+        return () => {
+            slideAnim.stopAnimation();
+            fadeAnim.stopAnimation();
+        };
+    }, [visible, slideAnim, fadeAnim]);
 
     const handleLogout = () => {
         onClose();
@@ -107,7 +116,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
         setTimeout(() => {
             switch (item) {
                 case 'основное':
-                    router.push('/home' as any);
+                    router.replace('/main-tabs');
                     break;
                 case 'развитие':
                     // Add route when available
@@ -166,8 +175,8 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                 <Ionicons name="person" size={22} color="#FFFFFF" />
                             </View>
                             <View style={styles.userInfo}>
-                                <Text style={styles.userName}>User Name</Text>
-                                <Text style={styles.subscriptionLevel}>Level of Subscription</Text>
+                                <Text style={styles.userName}>{displayName}</Text>
+                                <Text style={styles.subscriptionLevel}>{displaySubscription}</Text>
                                 <TouchableOpacity
                                     style={styles.logoutButton}
                                     onPress={handleLogout}

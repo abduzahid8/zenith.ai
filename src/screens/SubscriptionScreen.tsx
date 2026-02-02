@@ -8,7 +8,7 @@ import {
     TouchableOpacity,
     ScrollView,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LogoSimple } from '../components/Logo';
 import { Button } from '../components/Button';
@@ -41,19 +41,25 @@ export const SubscriptionScreen: React.FC = () => {
     const { setPremium, completeOnboarding } = useAuthStore();
     const [selectedPlan, setSelectedPlan] = useState<'free' | 'premium'>('free');
 
+    // const navigation = useNavigation();
+
     const handleContinue = async () => {
         if (selectedPlan === 'premium') {
             // TODO: Implement in-app purchase
             setPremium(true);
         }
         completeOnboarding();
-        router.replace('/main-tabs');
+
+        // Navigate to the main app layout
+        router.replace('/(app)/');
     };
 
     const handleSkip = () => {
         setPremium(false);
         completeOnboarding();
-        router.replace('/main-tabs');
+
+        // Navigate to the main app layout
+        router.replace('/(app)/');
     };
 
     return (

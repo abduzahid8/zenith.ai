@@ -13,6 +13,8 @@ import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle, G, Defs, Filter, FeFlood, FeColorMatrix, FeOffset, FeGaussianBlur, FeComposite, FeBlend } from 'react-native-svg';
 import { colors } from '../theme';
 import { MenuDrawer } from '../components/NavigationSidebar';
+import { useAuthStore } from '../store/authStore';
+import { BottomNavigation } from '../components/BottomNavigation';
 
 // Scale from Figma (402x874) to device
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -56,20 +58,23 @@ const CircleIcon = () => (
 
 export const WeeklyPlanScreen: React.FC = () => {
     const router = useRouter();
-    const [streakDays] = useState(4);
+    const { streakDays, weeklyTasks, toggleWeeklyTask } = useAuthStore();
     const [activeTab, setActiveTab] = useState<'day' | 'week'>('day');
     const [menuVisible, setMenuVisible] = useState(false);
 
-    const handleNavigateHome = () => {
-        router.replace('/home');
+    // Get current day name in Russian
+    const getDayName = () => {
+        const days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда',
+            'Четверг', 'Пятница', 'Суббота'];
+        return days[new Date().getDay()];
     };
 
     const handleNavigateStatistics = () => {
-        router.push('/statistics');
+        router.replace('/main-tabs');
     };
 
     const handleNavigateAICoach = () => {
-        router.push('/ai-coach-chat');
+        router.replace('/main-tabs');
     };
 
     return (
@@ -83,8 +88,8 @@ export const WeeklyPlanScreen: React.FC = () => {
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
                     </View>
-                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
-                        <SettingsIcon />
+                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)} activeOpacity={0.7}>
+                        <Feather name="menu" size={scale(24)} color="#000" />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -118,17 +123,28 @@ export const WeeklyPlanScreen: React.FC = () => {
 
                 {/* Day Content */}
                 <View style={styles.dayContent}>
-                    <Text style={styles.dayTitle}>Понедельник</Text>
+                    <Text style={styles.dayTitle}>{getDayName()}</Text>
 
                     <View style={styles.taskList}>
-                        <View style={styles.taskItem}>
-                            <CircleIcon />
-                            <Text style={styles.taskText}>Изучить 1 базовый дебют</Text>
-                        </View>
-                        <View style={styles.taskItem}>
-                            <CircleIcon />
-                            <Text style={styles.taskText}>Сыграть 2 партии без{'\n'}отвлечений</Text>
-                        </View>
+                        {weeklyTasks.map((task, index) => (
+                            <TouchableOpacity
+                                key={index}
+                                style={styles.taskItem}
+                                activeOpacity={0.8}
+                                onPress={() => toggleWeeklyTask(index)}
+                            >
+                                <View style={task.completed ? styles.completedCircle : styles.circle}>
+                                    {task.completed ? (
+                                        <Ionicons name="checkmark-circle" size={scale(26)} color={colors.primary} />
+                                    ) : (
+                                        <CircleIcon />
+                                    )}
+                                </View>
+                                <Text style={[styles.taskText, task.completed && styles.taskTextCompleted]}>
+                                    {task.text}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
                     </View>
 
                     {/* Action Buttons */}
@@ -149,20 +165,7 @@ export const WeeklyPlanScreen: React.FC = () => {
             </View>
 
             {/* Bottom Navigation */}
-            <View style={styles.bottomNav}>
-                <TouchableOpacity style={styles.navItem} onPress={handleNavigateHome}>
-                    <Ionicons name="home-outline" size={scale(28)} color="#A3A3A3" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={handleNavigateStatistics}>
-                    <Ionicons name="bar-chart" size={scale(28)} color="#A3A3A3" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={handleNavigateAICoach}>
-                    <MaterialCommunityIcons name="lightbulb-outline" size={scale(28)} color="#A3A3A3" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem}>
-                    <MaterialCommunityIcons name="calendar-text" size={scale(28)} color="#000" />
-                </TouchableOpacity>
-            </View>
+            <BottomNavigation activeTab="weekly-plan" />
 
             {/* Menu Drawer */}
             <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />
@@ -338,6 +341,22 @@ const styles = StyleSheet.create({
     },
     navItem: {
         padding: scale(12),
+    },
+    circle: {
+        width: scale(26),
+        height: scale(26),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    completedCircle: {
+        width: scale(26),
+        height: scale(26),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    taskTextCompleted: {
+        textDecorationLine: 'line-through',
+        color: '#A0A0A0',
     },
 });
 

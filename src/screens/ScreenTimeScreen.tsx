@@ -15,6 +15,8 @@ import Svg, { Path } from 'react-native-svg';
 import { colors } from '../theme';
 import { WeeklyBarChart } from '../components/WeeklyBarChart';
 import { MenuDrawer } from '../components/NavigationSidebar';
+import { useAuthStore } from '../store/authStore';
+import { BottomNavigation } from '../components/BottomNavigation';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FIGMA_WIDTH = 402;
@@ -52,7 +54,7 @@ const mockWeeklyData: WeeklyData[] = [
 
 export const ScreenTimeScreen: React.FC = () => {
     const router = useRouter();
-    const [streakDays] = useState(4);
+    const { streakDays } = useAuthStore();
     const [menuVisible, setMenuVisible] = useState(false);
     const [totalChange] = useState(-24);
 
@@ -69,7 +71,7 @@ export const ScreenTimeScreen: React.FC = () => {
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
                     </View>
-                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
+                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)} activeOpacity={0.7}>
                         <Feather name="menu" size={scale(24)} color="#000" />
                     </TouchableOpacity>
                 </View>
@@ -111,24 +113,18 @@ export const ScreenTimeScreen: React.FC = () => {
                         Совсем скоро здесь будет много{'\n'}
                         интересного!
                     </Text>
+
+                    <TouchableOpacity
+                        style={{ marginTop: 20, backgroundColor: '#000', padding: 12, borderRadius: 8 }}
+                        onPress={() => router.push('/phone-analysis')}
+                    >
+                        <Text style={{ color: '#fff', fontWeight: 'bold' }}>Analyze Phone Usage</Text>
+                    </TouchableOpacity>
                 </View>
             </ScrollView>
 
             {/* Bottom Navigation */}
-            <View style={styles.bottomNav}>
-                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/home')}>
-                    <Ionicons name="home-outline" size={scale(28)} color="#A3A3A3" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/statistics')}>
-                    <Ionicons name="bar-chart" size={scale(28)} color="#000" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/ai-coach-chat')}>
-                    <MaterialCommunityIcons name="lightbulb-outline" size={scale(28)} color="#A3A3A3" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem}>
-                    <MaterialCommunityIcons name="calendar-text" size={scale(28)} color="#A3A3A3" />
-                </TouchableOpacity>
-            </View>
+            <BottomNavigation activeTab="statistics" />
 
             {/* Menu Drawer */}
             <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />
@@ -220,7 +216,6 @@ const styles = StyleSheet.create({
         lineHeight: scale(22),
         marginBottom: scale(12),
     },
-    // Figma: font-size: 12px, font-weight: 300, line-height: 15px, width: 251px
     maintenanceSubtitle: {
         fontFamily: 'Geometria-Light',
         fontSize: scale(12),
@@ -228,26 +223,6 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: scale(15),
         width: scale(251),
-    },
-    bottomNav: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        height: scale(60),
-        marginHorizontal: scale(16),
-        marginBottom: scale(16),
-        borderRadius: scale(47),
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
-    },
-    navItem: {
-        padding: scale(12),
     },
 });
 

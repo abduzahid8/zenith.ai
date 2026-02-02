@@ -1,25 +1,40 @@
 import 'react-native-url-polyfill/auto';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Supabase configuration
-// TODO: Replace with your actual Supabase URL and anon key
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://demo.supabase.co';
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'demo-anon-key';
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-        storage: AsyncStorage,
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: false,
-    },
-});
+let supabaseInstance: SupabaseClient | null = null;
+
+const getSupabase = (): SupabaseClient => {
+    if (supabaseInstance) return supabaseInstance;
+
+    if (!SUPABASE_URL || !SUPABASE_URL.startsWith('http')) {
+        console.warn('Supabase URL is invalid or missing. Check your .env file.');
+        // Return a dummy/mock client to prevent crash, or allow createClient to throw?
+        // createClient WILL throw if URL is invalid.
+        // We must NOT call createClient if URL is bad.
+        throw new Error('Supabase Configuration Error: Invalid URL in .env');
+    }
+
+    supabaseInstance = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+            storage: AsyncStorage,
+            autoRefreshToken: true,
+            persistSession: true,
+            detectSessionInUrl: false,
+        },
+    });
+    return supabaseInstance;
+};
 
 // Auth helpers
 export const authService = {
     // Sign up with email
     signUp: async (email: string, password: string) => {
+        const supabase = getSupabase();
         const { data, error } = await supabase.auth.signUp({
             email,
             password,
@@ -30,6 +45,7 @@ export const authService = {
 
     // Sign in with email
     signIn: async (email: string, password: string) => {
+        const supabase = getSupabase();
         const { data, error } = await supabase.auth.signInWithPassword({
             email,
             password,
@@ -40,19 +56,27 @@ export const authService = {
 
     // Sign out
     signOut: async () => {
+        const supabase = getSupabase();
         const { error } = await supabase.auth.signOut();
         if (error) throw error;
     },
 
     // Get current session
     getSession: async () => {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        return data.session;
+        try {
+            const supabase = getSupabase();
+            const { data, error } = await supabase.auth.getSession();
+            if (error) throw error;
+            return data.session;
+        } catch (e) {
+            console.warn('Supabase init skipped or failed:', e);
+            return null;
+        }
     },
 
     // Get current user
     getUser: async () => {
+        const supabase = getSupabase();
         const { data, error } = await supabase.auth.getUser();
         if (error) throw error;
         return data.user;
@@ -93,6 +117,7 @@ export interface UserProfile {
 export const dbService = {
     // Save quiz answers
     saveQuizAnswers: async (userId: string, answers: Record<number, number>) => {
+        const supabase = getSupabase();
         const { data, error } = await supabase
             .from('quiz_answers')
             .insert({ user_id: userId, answers })
@@ -104,6 +129,7 @@ export const dbService = {
 
     // Get quiz answers
     getQuizAnswers: async (userId: string) => {
+        const supabase = getSupabase();
         const { data, error } = await supabase
             .from('quiz_answers')
             .select('*')
@@ -117,6 +143,7 @@ export const dbService = {
 
     // Save selected hobby
     saveHobby: async (userId: string, hobbyId: string) => {
+        const supabase = getSupabase();
         const { data, error } = await supabase
             .from('user_hobbies')
             .insert({ user_id: userId, hobby_id: hobbyId })
@@ -128,6 +155,7 @@ export const dbService = {
 
     // Get user's hobbies
     getUserHobbies: async (userId: string) => {
+        const supabase = getSupabase();
         const { data, error } = await supabase
             .from('user_hobbies')
             .select('*')
@@ -138,6 +166,7 @@ export const dbService = {
 
     // Save session
     saveSession: async (userId: string, hobbyId: string, durationSeconds: number) => {
+        const supabase = getSupabase();
         const { data, error } = await supabase
             .from('sessions')
             .insert({ user_id: userId, hobby_id: hobbyId, duration_seconds: durationSeconds })
@@ -149,6 +178,7 @@ export const dbService = {
 
     // Get user sessions
     getUserSessions: async (userId: string, limit: number = 10) => {
+        const supabase = getSupabase();
         const { data, error } = await supabase
             .from('sessions')
             .select('*')
@@ -161,6 +191,7 @@ export const dbService = {
 
     // Get/create user profile
     getOrCreateProfile: async (userId: string) => {
+        const supabase = getSupabase();
         let { data, error } = await supabase
             .from('user_profiles')
             .select('*')
@@ -184,6 +215,7 @@ export const dbService = {
 
     // Update premium status
     updatePremiumStatus: async (userId: string, isPremium: boolean) => {
+        const supabase = getSupabase();
         const { data, error } = await supabase
             .from('user_profiles')
             .update({ is_premium: isPremium })
@@ -195,4 +227,5 @@ export const dbService = {
     },
 };
 
-export default supabase;
+// Export getSupabase for direct usage if needed, but prefer services
+export { getSupabase };

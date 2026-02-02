@@ -12,7 +12,8 @@ import { colors } from '../theme';
 interface ButtonProps {
     title: string;
     onPress: () => void;
-    variant?: 'primary' | 'secondary' | 'outline';
+    variant?: 'primary' | 'secondary' | 'outline' | 'gradient';
+    size?: 'small' | 'medium' | 'large';
     disabled?: boolean;
     loading?: boolean;
     style?: ViewStyle;
@@ -23,6 +24,7 @@ export const Button: React.FC<ButtonProps> = ({
     title,
     onPress,
     variant = 'primary',
+    size = 'medium',
     disabled = false,
     loading = false,
     style,
@@ -36,8 +38,21 @@ export const Button: React.FC<ButtonProps> = ({
                 return styles.secondaryButton;
             case 'outline':
                 return styles.outlineButton;
+            case 'gradient':
+                return styles.gradientButton;
             default:
                 return styles.primaryButton;
+        }
+    };
+
+    const getSizeStyle = (): ViewStyle => {
+        switch (size) {
+            case 'small':
+                return { height: 40, paddingHorizontal: 20 };
+            case 'large':
+                return { height: 64, paddingHorizontal: 40 };
+            default:
+                return {}; // medium uses default button styles
         }
     };
 
@@ -57,6 +72,7 @@ export const Button: React.FC<ButtonProps> = ({
             style={[
                 styles.button,
                 getButtonStyle(),
+                getSizeStyle(),
                 disabled && styles.disabled,
                 style,
             ]}
@@ -90,6 +106,9 @@ const styles = StyleSheet.create({
         backgroundColor: 'transparent',
         borderWidth: 1,
         borderColor: colors.text,
+    },
+    gradientButton: {
+        backgroundColor: '#6E5EFF', // Gradient approximation as solid color
     },
     buttonText: {
         fontFamily: 'Gramatika-Bold',

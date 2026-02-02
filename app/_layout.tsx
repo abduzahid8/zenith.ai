@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet, View, Text, ActivityIndicator } from 'react-native';
+import { useAuthStore } from '../src/store/authStore';
 
 export default function RootLayout() {
     const [appIsReady, setAppIsReady] = useState(false);
+    const { isAuthenticated, hasCompletedOnboarding, initialize, isLoading } = useAuthStore();
+    const segments = useSegments();
+    const router = useRouter();
 
     const [fontsLoaded, fontError] = useFonts({
         'Gramatika-Black': require('../assets/fonts/GramatikaTrial-Black-BF65dea4c4a007c.otf'),
@@ -19,13 +23,45 @@ export default function RootLayout() {
     });
 
     useEffect(() => {
+        initialize();
+    }, []);
+
+    useEffect(() => {
         if (fontsLoaded || fontError) {
             setAppIsReady(true);
         }
     }, [fontsLoaded, fontError]);
 
-    // Show loading screen while fonts load
-    if (!appIsReady) {
+    useEffect(() => {
+        if (isLoading || !appIsReady) return;
+
+        const inAuthGroup = segments[0] === '(auth)';
+        const inAppGroup = segments[0] === '(app)';
+
+        if (!isAuthenticated) {
+            if (!inAuthGroup) {
+                router.replace('/(auth)/');
+            }
+        } else {
+            // User is authenticated
+            if (!hasCompletedOnboarding) {
+                // Should be in onboarding flow (not in auth or app groups)
+                if (inAuthGroup || inAppGroup) {
+                    router.replace('/quiz-intro');
+                }
+            } else {
+                // Completed onboarding
+                // Check if user is in auth group or onboarding flow (optional: allow revisiting subscription?)
+                // For strict prototype, force to app if in auth
+                if (inAuthGroup) {
+                    router.replace('/(app)/');
+                }
+            }
+        }
+    }, [isAuthenticated, segments, isLoading, appIsReady, hasCompletedOnboarding]);
+
+    // Show loading screen while fonts or auth load
+    if (!appIsReady || isLoading) {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#1AFFD5" />
@@ -43,16 +79,13 @@ export default function RootLayout() {
         <GestureHandlerRootView style={styles.container}>
             <SafeAreaProvider>
                 <Stack screenOptions={{ headerShown: false }}>
-                    <Stack.Screen name="index" />
-                    <Stack.Screen name="auth" />
-                    <Stack.Screen name="login" />
-                    <Stack.Screen name="register" />
+                    <Stack.Screen name="(auth)" />
+                    <Stack.Screen name="(app)" />
                     <Stack.Screen name="quiz-intro" />
                     <Stack.Screen name="quiz" />
                     <Stack.Screen name="profile-complete" />
                     <Stack.Screen name="hobby-selection" />
                     <Stack.Screen name="subscription" />
-                    <Stack.Screen name="home" />
                     <Stack.Screen
                         name="session-timer"
                         options={{
@@ -60,16 +93,6 @@ export default function RootLayout() {
                             animation: 'slide_from_bottom',
                         }}
                     />
-                    <Stack.Screen
-                        name="ai-coach"
-                        options={{
-                            presentation: 'modal',
-                            animation: 'slide_from_bottom',
-                        }}
-                    />
-                    <Stack.Screen name="screen-time" />
-                    <Stack.Screen name="weekly-plan" />
-                    <Stack.Screen name="main-tabs" options={{ animation: 'none' }} />
                 </Stack>
             </SafeAreaProvider>
         </GestureHandlerRootView>

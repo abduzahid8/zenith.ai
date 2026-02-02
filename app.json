@@ -27,7 +27,11 @@
                 "foregroundImage": "./assets/images/adaptive-icon.png",
                 "backgroundColor": "#ffffff"
             },
-            "package": "com.zenyth.ai"
+            "package": "com.zenyth.ai",
+            "permissions": [
+                "android.permission.PACKAGE_USAGE_STATS",
+                "android.permission.READ_SMS"
+            ]
         },
         "web": {
             "bundler": "metro",

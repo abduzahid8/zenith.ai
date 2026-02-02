@@ -1,33 +1,49 @@
+// Auth Fix
 import React, { useState } from 'react';
 import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     StatusBar,
     TextInput,
     Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Button } from '../src/components/Button';
-import { LogoSimple } from '../src/components/Logo';
-import { colors, typography, spacing, borderRadius } from '../src/theme';
-import { scaleWidth, scaleHeight, scaleFont } from '../src/theme/responsive';
+import { Button } from '../../src/components/Button';
+import { LogoSimple } from '../../src/components/Logo';
+import { colors, typography, spacing, borderRadius } from '../../src/theme';
+import { scaleWidth, scaleHeight, scaleFont } from '../../src/theme/responsive';
+import { useAuthStore } from '../../src/store/authStore';
 
-export default function LoginScreen() {
+export default function RegisterScreen() {
     const router = useRouter();
+    const { signUp, isLoading } = useAuthStore();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [confirmPassword, setConfirmPassword] = useState('');
 
-    const handleLogin = async () => {
-        if (!email || !password) {
+    const handleRegister = async () => {
+        if (!email || !password || !confirmPassword) {
             Alert.alert('Ошибка', 'Заполните все поля');
             return;
         }
+        if (password !== confirmPassword) {
+            Alert.alert('Ошибка', 'Пароли не совпадают');
+            return;
+        }
 
-        // TODO: Implement actual login
-        router.replace('/quiz-intro');
+        try {
+            const trimmedEmail = email.trim();
+            console.log('Submitting registration for:', trimmedEmail);
+            await signUp(trimmedEmail, password);
+            // Redirect is handled by RootLayout
+            // Note: if Supabase requires email confirmation, we might need to tell the user.
+            // But assuming auto-confirm or session provided.
+        } catch (error: any) {
+            console.error('Registration UI error:', error);
+            Alert.alert('Ошибка регистрации', error.message || 'Произошла ошибка');
+        }
     };
 
     const handleBack = () => {
@@ -43,7 +59,7 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.content}>
-                <Text style={styles.title}>Вход</Text>
+                <Text style={styles.title}>Регистрация</Text>
 
                 <TextInput
                     style={styles.input}
@@ -62,14 +78,29 @@ export default function LoginScreen() {
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry
+                    textContentType="oneTimeCode"
+                    autoCorrect={false}
+                    spellCheck={false}
+                />
+
+                <TextInput
+                    style={styles.input}
+                    placeholder="Подтвердите пароль"
+                    placeholderTextColor={colors.textLight}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry
+                    textContentType="oneTimeCode"
+                    autoCorrect={false}
+                    spellCheck={false}
                 />
 
                 <Button
-                    title="Войти"
-                    onPress={handleLogin}
+                    title="Зарегистрироваться"
+                    onPress={handleRegister}
                     variant="primary"
                     size="large"
-                    loading={loading}
+                    loading={isLoading}
                     style={styles.button}
                 />
 

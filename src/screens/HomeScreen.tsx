@@ -8,12 +8,17 @@ import {
     TouchableOpacity,
     Dimensions,
     Image,
+    Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, getGreeting } from '../store/authStore';
 import { MenuDrawer } from '../components/NavigationSidebar';
+import { BottomNavigation } from '../components/BottomNavigation';
+import { Platform } from 'react-native';
+// @ts-ignore
+import { hasUsagePermission } from 'device-activity';
 
 // Scale from Figma (402x874) to device
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -34,29 +39,42 @@ const ChessIcon = () => (
 
 export const HomeScreen: React.FC = () => {
     const router = useRouter();
-    const { selectedHobby, isPremium } = useAuthStore();
-    const [greeting, setGreeting] = useState('Привет');
-    const [streakDays] = useState(4);
+    const { selectedHobby, isPremium, streakDays, userName } = useAuthStore();
     const [menuVisible, setMenuVisible] = useState(false);
 
-    // Set greeting based on time of day
     useEffect(() => {
-        const hour = new Date().getHours();
-        if (hour < 12) {
-            setGreeting('Доброе утро');
-        } else if (hour < 18) {
-            setGreeting('Добрый день');
-        } else {
-            setGreeting('Добрый вечер');
+        if (Platform.OS === 'android') {
+            checkAutoPrompt();
         }
     }, []);
+
+    const checkAutoPrompt = async () => {
+        try {
+            const hasPerm = await hasUsagePermission();
+            if (!hasPerm) {
+                Alert.alert(
+                    "Allow Phone Analysis",
+                    "We need access to your usage stats to provide insights. Would you like to enable this?",
+                    [
+                        { text: "No", style: "cancel" },
+                        { text: "Yes", onPress: () => router.push('/phone-analysis') }
+                    ]
+                );
+            }
+        } catch (e) {
+            console.log('Error checking permissions', e);
+        }
+    };
+
+    // Get dynamic greeting based on time and user name
+    const greeting = getGreeting();
 
     const handleStartSession = () => {
         router.push('/session-timer');
     };
 
     const handleDailyGoal = () => {
-        router.push('/weekly-plan');
+        router.replace('/main-tabs');
     };
 
     const handleAICoach = () => {
@@ -64,7 +82,7 @@ export const HomeScreen: React.FC = () => {
     };
 
     const handleScreenTime = () => {
-        router.push('/screen-time');
+        router.replace('/main-tabs');
     };
 
     return (
@@ -73,14 +91,14 @@ export const HomeScreen: React.FC = () => {
 
             {/* Header */}
             <View style={styles.header}>
-                <Text style={styles.greetingText}>Привет !</Text>
+                <Text style={styles.greetingText}>{greeting}</Text>
                 <View style={styles.headerRight}>
                     <ChessIcon />
                     <View style={styles.streakContainer}>
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
                     </View>
-                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
+                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)} activeOpacity={0.7}>
                         <Feather name="menu" size={scale(24)} color="#000" />
                     </TouchableOpacity>
                 </View>
@@ -129,20 +147,7 @@ export const HomeScreen: React.FC = () => {
             </View>
 
             {/* Bottom Navigation */}
-            <View style={styles.bottomNav}>
-                <TouchableOpacity style={styles.navItem}>
-                    <Ionicons name="home" size={scale(28)} color="#000" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/statistics')}>
-                    <Ionicons name="bar-chart" size={scale(28)} color="#A3A3A3" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/ai-coach-chat')}>
-                    <MaterialCommunityIcons name="lightbulb-outline" size={scale(28)} color="#A3A3A3" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem}>
-                    <MaterialCommunityIcons name="calendar-text" size={scale(28)} color="#A3A3A3" />
-                </TouchableOpacity>
-            </View>
+            <BottomNavigation activeTab="home" />
 
             {/* Menu Drawer */}
             <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />
@@ -271,33 +276,11 @@ const styles = StyleSheet.create({
         elevation: 3,
         justifyContent: 'flex-start',
     },
-    // Figma: font-size 22px, weight 700, line-height 22px
     smallCardTitle: {
         fontFamily: 'Gramatika-Bold',
         fontSize: scale(22),
         lineHeight: scale(24),
         color: '#1E1E2E',
-    },
-    // Bottom Navigation - Figma: height 60px, border-radius 47px
-    bottomNav: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        height: scale(60),
-        marginHorizontal: scale(16),
-        marginBottom: scale(16),
-        borderRadius: scale(47),
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
-    },
-    navItem: {
-        padding: scale(12),
     },
 });
 

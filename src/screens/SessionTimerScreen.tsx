@@ -7,651 +7,354 @@ import {
     StatusBar,
     TouchableOpacity,
     Dimensions,
-    Modal,
     LayoutAnimation,
     Animated,
+    Easing,
+    Image,
+    Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
-import Svg, { Circle, G, Path } from 'react-native-svg';
-import { MenuDrawer } from '../components/NavigationSidebar';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 // Screen Dimensions
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FIGMA_WIDTH = 402;
 const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
 
-// Colors from Request
+// Colors - Blue Theme (Goal)
 const COLORS = {
-    background: '#FFFFFF',
-    text: '#000000',
-    primary: '#6E5EFF', // Timer function color
-    toggleActiveBg: '#BABABA', // Darker grey for active toggle
-    toggleInactiveBg: '#F1F1F1', // Light grey for inactive toggle
-    controlLight: '#F1F1F1', // Second (Reset) and Fourth (Stop) buttons
-    controlDark: '#C4C4C4', // Third (Play) button
-    iconDark: '#3A3A3A',
-    iconBlack: '#020202',
-    summaryCardBg: '#D9D9D9', // Approx grey from screenshot
+    background: '#F2F6FC', // Very light blue/grey typical of the design
+    primary: '#37A0EF',   // Updated Blue color
+    primaryFaded: '#D6EBFD', // Lighter faded blue for track matching Goal
+    text: '#2E2E43',
+    white: '#FFFFFF',
+    navBg: 'rgba(255, 255, 255, 0.95)',
+    controlDark: '#2E2E43', // Dark background for Reset/Stop buttons
 };
 
-// Play Icon SVG
-const PlayIcon = () => (
-    <Svg width={scale(31)} height={scale(34)} viewBox="0 0 31 34" fill="none">
-        <Path d="M28.3334 13.1556C31.0439 14.6864 31.0439 18.5904 28.3334 20.1213L5.96712 32.7538C3.30064 34.2598 2.98024e-07 32.3333 2.98024e-07 29.2709V4.00595C2.98024e-07 0.943553 3.30064 -0.982947 5.96712 0.523083L28.3334 13.1556Z" fill="#3A3A3A" />
-    </Svg>
-);
+// Types
+const TABS = [
+    { key: 'home', icon: 'home', iconOutline: 'home-outline', type: 'ionicon' },
+    { key: 'statistics', icon: 'bar-chart', iconOutline: 'bar-chart-outline', type: 'ionicon' },
+    { key: 'ai-coach', icon: 'lightbulb', iconOutline: 'lightbulb-outline', type: 'material' },
+    { key: 'weekly-plan', icon: 'clipboard-text', iconOutline: 'clipboard-text-outline', type: 'material' },
+];
 
-const TaskProgressIcon = ({ number }: { number: number }) => (
-    <View style={{ width: scale(108), height: scale(108), justifyContent: 'center', alignItems: 'center' }}>
-        <Svg width={scale(108)} height={scale(108)} viewBox="0 0 108 108" fill="none" style={{ position: 'absolute' }}>
-            <Circle cx="54" cy="54" r="44" stroke="#DCDCDC" strokeWidth="20" />
-            <Path d="M54 9.89734C54 4.43119 58.4678 -0.0919748 63.8424 0.904367C73.9807 2.78381 83.4429 7.54257 91.0451 14.7106C101.066 24.1588 107.098 37.0788 107.907 50.8274C108.716 64.5761 104.241 78.1144 95.398 88.6728C88.689 96.6831 79.8504 102.519 70.0025 105.575C64.7819 107.194 59.8144 103.227 59.1732 97.7982C58.532 92.3698 62.5184 87.5758 67.5381 85.4122C72.4056 83.3143 76.7616 80.0954 80.2228 75.9629C85.8244 69.2749 88.6588 60.6993 88.1462 51.9904C87.6337 43.2815 83.8129 35.0976 77.4656 29.1128C73.5435 25.4148 68.84 22.7291 63.7601 21.2166C58.5212 19.6568 54 15.3635 54 9.89734Z" fill="#BCBCBC" />
-        </Svg>
-        <Text style={{ fontFamily: 'Gramatika-Bold', fontSize: scale(40), color: '#000' }}>{number}</Text>
-    </View>
-);
+// Circular Progress Component
+const TimerProgress = ({ progress, size, strokeWidth, color, trackColor, children }: any) => {
+    const radius = (size - strokeWidth) / 2;
+    const circumference = radius * 2 * Math.PI;
+    const strokeDashoffset = circumference - (progress * circumference);
+
+    return (
+        <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
+            <Svg width={size} height={size} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
+                {/* Track */}
+                <Circle
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    stroke={trackColor}
+                    strokeWidth={strokeWidth}
+                    fill="none"
+                />
+                {/* Progress */}
+                <Circle
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    stroke={color}
+                    strokeWidth={strokeWidth}
+                    fill="none"
+                    strokeDasharray={`${circumference} ${circumference}`}
+                    strokeDashoffset={strokeDashoffset}
+                    strokeLinecap="round"
+                />
+            </Svg>
+            {children}
+        </View>
+    );
+};
 
 export const SessionTimerScreen: React.FC = () => {
     const router = useRouter();
-    const [streakDays] = useState(4);
-    const [activeView, setActiveView] = useState<'timer' | 'list' | 'ai-chat' | 'summary'>('timer');
-    const [activeCategory, setActiveCategory] = useState<'tasks' | 'ai'>('tasks');
-    const [menuVisible, setMenuVisible] = useState(false);
+    const [timerStatus, setTimerStatus] = useState<'idle' | 'running' | 'paused'>('idle');
+    const [timeLeft, setTimeLeft] = useState(30 * 60); // 30 minutes in seconds
+    const [isTaskListVisible, setIsTaskListVisible] = useState(false);
+    const totalTime = 30 * 60;
 
+    const controlsAnim = useRef(new Animated.Value(0)).current;
+    const drawerAnim = useRef(new Animated.Value(-scale(286))).current; // Start hidden (left)
+    const backdropAnim = useRef(new Animated.Value(0)).current; // Opacity 0
+
+    // Timer Logic
     useEffect(() => {
-        Animated.timing(toggleAnim, {
-            toValue: activeView === 'timer' ? 0 : 1,
-            duration: 300,
-            useNativeDriver: true,
-            easing: (t) => t * (2 - t), // easeOutQuad
-        }).start();
-    }, [activeView]);
+        let interval: any;
+        if (timerStatus === 'running' && timeLeft > 0) {
+            interval = setInterval(() => {
+                setTimeLeft((prev) => prev - 1);
+            }, 1000);
+        } else if (timeLeft === 0) {
+            setTimerStatus('idle'); // Or 'completed' if we had that state
+        }
+        return () => clearInterval(interval);
+    }, [timerStatus, timeLeft]);
 
-    // Animated value for category toggle (0 = tasks, 1 = ai)
-    const categoryAnim = useRef(new Animated.Value(0)).current;
-
-    // Helper for category toggle with smooth animation
-    const handleCategoryChange = (category: 'tasks' | 'ai') => {
-        Animated.timing(categoryAnim, {
-            toValue: category === 'tasks' ? 0 : 1,
-            duration: 400,
-            useNativeDriver: false, // Required for width/backgroundColor animation
-            easing: (t) => t * (2 - t), // easeOutQuad
-        }).start();
-        setActiveCategory(category);
-    };
-
-    // Interpolated values for smooth animation
-    const tasksButtonWidth = categoryAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [scale(240), scale(70)],
-    });
-    const aiButtonWidth = categoryAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [scale(70), scale(240)],
-    });
-    const tasksButtonBg = categoryAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['#37A0EF', '#FBFBFB'],
-    });
-    const aiButtonBg = categoryAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['#FBFBFB', '#37A0EF'],
-    });
-    const tasksIconColor = categoryAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['#FFFFFF', '#3D3D3D'],
-    });
-    const aiIconColor = categoryAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['#3D3D3D', '#FFFFFF'],
-    });
-
-    // Helper to switch to AI Chat with animation
-    const handleAICoachClick = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setActiveView('ai-chat');
-    };
-
-    // Helper to switch to list view with animation
-    const handleListClick = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setActiveView('list');
-    };
-
-    // Timer State
-    const INITIAL_DURATION = 30 * 60; // 30 minutes
-    const [timeLeft, setTimeLeft] = useState(INITIAL_DURATION);
-    const [isRunning, setIsRunning] = useState(false);
-    const [hasStarted, setHasStarted] = useState(false);
-    const [showChecklist, setShowChecklist] = useState(false);
-    const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
-
-    // Tasks List - Not used in new design but kept for state reference if needed
-    const initialTasks = [
-        'Изучить 1 базовый дебют',
-        'Сыграть 2 партии без отвлечений',
-    ];
-    const [tasks, setTasks] = useState(initialTasks.map(t => ({ text: t, completed: false })));
-
-    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const progressAnim = useRef(new Animated.Value(1)).current;
-    const toggleAnim = useRef(new Animated.Value(0)).current; // 0 = timer, 1 = list
-    const [progressValue, setProgressValue] = useState(1);
-
-    // Animation values for flying buttons
-    const task1Anim = useRef(new Animated.Value(0)).current; // 0 = hidden/start pos, 1 = visible/end pos
-    const task2Anim = useRef(new Animated.Value(0)).current;
-
-    // Circle config
-    const size = scale(310);
-    const strokeWidth = scale(25);
-    const radius = (size - strokeWidth) / 2;
-    const circumference = radius * 2 * Math.PI;
-
-    // Listen to animated value changes
+    // Animation Logic for Controls
     useEffect(() => {
-        const listenerId = progressAnim.addListener(({ value }) => {
-            setProgressValue(value);
-        });
-        return () => {
-            progressAnim.removeListener(listenerId);
-            if (intervalRef.current) clearInterval(intervalRef.current);
-        };
-    }, []);
+        if (timerStatus !== 'idle') {
+            Animated.timing(controlsAnim, {
+                toValue: 1,
+                duration: 1600, // Slowed down to 1 second
+                useNativeDriver: true,
+                easing: Easing.out(Easing.back(1.5)), // Slight overshoot for "pop" effect but smooth
+            }).start();
+        } else {
+            controlsAnim.setValue(0);
+        }
+    }, [timerStatus]);
 
-    // Effect to trigger animations when summary expands
+    // Drawer Animation Logic
     useEffect(() => {
-        if (isSummaryExpanded) {
-            // Reset to 0 first just in case
-            task1Anim.setValue(0);
-            task2Anim.setValue(0);
-
-            Animated.stagger(150, [
-                Animated.spring(task1Anim, {
+        if (isTaskListVisible) {
+            Animated.parallel([
+                Animated.timing(drawerAnim, {
+                    toValue: 0,
+                    duration: 300,
+                    useNativeDriver: true,
+                    easing: Easing.out(Easing.ease),
+                }),
+                Animated.timing(backdropAnim, {
                     toValue: 1,
-                    friction: 6,
-                    tension: 50,
+                    duration: 300,
                     useNativeDriver: true,
                 }),
-                Animated.spring(task2Anim, {
-                    toValue: 1,
-                    friction: 6,
-                    tension: 50,
+            ]).start();
+        } else {
+            Animated.parallel([
+                Animated.timing(drawerAnim, {
+                    toValue: -scale(300), // Move back off-screen
+                    duration: 250,
                     useNativeDriver: true,
-                })
+                    easing: Easing.in(Easing.ease),
+                }),
+                Animated.timing(backdropAnim, {
+                    toValue: 0,
+                    duration: 250,
+                    useNativeDriver: true,
+                }),
             ]).start();
         }
-    }, [isSummaryExpanded]);
+    }, [isTaskListVisible]);
 
-    // Calculate strokeDashoffset based on progress
-    const strokeDashoffset = circumference * (1 - progressValue);
-
+    // Format time mm:ss
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const handleStartPause = () => {
-        if (!hasStarted) setHasStarted(true);
+    const progress = timeLeft / totalTime;
 
-        if (isRunning) {
-            // PAUSE
-            setIsRunning(false);
-            if (intervalRef.current) clearInterval(intervalRef.current);
-            progressAnim.stopAnimation();
+    const handlePlay = () => {
+        setTimerStatus('running');
+    };
+
+    const handlePause = () => {
+        if (timerStatus === 'running') {
+            setTimerStatus('paused');
         } else {
-            // START
-            setIsRunning(true);
-
-            // Animate progress to 0 over the remaining time
-            Animated.timing(progressAnim, {
-                toValue: 0,
-                duration: timeLeft * 1000,
-                easing: (t) => t, // linear
-                useNativeDriver: false,
-            }).start();
-
-            intervalRef.current = setInterval(() => {
-                setTimeLeft((prev) => {
-                    if (prev <= 1) {
-                        if (intervalRef.current) clearInterval(intervalRef.current);
-                        setIsRunning(false);
-                        progressAnim.stopAnimation();
-                        progressAnim.setValue(0);
-                        return 0;
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
+            setTimerStatus('running');
         }
     };
 
     const handleReset = () => {
-        setIsRunning(false);
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        progressAnim.stopAnimation();
-        setTimeLeft(INITIAL_DURATION);
-        Animated.timing(progressAnim, {
-            toValue: 1,
-            duration: 500,
-            useNativeDriver: false,
-        }).start();
+        setTimeLeft(totalTime);
+        setTimerStatus('idle');
     };
 
     const handleStop = () => {
-        console.log('Stop button clicked');
-        setIsRunning(false);
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        progressAnim.stopAnimation();
-
-        // Show Summary View
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setActiveView('summary');
-        setIsSummaryExpanded(true);
+        setTimeLeft(totalTime);
+        setTimerStatus('idle');
+        router.back();
     };
 
-    const handleFinishSession = () => {
-        console.log('Finishing session -> Navigating to stats');
-        setShowChecklist(false);
-        // Navigate to statistics or home after finishing
-        router.replace('/statistics');
+    const renderTabIcon = (tab: typeof TABS[0], index: number) => {
+        const isActive = tab.key === 'home';
+        const color = isActive ? '#000' : '#A3A3A3';
+        const iconName = isActive ? tab.icon : tab.iconOutline;
+
+        if (tab.type === 'ionicon') {
+            return <Ionicons name={iconName as any} size={scale(28)} color={color} />;
+        } else {
+            return <MaterialCommunityIcons name={iconName as any} size={scale(28)} color={color} />;
+        }
     };
 
-    const toggleTask = (index: number) => {
-        const newTasks = [...tasks];
-        newTasks[index].completed = !newTasks[index].completed;
-        setTasks(newTasks);
-    };
+    // Interpolations for sliding animations (Long Slide)
+    const translateXReset = controlsAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [scale(120), 0], // Starts far right (behind center button), moves left to position
+    });
 
-    const handleNavigateHome = () => router.replace('/home');
-    const handleNavigateStatistics = () => router.push('/statistics');
-    const handleNavigateAICoach = () => router.push('/ai-coach-chat');
-    const handleNavigateWeeklyPlan = () => router.push('/weekly-plan');
+    const translateXStop = controlsAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [scale(-120), 0], // Starts far left (behind center button), moves right to position
+    });
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
+            <StatusBar barStyle="dark-content" />
 
-            {/* Header */}
-            <View style={styles.header}>
-                <View style={styles.headerRight}>
-                    <View style={styles.streakContainer}>
-                        <Text style={styles.streakNumber}>{streakDays}</Text>
-                        <Text style={styles.fireIcon}>🔥</Text>
-                    </View>
-                    <TouchableOpacity onPress={handleAICoachClick} style={{ padding: scale(4) }}>
-                        <MaterialCommunityIcons name="lightbulb-on-outline" size={scale(24)} color="#000" />
+            <View style={styles.header} />
+
+            {/* Visual Menu Button (Top Left) - Only visible when active */}
+            {timerStatus !== 'idle' && (
+                <Animated.View style={{ opacity: controlsAnim, position: 'absolute', top: scale(100), left: scale(24), zIndex: 10 }}>
+                    <TouchableOpacity
+                        style={styles.floatingMenu}
+                        activeOpacity={0.7}
+                        onPress={() => setIsTaskListVisible(true)}
+                    >
+                        <MaterialCommunityIcons name="format-list-checks" size={scale(24)} color="#1E1E2E" />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
-                        <Feather name="menu" size={scale(24)} color="#000" />
-                    </TouchableOpacity>
-                </View>
-            </View>
-
-            {/* Toggles Row - Common (Hidden in Summary) */}
-            {activeView !== 'summary' && (
-                <View style={styles.togglesRow}>
-                    <View style={{ flexDirection: 'row', gap: scale(20), position: 'relative' }}>
-                        {/* Sliding Indicator */}
-                        {hasStarted && (
-                            <Animated.View
-                                style={[
-                                    styles.slidingIndicator,
-                                    {
-                                        transform: [{
-                                            translateX: toggleAnim.interpolate({
-                                                inputRange: [0, 1],
-                                                outputRange: [0, scale(95)] // 75 + 20
-                                            })
-                                        }]
-                                    }
-                                ]}
-                            />
-                        )}
-
-                        <TouchableOpacity
-                            style={[styles.toggleButton, { backgroundColor: hasStarted ? 'transparent' : (activeView === 'timer' ? COLORS.toggleActiveBg : COLORS.toggleInactiveBg) }]}
-                            onPress={() => setActiveView('timer')}
-                        >
-                            <MaterialCommunityIcons
-                                name="clock-outline"
-                                size={scale(32)}
-                                color={COLORS.iconBlack}
-                            />
-                        </TouchableOpacity>
-
-                        {/* List Toggle - Only visible after start */}
-                        {hasStarted && (
-                            <TouchableOpacity
-                                style={[styles.toggleButton, { backgroundColor: 'transparent' }]}
-                                onPress={() => setActiveView('list')}
-                            >
-                                <MaterialCommunityIcons
-                                    // Updated icon to match screenshot (List with checks)
-                                    name="format-list-checks"
-                                    size={scale(32)}
-                                    color={COLORS.iconBlack}
-                                />
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                </View>
+                </Animated.View>
             )}
 
-            {activeView === 'timer' ? (
-                /* Timer View Logic */
-                <>
-                    {/* Timer Circle */}
-                    <View style={styles.timerContainer}>
-                        <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-                            <G rotation="-90" origin={`${size / 2}, ${size / 2}`}>
-                                <Circle
-                                    cx={size / 2}
-                                    cy={size / 2}
-                                    r={radius}
-                                    stroke="#E0E0E0"
-                                    strokeWidth={strokeWidth}
-                                    fill="none"
-                                />
-                                <Circle
-                                    cx={size / 2}
-                                    cy={size / 2}
-                                    r={radius}
-                                    stroke={COLORS.primary}
-                                    strokeWidth={strokeWidth}
-                                    strokeLinecap="round"
-                                    strokeDasharray={`${circumference} ${circumference}`}
-                                    strokeDashoffset={strokeDashoffset}
-                                    fill="none"
-                                />
-                            </G>
-                        </Svg>
+            {/* Main Content */}
+            <View style={styles.content}>
 
-                        <View style={[styles.timeDisplay, { width: size, height: size }]}>
-                            <Text style={styles.timeText}>{formatTime(timeLeft)}</Text>
-                        </View>
-                    </View>
+                {/* Timer Circle */}
+                <TimerProgress
+                    size={scale(300)}
+                    strokeWidth={scale(25)}
+                    color={COLORS.primary}
+                    trackColor={COLORS.primaryFaded}
+                    progress={progress}
+                >
+                    <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
+                </TimerProgress>
 
-                    {/* Controls */}
-                    <View style={styles.controlsRow}>
-                        <TouchableOpacity style={styles.secondButton} onPress={handleReset}>
-                            <MaterialCommunityIcons name="restart" size={scale(34)} color={COLORS.iconDark} />
+                {/* Controls */}
+                <View style={styles.controlsContainer}>
+                    {timerStatus === 'idle' ? (
+                        // Initial State: Single Play Button
+                        <TouchableOpacity
+                            style={styles.playButton}
+                            onPress={handlePlay}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons
+                                name="play"
+                                size={scale(40)}
+                                color={COLORS.white}
+                                style={{ marginLeft: scale(5) }}
+                            />
                         </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.thirdButton} onPress={handleStartPause}>
-                            {isRunning ? (
-                                <Ionicons name="pause" size={scale(40)} color={COLORS.iconDark} />
-                            ) : (
-                                <PlayIcon />
-                            )}
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.fourthButton} onPress={handleStop}>
-                            <View style={styles.fourthButtonIcon} />
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Bottom Navigation */}
-                    <View style={styles.bottomNav}>
-                        <TouchableOpacity style={styles.navItem} onPress={handleNavigateHome}>
-                            <Ionicons name="home" size={scale(28)} color="#000" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.navItem} onPress={handleNavigateStatistics}>
-                            <Ionicons name="bar-chart-outline" size={scale(28)} color="#A3A3A3" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.navItem} onPress={handleNavigateAICoach}>
-                            <MaterialCommunityIcons name="lightbulb-outline" size={scale(28)} color="#A3A3A3" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.navItem} onPress={handleNavigateWeeklyPlan}>
-                            <MaterialCommunityIcons name="calendar-text" size={scale(28)} color="#A3A3A3" />
-                        </TouchableOpacity>
-                    </View>
-                </>
-            ) : (
-                /* Summary / List View */
-                <View style={styles.listContainer}>
-                    {/* Buttons 3 & 4 (Top Row) */}
-
-
-                    {activeView === 'list' ? (
-                        <View style={{ flex: 1, width: '100%', alignItems: 'center' }}>
-                            {/* Category Filter Buttons Row */}
-                            <View style={styles.categoryButtonsRow}>
-                                <TouchableOpacity onPress={() => handleCategoryChange('tasks')} activeOpacity={0.8}>
-                                    <Animated.View
-                                        style={[
-                                            styles.categoryButtonBase,
-                                            {
-                                                width: tasksButtonWidth,
-                                                backgroundColor: tasksButtonBg,
-                                            }
-                                        ]}
-                                    >
-                                        <Animated.View style={{ opacity: activeCategory === 'tasks' ? 1 : 0.7 }}>
-                                            <MaterialCommunityIcons
-                                                name="format-list-checks"
-                                                size={scale(24)}
-                                                color={activeCategory === 'tasks' ? '#FFFFFF' : '#3D3D3D'}
-                                            />
-                                        </Animated.View>
-                                    </Animated.View>
+                    ) : (
+                        // Active State: 3 Buttons
+                        <View style={styles.activeControls}>
+                            {/* Reset Button */}
+                            <Animated.View style={{ transform: [{ translateX: translateXReset }] }}>
+                                <TouchableOpacity
+                                    style={styles.secondaryControl}
+                                    onPress={handleReset}
+                                    activeOpacity={0.8}
+                                >
+                                    <MaterialCommunityIcons name="replay" size={scale(32)} color={COLORS.white} />
                                 </TouchableOpacity>
-                                <TouchableOpacity onPress={() => handleCategoryChange('ai')} activeOpacity={0.8}>
-                                    <Animated.View
-                                        style={[
-                                            styles.categoryButtonBase,
-                                            {
-                                                width: aiButtonWidth,
-                                                backgroundColor: aiButtonBg,
-                                            }
-                                        ]}
-                                    >
-                                        <Animated.View style={{ opacity: activeCategory === 'ai' ? 1 : 0.7 }}>
-                                            <MaterialCommunityIcons
-                                                name="lightbulb-on-outline"
-                                                size={scale(24)}
-                                                color={activeCategory === 'ai' ? '#FFFFFF' : '#3D3D3D'}
-                                            />
-                                        </Animated.View>
-                                    </Animated.View>
-                                </TouchableOpacity>
-                            </View>
+                            </Animated.View>
 
-                            {/* Content based on active category */}
-                            {activeCategory === 'tasks' ? (
-                                <>
-                                    {/* Button 5 (Task 1) */}
-                                    <TouchableOpacity style={styles.taskButton}>
-                                        <View style={styles.taskIconWrapper}>
-                                            <Svg width={scale(28)} height={scale(28)} viewBox="0 0 28 28" fill="none">
-                                                <Circle cx="14" cy="12" r="12" fill="#C2C2C2" />
-                                            </Svg>
-                                        </View>
-                                        <Text style={styles.taskText}>Изучить 1 базовый дебют</Text>
-                                    </TouchableOpacity>
-
-                                    {/* Button 6 (Task 2) */}
-                                    <TouchableOpacity style={styles.taskButton}>
-                                        <View style={styles.taskIconWrapper}>
-                                            <Svg width={scale(28)} height={scale(28)} viewBox="0 0 28 28" fill="none">
-                                                <Circle cx="14" cy="12" r="12" fill="#C2C2C2" />
-                                            </Svg>
-                                        </View>
-                                        <Text style={[styles.taskText, { maxWidth: scale(263) }]}>Сыграть 2 партии без отвлечений</Text>
-                                    </TouchableOpacity>
-                                </>
-                            ) : (
-                                /* AI Chat View - Empty space with input at bottom */
-                                <View style={{ flex: 1 }} />
-                            )}
-
-                            {/* Bottom Button - Either Continue or Chat Input */}
-                            {activeCategory === 'tasks' ? (
-                                <View style={styles.continueButtonWrapper}>
-                                    <TouchableOpacity
-                                        style={styles.continueButton}
-                                        onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setActiveView('timer'); }}
-                                    >
-                                        <Text style={styles.continueButtonText}>Продолжить</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            ) : (
-                                <View style={styles.chatInputWrapper}>
-                                    <View style={styles.chatInputBar}>
-                                        <Text style={styles.chatInputPlaceholder}>Чем я могу помочь?</Text>
-                                        <TouchableOpacity>
-                                            <Ionicons name="arrow-forward" size={scale(24)} color="#000" />
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-                            )}
-                        </View>
-                    ) : activeView === 'summary' ? (
-                        // Summary View (Triggered by Stop Button)
-                        <View style={{ flex: 1, width: '100%', alignItems: 'center' }}>
+                            {/* Pause/Resume Button */}
                             <TouchableOpacity
-                                style={styles.summaryCard}
-                                activeOpacity={0.9}
-                                onPress={() => setIsSummaryExpanded(!isSummaryExpanded)}
+                                style={[styles.playButton, { zIndex: 10 }]}
+                                onPress={handlePause}
+                                activeOpacity={0.8}
                             >
-                                <View style={styles.summaryHeader}>
-                                    <Text style={styles.summaryTimeText}>16:25</Text>
-                                    <Text style={styles.summaryLabelText}>Время выполнения{'\n'}заданий</Text>
-                                    <View style={styles.summaryChevron}>
-                                        <Feather name={isSummaryExpanded ? "chevron-up" : "chevron-down"} size={scale(24)} color="#000" />
-                                    </View>
-                                </View>
+                                <Ionicons
+                                    name={timerStatus === 'running' ? "pause" : "play"}
+                                    size={scale(40)}
+                                    color={COLORS.white}
+                                    style={timerStatus === 'running' ? {} : { marginLeft: scale(5) }}
+                                />
                             </TouchableOpacity>
 
-                            {/* Expanded Content (Tasks) - Outside Card */}
-                            {isSummaryExpanded && (
-                                <View style={styles.expandedList}>
-                                    {/* Task 1 */}
-                                    <Animated.View
-                                        style={[
-                                            styles.expandedRow,
-                                            {
-                                                opacity: task1Anim,
-                                                transform: [
-                                                    {
-                                                        translateY: task1Anim.interpolate({
-                                                            inputRange: [0, 1],
-                                                            outputRange: [-30, 0]
-                                                        })
-                                                    },
-                                                    {
-                                                        scale: task1Anim.interpolate({
-                                                            inputRange: [0, 1],
-                                                            outputRange: [0.9, 1]
-                                                        })
-                                                    }
-                                                ]
-                                            }
-                                        ]}
-                                    >
-                                        <TaskProgressIcon number={1} />
-                                        <View>
-                                            <Text style={styles.expandedTime}>6:11</Text>
-                                            <Text style={styles.expandedLabel}>Время выполнения{'\n'}1 задачи</Text>
-                                        </View>
-                                    </Animated.View>
-
-                                    {/* Task 2 */}
-                                    <Animated.View
-                                        style={[
-                                            styles.expandedRow,
-                                            {
-                                                opacity: task2Anim,
-                                                transform: [
-                                                    {
-                                                        translateY: task2Anim.interpolate({
-                                                            inputRange: [0, 1],
-                                                            outputRange: [-30, 0]
-                                                        })
-                                                    },
-                                                    {
-                                                        scale: task2Anim.interpolate({
-                                                            inputRange: [0, 1],
-                                                            outputRange: [0.9, 1]
-                                                        })
-                                                    }
-                                                ]
-                                            }
-                                        ]}
-                                    >
-                                        <TaskProgressIcon number={2} />
-                                        <View>
-                                            <Text style={styles.expandedTime}>10:14</Text>
-                                            <Text style={styles.expandedLabel}>Время выполнения{'\n'}2 задачи</Text>
-                                        </View>
-                                    </Animated.View>
-                                </View>
-                            )}
-
-                            <View style={styles.continueButtonWrapper}>
+                            {/* Stop Button */}
+                            <Animated.View style={{ transform: [{ translateX: translateXStop }] }}>
                                 <TouchableOpacity
-                                    style={styles.continueButton}
-                                    onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setActiveView('timer'); }}
+                                    style={styles.secondaryControl}
+                                    onPress={handleStop}
+                                    activeOpacity={0.8}
                                 >
-                                    <Text style={styles.continueButtonText}>Продолжить</Text>
+                                    <Ionicons name="stop" size={scale(32)} color={COLORS.white} />
                                 </TouchableOpacity>
-                            </View>
-                        </View>
-                    ) : (
-                        // AI Chat View
-                        <View style={{ flex: 1, width: '100%', justifyContent: 'flex-end', marginBottom: scale(34) }}>
-                            <View style={styles.chatInputBar}>
-                                <Text style={styles.chatInputPlaceholder}>Чем я могу помочь?</Text>
-                                <TouchableOpacity>
-                                    <Ionicons name="arrow-forward" size={scale(24)} color="#000" />
-                                </TouchableOpacity>
-                            </View>
+                            </Animated.View>
                         </View>
                     )}
                 </View>
+            </View>
+
+            {/* Bottom Navigation */}
+            <View style={styles.bottomNav}>
+                {TABS.map((tab, index) => (
+                    <TouchableOpacity
+                        key={tab.key}
+                        style={styles.navItem}
+                        onPress={() => {
+                            if (tab.key === 'home') router.dismissAll();
+                            else router.push('/' + tab.key as any);
+                        }}
+                    >
+                        {renderTabIcon(tab, index)}
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            {/* Drawer Overlay (Backdrop) */}
+            {(isTaskListVisible || drawerAnim._value > -scale(286)) && (
+                <Animated.View
+                    style={[
+                        styles.drawerBackdrop,
+                        { opacity: backdropAnim }
+                    ]}
+                    pointerEvents={isTaskListVisible ? 'auto' : 'none'}
+                >
+                    <TouchableOpacity
+                        style={{ flex: 1 }}
+                        activeOpacity={1}
+                        onPress={() => setIsTaskListVisible(false)}
+                    />
+                </Animated.View>
             )}
 
-            {/* Checklist Popup */}
-            <Modal
-                visible={showChecklist}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setShowChecklist(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Что удалось сделать?</Text>
+            {/* Side Drawer */}
+            <Animated.View style={[styles.drawerContainer, { transform: [{ translateX: drawerAnim }] }]}>
 
-                        {tasks.map((task, index) => (
-                            <TouchableOpacity
-                                key={index}
-                                style={styles.modalTaskRow}
-                                onPress={() => toggleTask(index)}
-                            >
-                                <View style={[styles.checkbox, task.completed && styles.checkboxChecked]}>
-                                    {task.completed && <Ionicons name="checkmark" size={scale(16)} color="#FFF" />}
-                                </View>
-                                <Text style={styles.modalTaskText}>{task.text}</Text>
-                            </TouchableOpacity>
-                        ))}
+                {/* Drawer Content */}
+                <Text style={styles.drawerTitle}>Твои задачи</Text>
 
-                        <TouchableOpacity
-                            style={styles.finishButton}
-                            onPress={handleFinishSession}
-                        >
-                            <Text style={styles.finishButtonText}>Завершить</Text>
+                <View style={styles.componentsContainer}>
+                    {/* Task Card 1: Debut */}
+                    <View style={styles.taskCard}>
+                        <Text style={styles.taskTitle}>Дебют</Text>
+                        <Text style={styles.taskSubtitle}>Изучить Королевский Гамбит</Text>
+                        <TouchableOpacity style={styles.addButton}>
+                            <Ionicons name="add" size={scale(24)} color="#1E1E2E" />
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Task Card 2: Practice */}
+                    <View style={styles.taskCard}>
+                        <Text style={styles.taskTitle}>Практика</Text>
+                        <Text style={styles.taskSubtitle}>Сыграть 2 партии</Text>
+                        <TouchableOpacity style={styles.addButton}>
+                            <Ionicons name="add" size={scale(24)} color="#1E1E2E" />
                         </TouchableOpacity>
                     </View>
                 </View>
-            </Modal>
-
-            {/* Menu Drawer */}
-            <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />
-
-        </SafeAreaView >
+            </Animated.View>
+        </SafeAreaView>
     );
 };
 
@@ -659,452 +362,164 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: COLORS.background,
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
     },
     header: {
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-        paddingHorizontal: scale(24),
-        paddingTop: scale(16),
-        paddingBottom: scale(10),
+        height: scale(50),
     },
-    headerRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: scale(8),
-    },
-    streakContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: scale(4),
-    },
-    streakNumber: {
-        fontFamily: 'Gramatika-Bold',
-        fontSize: scale(24),
-        lineHeight: scale(21),
-        color: '#000',
-    },
-    fireIcon: {
-        fontSize: scale(24),
-    },
-    menuButton: {
-        padding: scale(4),
-    },
-
-    // Toggles
-    togglesRow: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: scale(20),
-        marginTop: scale(20),
-        marginBottom: scale(40),
-    },
-    toggleButton: {
-        width: scale(75),
-        height: scale(75),
-        borderRadius: scale(25),
+    floatingMenu: {
+        width: scale(48),
+        height: scale(48),
+        borderRadius: scale(24),
+        backgroundColor: COLORS.white,
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 1,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 5,
     },
-    slidingIndicator: {
-        position: 'absolute',
-        top: 0,
-        left: 0, // Assuming justifyContent: center groups them, we might need to adjust left if gap is involved.
-        // Actually, styles.togglesRow uses justifyContent: 'center'. We need to be careful with absolute positioning inside a centered flex container.
-        // It's safer to put the indicator inside the first button's position relative to a wrapper?
-        // OR: Since we know the width, we can assume relative to the container? No, container width is dynamic content width.
-        // Let's rely on the fact that if we start at 0, that's the start of the content area?
-        // Wait, 'flexDirection: row, justifyContent: center' puts content in the middle. 'absolute top:0 left:0' puts it at the top-left of the CONTAINER (styles.togglesRow).
-        // Does the container span full width? It has no width set, so it's a block (full width).
-        // So left:0 is the left edge of screen (roughly).
-        // BUT the buttons are centered.
-        // FIX: We need a wrapper View around the buttons that has 'flexDirection: row' inside the centered container?
-        // Actually, simpler: Make togglesRow 'alignSelf: center' or wrap contents in a View that fits content.
-        width: scale(75),
-        height: scale(75),
-        borderRadius: scale(25),
-        backgroundColor: COLORS.toggleActiveBg,
-        zIndex: 0,
+    content: {
+        flex: 1,
+        justifyContent: 'center', // Center vertically
+        alignItems: 'center', // Center horizontally
+        marginBottom: scale(80), // Lift it up slightly from bottom nav
     },
-
-    // Timer
-    timerContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: scale(50),
-    },
-    timeDisplay: {
-        position: 'absolute',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    timeText: {
-        fontFamily: 'Gramatika-Bold',
+    timerText: {
         fontSize: scale(64),
-        lineHeight: scale(70),
-        color: '#1E1E2E',
-        textAlign: 'right',
+        fontFamily: 'Gramatika-Bold', // Ensure this font exists or use System/Roboto
+        color: COLORS.text,
+        fontWeight: 'bold',
+        position: 'absolute',
     },
-
-    // Controls
-    controlsRow: {
+    controlsContainer: {
         flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: scale(60), // Space between Timer and Controls
+        height: scale(100), // Fixed height to prevent layout jumps
+    },
+    playButton: {
+        width: scale(80),
+        height: scale(80),
+        borderRadius: scale(40),
+        backgroundColor: COLORS.primary,
         justifyContent: 'center',
         alignItems: 'center',
-        gap: scale(20),
-        // bottom: scale(190), // Removed as we want it in flow or aligned by margin now, 
-        // user requested "higher" before but now we structure it in flow unless user wants fixed.
-        // I will keep it in flow with margin to be safe in the 'timer' block.
-        marginTop: scale(40),
-        marginBottom: scale(40),
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 8,
     },
-    secondButton: {
-        width: scale(65),
-        height: scale(65),
-        padding: scale(17),
-        borderRadius: scale(32.5),
-        backgroundColor: COLORS.controlLight,
-        justifyContent: 'center',
+    activeControls: {
+        flexDirection: 'row',
         alignItems: 'center',
+        gap: scale(20), // Reduced gap to keep buttons closer
+        position: 'absolute', // To overlay perfectly if needed, but flex gap is safer
     },
-    thirdButton: {
-        width: scale(85),
-        height: scale(85),
-        borderRadius: scale(42.5),
+    secondaryControl: {
+        width: scale(60),
+        height: scale(60),
+        borderRadius: scale(30),
         backgroundColor: COLORS.controlDark,
         justifyContent: 'center',
         alignItems: 'center',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 5,
     },
-    fourthButton: {
-        width: scale(65),
-        height: scale(65),
-        padding: scale(20),
-        borderRadius: scale(32.5),
-        backgroundColor: COLORS.controlLight,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    fourthButtonIcon: {
-        width: scale(24),
-        height: scale(24),
-        borderRadius: scale(5),
-        backgroundColor: COLORS.iconDark,
-    },
-
-    // Bottom Navigation
     bottomNav: {
+        position: 'absolute',
+        bottom: scale(40),
+        left: scale(20),
+        right: scale(20),
+        height: scale(70),
+        backgroundColor: COLORS.white,
+        borderRadius: scale(35),
         flexDirection: 'row',
         justifyContent: 'space-around',
         alignItems: 'center',
-        height: scale(60),
-        marginHorizontal: scale(16),
-        marginBottom: scale(16),
-        marginTop: 'auto',
-        borderRadius: scale(47),
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
+        paddingHorizontal: scale(10),
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.05,
+        shadowRadius: 20,
+        elevation: 5,
     },
     navItem: {
         padding: scale(12),
     },
-
-    // Summary View Styles
-    summaryContainer: {
-        flex: 1,
-        paddingHorizontal: scale(24),
-        paddingTop: scale(20),
+    // Drawer Styles
+    drawerBackdrop: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        zIndex: 100, // Below drawer but above content
     },
-    summaryCard: {
-        backgroundColor: COLORS.summaryCardBg,
-        borderRadius: scale(24),
-        padding: scale(32), // Increased padding
-        width: '100%',
-        height: scale(150), // Approx height
+    drawerContainer: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: scale(286), // Fixed width from request
+        backgroundColor: '#102852', // Dark Blue background
+        zIndex: 101, // Top most
+        paddingHorizontal: scale(25),
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center', // Center content vertically
+        alignItems: 'center',
+        shadowColor: "#000",
+        shadowOffset: { width: 5, height: 0 }, // Right shadow
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        elevation: 20,
     },
-    summaryTimeText: {
+    drawerTitle: {
+        color: '#EAF0F8',
         fontFamily: 'Gramatika-Bold',
-        fontSize: scale(36),
-        color: '#000',
+        fontSize: scale(32),
+        fontWeight: '700',
+        lineHeight: scale(38), // Increased to avoid clipping (was 23px)
+        alignSelf: 'stretch',
+        marginBottom: scale(20),
+    },
+    componentsContainer: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        gap: scale(10),
+        alignSelf: 'stretch',
+    },
+    // Shared Task Card Styling for Drawer
+    taskCard: {
+        backgroundColor: '#1E293B',
+        borderRadius: scale(16),
+        padding: scale(16),
+        width: '100%',
+    },
+    taskTitle: {
+        color: 'white',
+        fontSize: scale(18),
+        fontFamily: 'Gramatika-Bold',
         marginBottom: scale(4),
     },
-    summaryLabelText: {
+    taskSubtitle: {
+        color: '#94A3B8',
+        fontSize: scale(14),
         fontFamily: 'Gramatika-Regular',
-        fontSize: scale(18),
-        color: '#000',
-        lineHeight: scale(22),
-        maxWidth: '80%', // Ensure wrapping
+        marginBottom: scale(12),
     },
-    // New Expanded Styles
-    expandedList: {
-        marginTop: scale(24),
-        gap: scale(24),
-    },
-    expandedRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: scale(20),
-    },
-    expandedTime: {
-        fontFamily: 'Gramatika-Bold',
-        fontSize: scale(36),
-        fontWeight: '700',
-        lineHeight: scale(40),
-        color: '#000',
-    },
-    expandedLabel: {
-        fontFamily: 'Gramatika-Regular', // Changed from Geometria to match usage
-        fontSize: scale(18), // Reduced from 24
-        fontWeight: '300',
-        lineHeight: scale(22), // Adjusted
-        color: '#000',
-    },
-    summaryHeader: {
-        width: '100%',
-        alignItems: 'flex-start',
-    },
-    expandedContent: {
-        width: '100%',
-    },
-    summaryChevron: {
-        position: 'absolute',
-        bottom: scale(24),
-        right: scale(24),
-    },
-    continueButtonWrapper: {
-        position: 'absolute',
-        bottom: scale(34),
-        width: '100%',
-        alignSelf: 'center',
-    },
-    continueButton: {
-        backgroundColor: COLORS.summaryCardBg,
-        height: scale(60),
-        borderRadius: scale(30),
+    addButton: {
+        backgroundColor: '#E2E8F0',
+        borderRadius: scale(20),
+        height: scale(36),
         justifyContent: 'center',
         alignItems: 'center',
-        width: '100%',
-    },
-    continueButtonText: {
-        fontFamily: 'Gramatika-Bold',
-        fontSize: scale(18),
-        color: '#000',
-    },
-
-    // Checkbox Styles
-    checkbox: {
-        width: scale(24),
-        height: scale(24),
-        borderRadius: scale(6),
-        borderWidth: 2,
-        borderColor: '#C2C2C2',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    checkboxChecked: {
-        backgroundColor: COLORS.primary,
-        borderColor: COLORS.primary,
-    },
-
-    // Modal Styles
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    modalContent: {
-        backgroundColor: '#FFFFFF',
-        width: '85%',
-        borderRadius: scale(24),
-        padding: scale(24),
-        alignItems: 'center',
-    },
-    modalTitle: {
-        fontFamily: 'Gramatika-Bold',
-        fontSize: scale(20),
-        marginBottom: scale(20),
-        color: '#000',
-    },
-    modalTaskRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: scale(16),
-        width: '100%',
-        gap: scale(12),
-    },
-    modalTaskText: {
-        fontFamily: 'Gramatika-Regular',
-        fontSize: scale(16),
-        color: '#000',
-        flex: 1,
-    },
-    finishButton: {
-        backgroundColor: COLORS.primary,
-        width: '100%',
-        height: scale(50),
-        borderRadius: scale(25),
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: scale(10),
-    },
-    finishButtonText: {
-        fontFamily: 'Gramatika-Bold',
-        fontSize: scale(16),
-        color: '#FFF',
-    },
-
-    // New List View Styles
-    listContainer: {
-        flex: 1,
-        paddingHorizontal: scale(20),
-        marginTop: scale(20),
-        alignItems: 'center',
-    },
-    listControlRow: {
-        flexDirection: 'row',
-        gap: scale(10),
-        marginBottom: scale(40),
-        width: '100%',
-        justifyContent: 'center',
-    },
-    // Category Buttons Row (Figma specs)
-    categoryButtonsRow: {
-        flexDirection: 'row',
-        gap: scale(10),
-        marginBottom: scale(20),
-        width: '100%',
-        justifyContent: 'center',
-    },
-    categoryButtonBase: {
-        height: scale(50),
-        paddingHorizontal: scale(20),
-        paddingVertical: scale(10),
-        borderRadius: scale(30),
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    categoryButtonActive: {
-        width: scale(240),
-        height: scale(50),
-        paddingHorizontal: scale(20),
-        paddingVertical: scale(10),
-        backgroundColor: '#37A0EF',
-        borderRadius: scale(30),
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    categoryButtonInactive: {
-        width: scale(70),
-        height: scale(50),
-        paddingHorizontal: scale(20),
-        paddingVertical: scale(10),
-        backgroundColor: '#FBFBFB',
-        borderRadius: scale(30),
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    categoryButtonInactiveSmall: {
-        width: scale(70),
-        height: scale(50),
-        paddingHorizontal: scale(20),
-        paddingVertical: scale(10),
-        backgroundColor: '#FBFBFB',
-        borderRadius: scale(30),
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    chatInputWrapper: {
-        position: 'absolute',
-        bottom: scale(34),
-        width: '100%',
-        alignSelf: 'center',
-    },
-    thirdButtonNew: {
-        width: scale(240),
-        height: scale(50),
-        backgroundColor: '#C2C2C2',
-        borderRadius: scale(30),
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    fourthButtonNew: {
-        width: scale(70),
-        height: scale(50),
-        backgroundColor: '#E2E2E2',
-        borderRadius: scale(30),
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    taskButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: scale(12),
-        backgroundColor: '#FBFBFB',
-        borderRadius: scale(45),
-        paddingHorizontal: scale(25),
-        paddingVertical: scale(15),
-        marginBottom: scale(18),
-        width: '100%',
-        // box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.25)
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.25,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    taskIconWrapper: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    taskText: {
-        fontFamily: 'Gramatika-Regular',
-        fontSize: scale(19),
-        fontWeight: '300',
-        lineHeight: scale(23),
-        color: '#000',
-        flex: 1,
-    },
-    chatInputBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#FFFFFF',
-        borderRadius: scale(30),
-        paddingHorizontal: scale(24),
-        paddingVertical: scale(16),
-        width: '100%',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: '#EFEFEF',
-    },
-    chatInputPlaceholder: {
-        fontFamily: 'Gramatika-Regular',
-        fontSize: scale(16),
-        color: '#A0A0A0',
+        marginTop: scale(8),
     },
 });
 

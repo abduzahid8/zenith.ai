@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import { colors } from '../theme';
+import { useAuthStore } from '../store/authStore';
 
 // Scale from Figma (402x874) to device
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -39,14 +40,14 @@ const SendIcon = () => (
 
 export const AICoachChatScreen: React.FC = () => {
     const router = useRouter();
-    const [streakDays] = React.useState(4);
+    const { streakDays } = useAuthStore();
 
     const handleNavigateHome = () => {
-        router.replace('/home');
+        router.replace('/main-tabs');
     };
 
     const handleNavigateStatistics = () => {
-        router.push('/statistics');
+        router.replace('/main-tabs');
     };
 
     const handleSuggestionPress = (suggestion: string) => {
@@ -143,7 +144,7 @@ export const AICoachChatScreen: React.FC = () => {
                 <TouchableOpacity style={styles.navItem}>
                     <MaterialCommunityIcons name="lightbulb" size={scale(28)} color="#000" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/weekly-plan')}>
+                <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/main-tabs')}>
                     <MaterialCommunityIcons name="calendar-text-outline" size={scale(28)} color="#A3A3A3" />
                 </TouchableOpacity>
             </View>

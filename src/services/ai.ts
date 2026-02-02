@@ -1,12 +1,21 @@
 import OpenAI from 'openai';
 
-// OpenAI configuration
-const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY';
+// OpenAI / Gemini configuration
+const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+
+// Prefer Gemini if available, otherwise OpenAI (or dummy for safety)
+const API_KEY = GEMINI_API_KEY || OPENAI_API_KEY || 'dummy-key';
+const IS_GEMINI = !!GEMINI_API_KEY;
 
 const openai = new OpenAI({
-    apiKey: OPENAI_API_KEY,
-    dangerouslyAllowBrowser: true, // Required for React Native
+    apiKey: API_KEY,
+    baseURL: IS_GEMINI ? 'https://generativelanguage.googleapis.com/v1beta/openai/' : undefined,
+    dangerouslyAllowBrowser: true,
 });
+
+// Model to use
+const AI_MODEL = IS_GEMINI ? 'gemini-1.5-flash' : 'gpt-4o-mini';
 
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
@@ -68,7 +77,7 @@ export const aiService = {
             }
 
             const completion = await openai.chat.completions.create({
-                model: 'gpt-4o-mini',
+                model: AI_MODEL,
                 messages: [
                     { role: 'system', content: systemPrompt },
                     ...messages,
@@ -97,7 +106,7 @@ ${JSON.stringify(answers)}
 Верни только JSON массив с ID хобби в порядке приоритета, например: ["chess", "drawing", "video_editing"]`;
 
             const completion = await openai.chat.completions.create({
-                model: 'gpt-4o-mini',
+                model: AI_MODEL,
                 messages: [
                     { role: 'system', content: 'Ты помощник, который анализирует ответы анкеты и рекомендует хобби. Отвечай только JSON массивом.' },
                     { role: 'user', content: prompt },
@@ -134,7 +143,7 @@ ${JSON.stringify(answers)}
 Верни JSON массив строк с задачами на русском языке.`;
 
             const completion = await openai.chat.completions.create({
-                model: 'gpt-4o-mini',
+                model: AI_MODEL,
                 messages: [
                     { role: 'system', content: 'Ты генератор учебных задач. Отвечай только JSON массивом строк.' },
                     { role: 'user', content: prompt },

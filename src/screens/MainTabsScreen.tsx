@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -11,6 +11,9 @@ import {
     LayoutAnimation,
     Platform,
     UIManager,
+    Image,
+    Animated,
+    Easing,
 } from 'react-native';
 
 if (Platform.OS === 'android') {
@@ -18,15 +21,24 @@ if (Platform.OS === 'android') {
         UIManager.setLayoutAnimationEnabledExperimental(true);
     }
 }
-import { useRouter } from 'expo-router';
+
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path, Circle } from 'react-native-svg';
 import PagerView from 'react-native-pager-view';
 import { colors } from '../theme';
 import { MenuDrawer } from '../components/NavigationSidebar';
 import { WeeklyBarChart } from '../components/WeeklyBarChart';
+import { useAuthStore, getGreeting } from '../store/authStore';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const booksImage = require('../../assets/images/home-books.png');
+const targetImage = require('../../assets/images/home-target.png');
+const lightbulbImage = require('../../assets/images/home-lightbulb.png');
+const chartImage = require('../../assets/images/home-chart.png');
+
 const FIGMA_WIDTH = 402;
 const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
 
@@ -81,10 +93,47 @@ export const MainTabsScreen: React.FC = () => {
     const router = useRouter();
     const pagerRef = useRef<PagerView>(null);
     const [activeTab, setActiveTab] = useState(0);
-    const [streakDays] = useState(4);
+    const { streakDays, userName } = useAuthStore();
     const [menuVisible, setMenuVisible] = useState(false);
     const [weeklyToggle, setWeeklyToggle] = useState<'day' | 'week'>('day');
     const [showPractice, setShowPractice] = useState(true);
+
+    // Animation values
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+
+    const playAnimation = useCallback(() => {
+        fadeAnim.setValue(0); // Reset to start
+        Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+            easing: Easing.out(Easing.cubic),
+        }).start();
+    }, [fadeAnim]);
+
+    // Trigger on internal tab switch
+    useEffect(() => {
+        if (activeTab === 0) {
+            playAnimation();
+        }
+    }, [activeTab, playAnimation]);
+
+    // Trigger on navigation return (screen focus)
+    useFocusEffect(
+        useCallback(() => {
+            if (activeTab === 0) {
+                playAnimation();
+            }
+        }, [activeTab, playAnimation])
+    );
+
+    const iconTranslateY = fadeAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [50, 0],
+    });
+
+    // Get dynamic greeting
+    const greeting = getGreeting();
 
     const handleTabPress = (index: number) => {
         pagerRef.current?.setPage(index);
@@ -114,16 +163,16 @@ export const MainTabsScreen: React.FC = () => {
         }
     };
 
-    // Dynamic header title
+    // Dynamic header title based on active tab
     const getHeaderTitle = () => {
         switch (activeTab) {
-            case 0: return 'Привет !';
+            case 0: return greeting;
             default: return '';
         }
     };
 
     const getBackgroundColor = () => {
-        return activeTab === 3 ? '#EAF0F8' : colors.background;
+        return '#EAF0F8';
     };
 
     return (
@@ -139,7 +188,7 @@ export const MainTabsScreen: React.FC = () => {
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
                     </View>
-                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
+                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)} activeOpacity={0.7}>
                         <Feather name="menu" size={scale(24)} color="#000" />
                     </TouchableOpacity>
                 </View>
@@ -156,31 +205,114 @@ export const MainTabsScreen: React.FC = () => {
                 <View key="1" style={styles.page}>
                     <View style={styles.homeContent}>
                         <TouchableOpacity
-                            style={styles.startSessionCard}
                             onPress={() => handleNavigate('/session-timer')}
                             activeOpacity={0.8}
+                            style={styles.cardShadowProp}
                         >
-                            <Text style={styles.cardTitle}>Начать занятие</Text>
+                            <LinearGradient
+                                start={{ x: 1, y: 1 }}
+                                end={{ x: 0, y: 0 }}
+                                colors={['#BFD8F9', '#CDE3FC', '#DAEEFF']}
+                                locations={[0.0258, 0.6253, 1.0]}
+                                style={styles.startSessionCard}
+                            >
+                                <Text style={styles.cardTitle}>Начать{'\n'}занятие</Text>
+                                <Animated.Image
+                                    source={booksImage}
+                                    style={[
+                                        styles.booksImage,
+                                        {
+                                            opacity: fadeAnim,
+                                            transform: [
+                                                { translateY: iconTranslateY },
+                                                { rotate: '-5.4deg' }
+                                            ]
+                                        }
+                                    ]}
+                                    resizeMode="contain"
+                                />
+                            </LinearGradient>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.dailyGoalButton} activeOpacity={0.8}>
-                            <Text style={styles.cardTitle}>Цель дня</Text>
+                        <TouchableOpacity activeOpacity={0.8} style={styles.cardShadowProp}>
+                            <LinearGradient
+                                start={{ x: 0, y: 0.5 }}
+                                end={{ x: 1, y: 0.5 }}
+                                colors={['#76B9FF', '#D2E8FF']}
+                                locations={[0.0125, 1.0]}
+                                style={styles.dailyGoalButton}
+                            >
+                                <Text style={styles.cardTitle}>Цель дня</Text>
+                                <Animated.Image
+                                    source={targetImage}
+                                    style={[
+                                        styles.targetImage,
+                                        {
+                                            opacity: fadeAnim,
+                                            transform: [{ translateY: iconTranslateY }]
+                                        }
+                                    ]}
+                                    resizeMode="contain"
+                                />
+                            </LinearGradient>
                         </TouchableOpacity>
 
                         <View style={styles.bottomCardsRow}>
                             <TouchableOpacity
-                                style={styles.aiCoachCard}
                                 onPress={() => handleNavigate('/ai-coach')}
                                 activeOpacity={0.8}
+                                style={[styles.cardShadowProp, { flex: 1.3 }]}
                             >
-                                <Text style={styles.smallCardTitle}>ИИ-{'\n'}наставник</Text>
+                                <LinearGradient
+                                    start={{ x: 0.3, y: 0 }}
+                                    end={{ x: 0.8, y: 1 }}
+                                    colors={['#8CDEFF', '#D5F3FF']}
+                                    locations={[0.1155, 0.9307]}
+                                    style={styles.aiCoachCard}
+                                >
+                                    <View style={{ zIndex: 1 }}>
+                                        <Text style={styles.smallCardTitle}>Личный{'\n'}наставник</Text>
+                                    </View>
+                                    <Animated.Image
+                                        source={lightbulbImage}
+                                        style={[
+                                            styles.lightbulbImage,
+                                            {
+                                                opacity: fadeAnim,
+                                                transform: [{ translateY: iconTranslateY }]
+                                            }
+                                        ]}
+                                        resizeMode="contain"
+                                    />
+                                </LinearGradient>
                             </TouchableOpacity>
+
                             <TouchableOpacity
-                                style={styles.screenTimeCard}
                                 onPress={() => handleNavigate('/screen-time')}
                                 activeOpacity={0.8}
+                                style={[styles.cardShadowProp, { flex: 1 }]}
                             >
-                                <Text style={styles.smallCardTitle}>Экранное{'\n'}время:</Text>
+                                <LinearGradient
+                                    start={{ x: 0.5, y: 0 }}
+                                    end={{ x: 0.5, y: 1 }}
+                                    colors={['#D6D7F8', '#E0E2FF']}
+                                    style={styles.screenTimeCard}
+                                >
+                                    <View style={{ zIndex: 1 }}>
+                                        <Text style={styles.smallCardTitle}>Экранное{'\n'}время</Text>
+                                    </View>
+                                    <Animated.Image
+                                        source={chartImage}
+                                        style={[
+                                            styles.chartImage,
+                                            {
+                                                opacity: fadeAnim,
+                                                transform: [{ translateY: iconTranslateY }]
+                                            }
+                                        ]}
+                                        resizeMode="contain"
+                                    />
+                                </LinearGradient>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -388,36 +520,49 @@ const styles = StyleSheet.create({
         paddingHorizontal: scale(16),
         marginTop: scale(140),
     },
-    startSessionCard: {
-        height: scale(150),
-        borderRadius: scale(25),
-        backgroundColor: '#DCDCDC',
-        paddingHorizontal: scale(17),
-        paddingTop: scale(26),
-        marginBottom: scale(24),
+    cardShadowProp: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 3,
         elevation: 3,
+        marginBottom: scale(24),
+    },
+    startSessionCard: {
+        height: scale(150),
+        borderRadius: scale(25),
+        paddingHorizontal: scale(25),
+        paddingTop: scale(26),
+        overflow: 'hidden',
+    },
+    booksImage: {
+        position: 'absolute',
+        width: 213, // Using absolute pixels as requested, but scaled slightly for safety
+        height: 188,
+        right: scale(-20),
+        bottom: scale(-30),
+        transform: [{ rotate: '-5.4deg' }],
     },
     cardTitle: {
         fontFamily: 'Gramatika-Bold',
         fontSize: scale(24),
         lineHeight: scale(26),
         color: '#1E1E2E',
+        zIndex: 1,
     },
     dailyGoalButton: {
+        height: scale(74),
         borderRadius: scale(50),
-        backgroundColor: '#DCDCDC',
-        paddingVertical: scale(26),
-        paddingHorizontal: scale(26),
-        marginBottom: scale(24),
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
+        paddingHorizontal: scale(25),
+        justifyContent: 'center',
+        overflow: 'hidden',
+    },
+    targetImage: {
+        position: 'absolute',
+        width: scale(180),
+        height: scale(180),
+        right: scale(-40),
+        top: scale(-53),
     },
     bottomCardsRow: {
         flexDirection: 'row',
@@ -425,36 +570,36 @@ const styles = StyleSheet.create({
         alignItems: 'flex-start',
     },
     aiCoachCard: {
-        flex: 1.3,
         height: scale(155),
         borderRadius: scale(25),
-        backgroundColor: '#DCDCDC',
         paddingHorizontal: scale(17),
         paddingVertical: scale(19),
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
-        justifyContent: 'flex-end',
+        overflow: 'hidden',
+    },
+    lightbulbImage: {
+        position: 'absolute',
+        width: scale(199),
+        height: scale(199),
+        right: scale(-70),
+        bottom: scale(-60),
     },
     screenTimeCard: {
-        flex: 1,
         height: scale(155),
         borderRadius: scale(25),
-        backgroundColor: '#DCDCDC',
         paddingHorizontal: scale(17),
         paddingVertical: scale(19),
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
-        justifyContent: 'flex-start',
+        overflow: 'hidden',
+    },
+    chartImage: {
+        position: 'absolute',
+        width: scale(162),
+        height: scale(162),
+        right: scale(-40),
+        bottom: scale(-40),
     },
     smallCardTitle: {
         fontFamily: 'Gramatika-Bold',
-        fontSize: scale(22),
+        fontSize: scale(20), // Slightly smaller to fit with images
         lineHeight: scale(24),
         color: '#1E1E2E',
     },

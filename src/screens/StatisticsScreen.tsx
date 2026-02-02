@@ -15,6 +15,8 @@ import Svg, { Path } from 'react-native-svg';
 import { colors } from '../theme';
 import { WeeklyBarChart } from '../components/WeeklyBarChart';
 import { MenuDrawer } from '../components/NavigationSidebar';
+import { useAuthStore } from '../store/authStore';
+import { BottomNavigation } from '../components/BottomNavigation';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FIGMA_WIDTH = 402;
@@ -52,7 +54,7 @@ const mockWeeklyData: WeeklyData[] = [
 
 export const StatisticsScreen: React.FC = () => {
     const router = useRouter();
-    const [streakDays] = useState(4);
+    const { streakDays } = useAuthStore();
     const [menuVisible, setMenuVisible] = useState(false);
     const [totalChange] = useState(-24);
 
@@ -69,7 +71,7 @@ export const StatisticsScreen: React.FC = () => {
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
                     </View>
-                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
+                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)} activeOpacity={0.7}>
                         <Feather name="menu" size={scale(24)} color="#000" />
                     </TouchableOpacity>
                 </View>
@@ -117,20 +119,7 @@ export const StatisticsScreen: React.FC = () => {
             </ScrollView>
 
             {/* Bottom Navigation */}
-            <View style={styles.bottomNav}>
-                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/home')}>
-                    <Ionicons name="home-outline" size={scale(28)} color="#A3A3A3" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem}>
-                    <Ionicons name="bar-chart" size={scale(28)} color="#000" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/ai-coach-chat')}>
-                    <MaterialCommunityIcons name="lightbulb-outline" size={scale(28)} color="#A3A3A3" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/weekly-plan')}>
-                    <MaterialCommunityIcons name="calendar-text" size={scale(28)} color="#A3A3A3" />
-                </TouchableOpacity>
-            </View>
+            <BottomNavigation activeTab="statistics" />
 
             {/* Menu Drawer */}
             <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />

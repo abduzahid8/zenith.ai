@@ -1,0 +1,11 @@
+{
+    "platforms": [
+        "android"
+    ],
+    "android": {
+        "package": "expo.modules.smsreader",
+        "modules": [
+            "SmsReaderModule"
+        ]
+    }
+}

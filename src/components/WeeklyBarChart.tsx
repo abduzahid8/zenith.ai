@@ -28,7 +28,8 @@ const defaultData: DayData[] = [
 ];
 
 // Color palette for bars - matching Figma goal design
-const barColors = [
+// Moved outside component to prevent recreation on every render
+const BAR_COLORS = [
     '#5ECFCF', // Пн - teal/cyan
     '#37A0EF', // Вт - dark blue
     '#7EC8FF', // Ср - medium/light blue  
@@ -36,7 +37,7 @@ const barColors = [
     '#5ECFCF', // Пт - teal/cyan
     '#37A0EF', // Сб - dark blue
     '#7EC8FF', // Вс - medium/light blue
-];
+] as const;
 
 // Green trend arrow SVG component
 const TrendArrowUp = ({ size = 24 }: { size?: number }) => (
@@ -120,7 +121,7 @@ export const WeeklyBarChart: React.FC<WeeklyBarChartProps> = ({
                                                 styles.bar,
                                                 {
                                                     height: barHeight,
-                                                    backgroundColor: barColors[index % barColors.length],
+                                                    backgroundColor: BAR_COLORS[index % BAR_COLORS.length],
                                                 }
                                             ]}
                                         />
