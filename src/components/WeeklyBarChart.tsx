@@ -13,8 +13,6 @@ interface DayData {
 
 interface WeeklyBarChartProps {
     data?: DayData[];
-    changePercent?: number;
-    periodLabel?: string;
 }
 
 const defaultData: DayData[] = [
@@ -39,37 +37,17 @@ const BAR_COLORS = [
     '#7EC8FF', // Вс - medium/light blue
 ] as const;
 
-// Green trend arrow SVG component
-const TrendArrowUp = ({ size = 24 }: { size?: number }) => (
-    <Svg width={scale(size)} height={scale(size)} viewBox="0 0 24 24" fill="none">
-        <Path
-            d="M4 14L10 8L14 12L20 6"
-            stroke="#13E659"
-            strokeWidth={2.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-        />
-        <Path
-            d="M14 6H20V12"
-            stroke="#13E659"
-            strokeWidth={2.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-        />
-    </Svg>
-);
+
 
 // Grid image for chart background
 const gridImage = require('../../frame auth/Group 39.png');
 
 export const WeeklyBarChart: React.FC<WeeklyBarChartProps> = ({
     data = defaultData,
-    changePercent = -24,
-    periodLabel = 'за последнюю\nнеделю',
 }) => {
     const maxValue = 7;
     const yAxisLabels = ['7+', '6', '5', '4', '3', '2', '1'];
-    const chartHeight = scale(200); // Height for actual chart bars area
+    const chartHeight = scale(160); // Height for actual chart bars area
 
     return (
         <View style={styles.container}>
@@ -82,16 +60,7 @@ export const WeeklyBarChart: React.FC<WeeklyBarChartProps> = ({
                     resizeMode="cover"
                 />
 
-                {/* Stats badge in top right */}
-                <View style={styles.statsBadge}>
-                    <View style={styles.statsBadgeRow}>
-                        <Text style={styles.statsPercent}>
-                            {changePercent > 0 ? '+' : ''}{changePercent}%
-                        </Text>
-                        <TrendArrowUp size={28} />
-                    </View>
-                    <Text style={styles.statsPeriod}>{periodLabel}</Text>
-                </View>
+
 
                 {/* Chart content wrapper */}
                 <View style={styles.chartContent}>
@@ -146,7 +115,7 @@ const styles = StyleSheet.create({
     chartContainer: {
         backgroundColor: '#D6DEF8',
         borderRadius: scale(30),
-        height: scale(304),
+        height: scale(258),
         alignSelf: 'center',
         width: scale(362),
         overflow: 'hidden',
@@ -162,32 +131,7 @@ const styles = StyleSheet.create({
         height: '100%',
         borderRadius: scale(30),
     },
-    statsBadge: {
-        position: 'absolute',
-        top: scale(12),
-        right: scale(14),
-        alignItems: 'flex-end',
-        zIndex: 10,
-    },
-    statsBadgeRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: scale(4),
-    },
-    statsPercent: {
-        fontFamily: 'Gramatika-Bold',
-        fontSize: scale(20),
-        lineHeight: scale(28),
-        color: '#000',
-    },
-    statsPeriod: {
-        fontFamily: 'Gramatika-Light',
-        fontSize: scale(14),
-        color: '#000',
-        textAlign: 'right',
-        lineHeight: scale(16),
-        fontStyle: 'italic',
-    },
+
     chartContent: {
         flex: 1,
         flexDirection: 'row',

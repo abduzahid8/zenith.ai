@@ -8,7 +8,6 @@ import {
     TouchableOpacity,
     ScrollView,
     Dimensions,
-    LayoutAnimation,
     Platform,
     UIManager,
     Image,
@@ -24,7 +23,7 @@ if (Platform.OS === 'android') {
 
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import PagerView from 'react-native-pager-view';
 import { colors } from '../theme';
 import { MenuDrawer } from '../components/NavigationSidebar';
@@ -45,9 +44,9 @@ const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
 // Tab configuration
 const TABS = [
     { key: 'home', icon: 'home', iconOutline: 'home-outline', type: 'ionicon' },
-    { key: 'statistics', icon: 'bar-chart', iconOutline: 'bar-chart-outline', type: 'ionicon' },
-    { key: 'ai-coach', icon: 'lightbulb', iconOutline: 'lightbulb-outline', type: 'material' },
     { key: 'weekly-plan', icon: 'clipboard-text', iconOutline: 'clipboard-text-outline', type: 'material' },
+    { key: 'ai-coach', icon: 'lightbulb', iconOutline: 'lightbulb-outline', type: 'material' },
+    { key: 'statistics', icon: 'bar-chart', iconOutline: 'bar-chart-outline', type: 'ionicon' },
 ];
 
 // Icons
@@ -95,8 +94,7 @@ export const MainTabsScreen: React.FC = () => {
     const [activeTab, setActiveTab] = useState(0);
     const { streakDays, userName } = useAuthStore();
     const [menuVisible, setMenuVisible] = useState(false);
-    const [weeklyToggle, setWeeklyToggle] = useState<'day' | 'week'>('day');
-    const [showPractice, setShowPractice] = useState(true);
+    const [showAnalysis, setShowAnalysis] = useState(false);
 
     // Animation values
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -318,28 +316,70 @@ export const MainTabsScreen: React.FC = () => {
                     </View>
                 </View>
 
-                {/* PAGE 2: Statistics */}
-                <View key="2" style={styles.page}>
-                    <ScrollView style={styles.statsScroll} showsVerticalScrollIndicator={false}>
-                        <WeeklyBarChart
-                            data={mockWeeklyData}
-                            changePercent={-24}
-                            periodLabel={`за последнюю\nнеделю`}
-                        />
-                        <View style={styles.pageIndicators}>
-                            <View style={styles.indicatorPill} />
-                            <View style={styles.indicatorCircle} />
+                {/* PAGE 2: Your Day - New Design */}
+                <View key="2" style={styles.yourDayPage}>
+                    {/* Title */}
+                    <Text style={styles.yourDayTitle}>Твой день</Text>
+
+                    {/* Task Card 1: Theory */}
+                    <TouchableOpacity style={styles.theoryCard} activeOpacity={0.8}>
+                        <View style={styles.taskCardContent}>
+                            <View style={styles.taskCardTextContainer}>
+                                <Text style={styles.taskCardTitle}>Теория</Text>
+                                <Text style={styles.taskCardDescription}>Изучить{"\n"}Королевский Гамбит</Text>
+                            </View>
+                            <View style={styles.theoryIconContainer}>
+                                {/* Book Icon */}
+                                <Svg width={scale(24)} height={scale(24)} viewBox="0 0 24 24" fill="none">
+                                    <Path d="M4 19.5C4 18.837 4.26339 18.2011 4.73223 17.7322C5.20107 17.2634 5.83696 17 6.5 17H20" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <Path d="M6.5 2H20V22H6.5C5.83696 22 5.20107 21.7366 4.73223 21.2678C4.26339 20.7989 4 20.163 4 19.5V4.5C4 3.83696 4.26339 3.20107 4.73223 2.73223C5.20107 2.26339 5.83696 2 6.5 2Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                </Svg>
+                            </View>
                         </View>
-                        <View style={styles.maintenanceSection}>
-                            <ToolsIcon />
-                            <Text style={styles.maintenanceTitle}>Ой! Мы еще наводим здесь порядок</Text>
-                            <Text style={styles.maintenanceSubtitle}>
-                                Этот блок временно недоступен.{'\n'}
-                                Совсем скоро здесь будет много{'\n'}
-                                интересного!
-                            </Text>
+                    </TouchableOpacity>
+
+                    {/* Task Card 2: Practice */}
+                    <TouchableOpacity style={styles.practiceCard} activeOpacity={0.8}>
+                        <View style={styles.taskCardContent}>
+                            <View style={styles.taskCardTextContainer}>
+                                <Text style={styles.taskCardTitle}>Практика</Text>
+                                <Text style={styles.taskCardDescription}>Сыграть 2 партии</Text>
+                            </View>
+                            <View style={styles.practiceIconContainer}>
+                                {/* Chess/Practice Icon */}
+                                <Svg width={scale(24)} height={scale(24)} viewBox="0 0 24 24" fill="none">
+                                    <Path d="M12 2L14.5 9H9.5L12 2Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <Path d="M5 22H19" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <Path d="M6 18H18" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <Path d="M8 22V18" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <Path d="M16 22V18" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <Path d="M5 14H19L18 18H6L5 14Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <Path d="M7 14L8 9H16L17 14" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                </Svg>
+                            </View>
                         </View>
-                    </ScrollView>
+                    </TouchableOpacity>
+
+                    {/* Analysis Card - appears after clicking add button */}
+                    {showAnalysis && (
+                        <View style={styles.analysisCard}>
+                            <View style={styles.taskCardContent}>
+                                <View style={styles.taskCardTextContainer}>
+                                    <Text style={styles.analysisTitle}>Анализ</Text>
+                                    <Text style={styles.analysisDescription}>Рассмотреть партию</Text>
+                                </View>
+                            </View>
+                        </View>
+                    )}
+
+                    {/* Add New Task Card */}
+                    <TouchableOpacity
+                        style={showAnalysis ? styles.addTaskCardSmall : styles.addTaskCard}
+                        activeOpacity={0.8}
+                        onPress={() => setShowAnalysis(!showAnalysis)}
+                    >
+                        <Feather name="plus" size={scale(32)} color="#A0A0A0" />
+                    </TouchableOpacity>
                 </View>
 
                 {/* PAGE 3: AI Coach */}
@@ -376,72 +416,38 @@ export const MainTabsScreen: React.FC = () => {
                     </View>
                 </View>
 
-                {/* PAGE 4: Weekly Plan - New Design */}
-                <View key="4" style={styles.planPage}>
-                    {/* Title */}
-                    <Text style={styles.planTitle}>Твой план</Text>
+                {/* PAGE 4: Statistics */}
+                <View key="4" style={styles.page}>
+                    <ScrollView
+                        style={styles.statsScroll}
+                        contentContainerStyle={{ paddingBottom: scale(100) }}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <Text style={styles.statsTitle}>Экранное время</Text>
+                        <WeeklyBarChart
+                            data={mockWeeklyData}
+                        />
 
-                    {/* Toggle Buttons */}
-                    <View style={styles.planToggleContainer}>
-                        <TouchableOpacity
-                            style={[styles.planToggleButton, weeklyToggle === 'day' ? styles.planToggleActive : styles.planToggleInactive]}
-                            onPress={() => setWeeklyToggle('day')}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={[styles.planToggleText, weeklyToggle === 'day' ? styles.planToggleTextActive : styles.planToggleTextInactive]}>
-                                План на день
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.planToggleButton, weeklyToggle === 'week' ? styles.planToggleActive : styles.planToggleInactive]}
-                            onPress={() => setWeeklyToggle('week')}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={[styles.planToggleText, weeklyToggle === 'week' ? styles.planToggleTextActive : styles.planToggleTextInactive]}>
-                                План на неделю
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
+                        {/* First Button: -24% */}
+                        <View style={styles.statCardBlue}>
+                            <Text style={styles.statCardBigText}>-24%</Text>
+                            <Text style={styles.statCardSmallText}>За последнюю неделю</Text>
+                        </View>
 
-                    {/* Settings Bar */}
-                    <View style={styles.planSettingsBar}>
-                        <View style={styles.planSettingsIcon}>
-                            {/* "Checklist" Icon matching Figma */}
-                            <Svg width={scale(24)} height={scale(24)} viewBox="0 0 24 24" fill="none">
-                                {/* Top: Checkmark + Line */}
-                                <Path d="M3 7L5 9L9 5" stroke="#EAF0F8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                <Path d="M12 7H21" stroke="#EAF0F8" strokeWidth="2" strokeLinecap="round" />
+                        {/* Second Button: Total Duration */}
+                        <View style={styles.statCardDarkBlue}>
+                            <Text style={styles.statCardBigText}>12:22:41</Text>
+                            <Text style={styles.statCardSmallText}>Экранное время{'\n'}за неделю</Text>
+                        </View>
 
-                                {/* Bottom: Circle + Line */}
-                                <Circle cx="6" cy="17" r="3" stroke="#EAF0F8" strokeWidth="2" />
-                                <Path d="M12 17H21" stroke="#EAF0F8" strokeWidth="2" strokeLinecap="round" />
+                        {/* Pagination Component */}
+                        <View style={styles.paginationContainer}>
+                            <Svg width={scale(82)} height={scale(13)} viewBox="0 0 82 13" fill="none">
+                                <Path fillRule="evenodd" clipRule="evenodd" d="M6.5 0H58.5C62.0899 0 65 2.91015 65 6.5C65 10.0899 62.0899 13 58.5 13H6.5C2.91015 13 0 10.0899 0 6.5C0 2.91015 2.91015 0 6.5 0Z" fill="#2E2E43" />
+                                <Path fillRule="evenodd" clipRule="evenodd" d="M75.5 0H69V13H75.5C79.0899 13 82 10.0899 82 6.5C82 2.91015 79.0899 0 75.5 0Z" fill="#2E2E43" />
                             </Svg>
                         </View>
-                        <TouchableOpacity onPress={() => {
-                            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                            setShowPractice(!showPractice);
-                        }}>
-                            <Svg width={scale(22)} height={scale(13)} viewBox="0 0 22 13" fill="none">
-                                <Path d={showPractice ? "M2 11L10.2929 2.70711C10.6834 2.31658 11.3166 2.31658 11.7071 2.70711L20 11" : "M2 2L10.2929 10.2929C10.6834 10.6834 11.3166 10.6834 11.7071 10.2929L20 2"} stroke="#EAF0F8" strokeWidth="4" strokeLinecap="round" />
-                            </Svg>
-                        </TouchableOpacity>
-                    </View>
-
-                    {showPractice && (
-                        <>
-                            {/* Task Card 1: Дебют */}
-                            <View style={styles.planTaskCard}>
-                                <Text style={styles.planTaskTitle}>Дебют</Text>
-                                <Text style={styles.planTaskDescription}>Изучить Королевский Гамбит</Text>
-                            </View>
-
-                            {/* Task Card 2: Практика */}
-                            <View style={styles.planTaskCard}>
-                                <Text style={styles.planTaskTitle}>Практика</Text>
-                                <Text style={styles.planTaskDescription}>Сыграть 2 партии без отвлечений</Text>
-                            </View>
-                        </>
-                    )}
+                    </ScrollView>
                 </View>
             </PagerView>
 
@@ -606,48 +612,64 @@ const styles = StyleSheet.create({
     // ============== STATISTICS PAGE STYLES ==============
     statsScroll: {
         flex: 1,
-        paddingHorizontal: scale(16),
+        paddingHorizontal: scale(20),
+        paddingTop: 0, // content moved up
     },
-    pageIndicators: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: scale(8),
-        marginTop: scale(24),
-        marginBottom: scale(32),
-    },
-    indicatorPill: {
-        width: scale(65),
-        height: scale(13),
-        borderRadius: scale(31),
-        backgroundColor: '#2E2E43',
-    },
-    indicatorCircle: {
-        width: scale(13),
-        height: scale(13),
-        borderRadius: scale(31),
-        backgroundColor: '#2E2E43',
-    },
-    maintenanceSection: {
-        alignItems: 'center',
-        paddingTop: scale(24),
-    },
-    maintenanceTitle: {
+    statsTitle: {
         fontFamily: 'Gramatika-Bold',
-        fontSize: scale(16),
-        lineHeight: scale(20),
+        fontSize: scale(32),
+        lineHeight: scale(34),
         color: '#000',
-        textAlign: 'center',
-        marginTop: scale(20),
-        marginBottom: scale(12),
+        marginBottom: scale(20),
+        marginTop: scale(0), // Removed negative margin to fix clipping
     },
-    maintenanceSubtitle: {
+    paginationContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginVertical: scale(0), // Moved higher (closer to cards)
+    },
+    statCardBlue: {
+        // display: flex; (React Native implies flex)
+        paddingTop: scale(16.5),
+        paddingRight: scale(111),
+        paddingBottom: scale(16.5),
+        paddingLeft: scale(20),
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        gap: scale(0), // Reduced to bring text closer
+        alignSelf: 'stretch',
+        borderRadius: scale(25),
+        backgroundColor: '#8CDEFF',
+        marginTop: scale(31), // Space between chart and this card
+        marginBottom: scale(10), // Reduced gap between buttons
+        minHeight: scale(100),
+    },
+    statCardDarkBlue: {
+        // display: flex;
+        padding: scale(20), // Updated to 20px all around
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'flex-start', // Updated to flex-start
+        alignSelf: 'stretch',
+        borderRadius: scale(25),
+        backgroundColor: '#78BAFF',
+        marginBottom: scale(20),
+        minHeight: scale(100),
+        gap: scale(0), // Reduced to bring text closer
+    },
+    statCardBigText: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(32),
+        color: '#000', // Assuming black text based on light background
+    },
+    statCardSmallText: {
         fontFamily: 'Gramatika-Light',
-        fontSize: scale(12),
-        lineHeight: scale(15),
-        color: '#666',
-        textAlign: 'center',
+        fontSize: scale(16),
+        color: '#2E2E43', // Using standard text color
+        lineHeight: scale(20),
     },
+
     // ============== AI COACH PAGE STYLES ==============
     aiContent: {
         flex: 1,
@@ -708,91 +730,129 @@ const styles = StyleSheet.create({
         fontSize: scale(20),
         color: '#4E4E4E',
     },
-    // ============== PLAN PAGE STYLES (New Figma Design) ==============
-    planPage: {
+    // ============== YOUR DAY PAGE STYLES (New Figma Design) ==============
+    yourDayPage: {
         width: SCREEN_WIDTH,
         flex: 1,
         backgroundColor: '#EAF0F8',
         paddingHorizontal: scale(20),
     },
-    planTitle: {
+    yourDayTitle: {
         fontFamily: 'Gramatika-Bold',
         fontSize: scale(32),
-        lineHeight: scale(30),
+        lineHeight: scale(34), // Increased to > fontSize (32)
         color: '#2E2E43',
-        width: scale(214),
-        marginBottom: scale(24),
+        width: scale(362),
+        marginBottom: scale(80),
     },
-    planToggleContainer: {
-        flexDirection: 'column',
-        gap: scale(10),
-        marginBottom: scale(24),
-    },
-    planToggleButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: scale(10),
-        paddingHorizontal: scale(20),
-        borderRadius: scale(25),
-        alignSelf: 'flex-start',
-        gap: scale(10),
-    },
-    planToggleActive: {
-        backgroundColor: '#2E2E43',
-    },
-    planToggleInactive: {
-        backgroundColor: '#FFFFFF',
-    },
-    planToggleText: {
-        fontFamily: 'Gramatika-Bold',
-        fontSize: scale(24),
-        lineHeight: scale(25),
-    },
-    planToggleTextActive: {
-        color: '#EAF0F8',
-    },
-    planToggleTextInactive: {
-        color: '#000000',
-    },
-    planSettingsBar: {
-        width: scale(340),
-        alignSelf: 'center',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: scale(20),
-        paddingLeft: scale(25),
-        paddingRight: scale(36),
-        borderRadius: scale(30),
-        backgroundColor: '#2E2E43',
-        marginBottom: scale(16),
-    },
-    planSettingsIcon: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    planTaskCard: {
-        width: scale(340),
-        padding: scale(25),
-        borderRadius: scale(25),
-        backgroundColor: '#D6DEF8',
-        alignSelf: 'center',
-        marginBottom: scale(10),
-    },
-    planTaskTitle: {
-        fontFamily: 'Gramatika-Bold',
-        fontSize: scale(24),
-        lineHeight: scale(28),
-        color: '#2E2E43',
+    // Theory Card - Light Blue
+    theoryCard: {
+        height: scale(119),
         alignSelf: 'stretch',
+        borderRadius: scale(25),
+        backgroundColor: '#8CDEFF',
+        paddingLeft: scale(28),
+        paddingRight: scale(20),
+        paddingVertical: scale(18),
         marginBottom: scale(10),
     },
-    planTaskDescription: {
+    // Practice Card - Darker Blue
+    practiceCard: {
+        height: scale(100),
+        alignSelf: 'stretch',
+        borderRadius: scale(25),
+        backgroundColor: '#78BAFF',
+        paddingLeft: scale(28),
+        paddingRight: scale(20),
+        paddingVertical: scale(18),
+        marginBottom: scale(10),
+    },
+    // Analysis Card - Pink
+    analysisCard: {
+        height: scale(101),
+        alignSelf: 'stretch',
+        borderRadius: scale(25),
+        backgroundColor: '#F4C0FD',
+        paddingLeft: scale(28),
+        paddingRight: scale(20),
+        paddingVertical: scale(18),
+        marginBottom: scale(10),
+    },
+    analysisTitle: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(24),
+        lineHeight: scale(26), // Increased to > fontSize (24)
+        color: '#000',
+        marginBottom: scale(6),
+    },
+    analysisDescription: {
+        fontFamily: 'Geometria-Light',
+        fontSize: scale(19),
+        lineHeight: scale(22),
+        color: '#000',
+        alignSelf: 'stretch',
+    },
+    // Shared task card styles
+    taskCardContent: {
+        flex: 1,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    taskCardTextContainer: {
+        flex: 1,
+    },
+    taskCardTitle: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(24),
+        lineHeight: scale(26), // Increased to > fontSize (24)
+        color: '#08132A',
+        marginBottom: scale(6),
+    },
+    taskCardDescription: {
         fontFamily: 'Geometria-Light',
         fontSize: scale(19),
         lineHeight: scale(23),
-        color: '#2E2E43',
+        color: '#08132A',
+    },
+    // Theory Icon Container - 42x42
+    theoryIconContainer: {
+        width: scale(42),
+        height: scale(42),
+        backgroundColor: '#08132A',
+        borderRadius: scale(10),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    // Practice Icon Container - 40x40
+    practiceIconContainer: {
+        width: scale(40),
+        height: scale(40),
+        backgroundColor: '#08132A',
+        borderRadius: scale(10),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    // Add Task Card - Large (initial state)
+    addTaskCard: {
+        width: scale(362),
+        height: scale(179),
+        alignSelf: 'center',
+        borderRadius: scale(25),
+        backgroundColor: '#D3DEEE',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: scale(74),
+        paddingHorizontal: scale(75),
+    },
+    // Add Task Card - Small (after analysis card added)
+    addTaskCardSmall: {
         alignSelf: 'stretch',
+        borderRadius: scale(25),
+        backgroundColor: '#D3DEEE',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: scale(25),
     },
     // ============== BOTTOM NAVIGATION ==============
     bottomNav: {

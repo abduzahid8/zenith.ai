@@ -13,10 +13,13 @@ export default function RootLayout() {
     const router = useRouter();
 
     const [fontsLoaded, fontError] = useFonts({
+        // Keep trial fonts for weights not provided in new set if necessary, 
+        // or map to closest available if strictly replacing. 
+        // User provided Bold and Regular non-trial versions.
         'Gramatika-Black': require('../assets/fonts/GramatikaTrial-Black-BF65dea4c4a007c.otf'),
-        'Gramatika-Bold': require('../assets/fonts/GramatikaTrial-Bold-BF65dea4c5530e5.otf'),
+        'Gramatika-Bold': require('../assets/fonts/Gramatika-Bold.ttf'), // Updated to non-trial
         'Gramatika-Medium': require('../assets/fonts/GramatikaTrial-Medium-BF65dea4c5c6afd.otf'),
-        'Gramatika-Regular': require('../assets/fonts/GramatikaTrial-Regular-BF65dea4c5a77e9.otf'),
+        'Gramatika-Regular': require('../assets/fonts/Gramatika-Regular.ttf'), // Updated to non-trial
         'Gramatika-Light': require('../assets/fonts/GramatikaTrial-Light-BF65dea4c59cf23.otf'),
         'Gramatika-ExtraLight': require('../assets/fonts/GramatikaTrial-ExtraLight-BF65dea4c5b0dc5.otf'),
         'Geometria-Light': require('../assets/fonts/Geometria-Light.ttf'),
