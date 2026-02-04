@@ -1,3 +1,5 @@
-import StatisticsScreen from '../../src/screens/StatisticsScreen';
+import { MainTabsScreen } from '../../src/screens/MainTabsScreen';
 
-export default StatisticsScreen;
+export default function Page() {
+    return <MainTabsScreen initialTab={3} />;
+}

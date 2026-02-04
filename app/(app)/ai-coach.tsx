@@ -1,1 +1,5 @@
-export { default } from '../../src/screens/AICoachScreen';
+import { MainTabsScreen } from '../../src/screens/MainTabsScreen';
+
+export default function Page() {
+    return <MainTabsScreen initialTab={2} />;
+}

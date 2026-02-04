@@ -88,13 +88,20 @@ const mockWeeklyData = [
     { day: 'Вс', value: 2.5 },
 ];
 
-export const MainTabsScreen: React.FC = () => {
+export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab = 0 }) => {
     const router = useRouter();
     const pagerRef = useRef<PagerView>(null);
-    const [activeTab, setActiveTab] = useState(0);
-    const { streakDays, userName } = useAuthStore();
+    const [activeTab, setActiveTab] = useState(initialTab);
+    const { streakDays, userName, user } = useAuthStore();
+    const isPremium = true; // ⚠️ FORCED PREMIUM FOR TESTING
     const [menuVisible, setMenuVisible] = useState(false);
-    const [showAnalysis, setShowAnalysis] = useState(false);
+    const [showTasks, setShowTasks] = useState(false); // 4th task card for premium users
+
+    useEffect(() => {
+        if (user?.id) {
+            console.log('🆔 YOUR USER ID:', user.id);
+        }
+    }, [user]);
 
     // Animation values
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -196,7 +203,7 @@ export const MainTabsScreen: React.FC = () => {
             <PagerView
                 ref={pagerRef}
                 style={styles.pagerView}
-                initialPage={0}
+                initialPage={initialTab}
                 onPageSelected={handlePageSelected}
             >
                 {/* PAGE 1: Home */}
@@ -360,26 +367,61 @@ export const MainTabsScreen: React.FC = () => {
                         </View>
                     </TouchableOpacity>
 
-                    {/* Analysis Card - appears after clicking add button */}
-                    {showAnalysis && (
-                        <View style={styles.analysisCard}>
+                    {/* Task Card 3: Analysis - Always visible */}
+                    <View style={styles.analysisCard}>
+                        <View style={styles.taskCardContent}>
+                            <View style={styles.taskCardTextContainer}>
+                                <Text style={styles.analysisTitle}>Анализ</Text>
+                                <Text style={styles.analysisDescription}>Рассмотреть партию</Text>
+                            </View>
+                            <View style={styles.analysisIconContainer}>
+                                {/* Magnifying Glass Icon */}
+                                <Svg width={scale(24)} height={scale(24)} viewBox="0 0 24 24" fill="none">
+                                    <Path d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <Path d="M21 21L16.65 16.65" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                </Svg>
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* Task Card 4: Tasks - Only for premium users when showTasks is true */}
+                    {isPremium && showTasks && (
+                        <View style={styles.tasksCard}>
                             <View style={styles.taskCardContent}>
                                 <View style={styles.taskCardTextContainer}>
-                                    <Text style={styles.analysisTitle}>Анализ</Text>
-                                    <Text style={styles.analysisDescription}>Рассмотреть партию</Text>
+                                    <Text style={styles.tasksTitle}>Задачи</Text>
+                                    <Text style={styles.tasksDescription}>Решить 15 тактических{"\n"}задач</Text>
+                                </View>
+                                <View style={styles.tasksIconContainer}>
+                                    {/* Puzzle Icon */}
+                                    <Svg width={scale(28)} height={scale(28)} viewBox="0 0 24 24" fill="none">
+                                        <Path d="M19.439 7.85c-.049.322.059.648.289.878l1.568 1.568c.47.47.706 1.087.706 1.704s-.235 1.233-.706 1.704l-1.611 1.611a.98.98 0 0 1-.837.276c-.47-.07-.802-.48-.968-.925a2.501 2.501 0 1 0-3.214 3.214c.446.166.855.497.925.968a.979.979 0 0 1-.276.837l-1.61 1.611a2.404 2.404 0 0 1-1.705.707 2.402 2.402 0 0 1-1.704-.706l-1.568-1.568a1.026 1.026 0 0 0-.877-.29c-.493.074-.84.504-1.02.968a2.5 2.5 0 1 1-3.237-3.237c.464-.18.894-.527.967-1.02a1.026 1.026 0 0 0-.289-.877l-1.568-1.568A2.402 2.402 0 0 1 1.998 12c0-.617.236-1.234.706-1.704L4.315 8.685a.98.98 0 0 1 .837-.276c.47.07.802.48.968.925a2.501 2.501 0 1 0 3.214-3.214c-.446-.166-.855-.497-.925-.968a.979.979 0 0 1 .276-.837l1.61-1.611a2.404 2.404 0 0 1 1.705-.707c.617 0 1.234.236 1.704.706l1.568 1.568c.23.23.556.338.877.29.493-.074.84-.504 1.02-.968a2.5 2.5 0 1 1 3.237 3.237c-.464.18-.894.527-.967 1.02Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    </Svg>
                                 </View>
                             </View>
                         </View>
                     )}
 
-                    {/* Add New Task Card */}
-                    <TouchableOpacity
-                        style={showAnalysis ? styles.addTaskCardSmall : styles.addTaskCard}
-                        activeOpacity={0.8}
-                        onPress={() => setShowAnalysis(!showAnalysis)}
-                    >
-                        <Feather name="plus" size={scale(32)} color="#A0A0A0" />
-                    </TouchableOpacity>
+                    {/* Add New Task Card - Lock for free users, Plus for premium */}
+                    {/* Hide button if premium user has added the extra task */}
+                    {(!isPremium || !showTasks) && (
+                        <TouchableOpacity
+                            style={styles.addTaskCard}
+                            activeOpacity={0.8}
+                            onPress={() => {
+                                if (isPremium) {
+                                    setShowTasks(true);
+                                }
+                                // Free users: button does nothing (locked)
+                            }}
+                        >
+                            <Feather
+                                name={isPremium ? "plus" : "lock"}
+                                size={scale(32)}
+                                color="#A0A0A0"
+                            />
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* PAGE 3: AI Coach */}
@@ -742,8 +784,8 @@ const styles = StyleSheet.create({
         fontSize: scale(32),
         lineHeight: scale(34), // Increased to > fontSize (32)
         color: '#2E2E43',
-        width: scale(362),
         marginBottom: scale(80),
+        paddingHorizontal: scale(0), // Adding padding directly to Text to prevent clipping
     },
     // Theory Card - Light Blue
     theoryCard: {
@@ -781,7 +823,7 @@ const styles = StyleSheet.create({
     analysisTitle: {
         fontFamily: 'Gramatika-Bold',
         fontSize: scale(24),
-        lineHeight: scale(26), // Increased to > fontSize (24)
+        lineHeight: scale(26),
         color: '#000',
         marginBottom: scale(6),
     },
@@ -791,6 +833,47 @@ const styles = StyleSheet.create({
         lineHeight: scale(22),
         color: '#000',
         alignSelf: 'stretch',
+    },
+    analysisIconContainer: {
+        width: scale(40),
+        height: scale(40),
+        backgroundColor: '#08132A',
+        borderRadius: scale(10),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    // Tasks Card - Bright Pink (Premium only)
+    tasksCard: {
+        height: scale(123),
+        alignSelf: 'stretch',
+        borderRadius: scale(25),
+        backgroundColor: '#F9A9FD',
+        paddingLeft: scale(28),
+        paddingRight: scale(20),
+        paddingVertical: scale(18),
+        marginBottom: scale(10),
+    },
+    tasksTitle: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(24),
+        lineHeight: scale(26),
+        color: '#000',
+        marginBottom: scale(6),
+    },
+    tasksDescription: {
+        fontFamily: 'Geometria-Light',
+        fontSize: scale(20),
+        lineHeight: scale(22),
+        color: '#2E2E43',
+        width: scale(322),
+    },
+    tasksIconContainer: {
+        width: scale(40),
+        height: scale(100),
+        backgroundColor: '#08132A',
+        borderRadius: scale(10),
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     // Shared task card styles
     taskCardContent: {
@@ -808,6 +891,7 @@ const styles = StyleSheet.create({
         lineHeight: scale(26), // Increased to > fontSize (24)
         color: '#08132A',
         marginBottom: scale(6),
+        paddingHorizontal: scale(0), // Adding padding directly to Text
     },
     taskCardDescription: {
         fontFamily: 'Geometria-Light',
@@ -833,17 +917,14 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    // Add Task Card - Large (initial state)
+    // Add Task Card - Standard size (matching goal design)
     addTaskCard: {
-        width: scale(362),
-        height: scale(179),
-        alignSelf: 'center',
+        alignSelf: 'stretch',
         borderRadius: scale(25),
         backgroundColor: '#D3DEEE',
         justifyContent: 'center',
         alignItems: 'center',
-        paddingVertical: scale(74),
-        paddingHorizontal: scale(75),
+        paddingVertical: scale(25),
     },
     // Add Task Card - Small (after analysis card added)
     addTaskCardSmall: {

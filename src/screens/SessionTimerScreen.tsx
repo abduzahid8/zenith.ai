@@ -36,9 +36,9 @@ const COLORS = {
 // Types
 const TABS = [
     { key: 'home', icon: 'home', iconOutline: 'home-outline', type: 'ionicon' },
-    { key: 'statistics', icon: 'bar-chart', iconOutline: 'bar-chart-outline', type: 'ionicon' },
-    { key: 'ai-coach', icon: 'lightbulb', iconOutline: 'lightbulb-outline', type: 'material' },
     { key: 'weekly-plan', icon: 'clipboard-text', iconOutline: 'clipboard-text-outline', type: 'material' },
+    { key: 'ai-coach', icon: 'lightbulb', iconOutline: 'lightbulb-outline', type: 'material' },
+    { key: 'statistics', icon: 'bar-chart', iconOutline: 'bar-chart-outline', type: 'ionicon' },
 ];
 
 // Circular Progress Component
@@ -433,22 +433,21 @@ const styles = StyleSheet.create({
         elevation: 5,
     },
     bottomNav: {
-        position: 'absolute',
-        bottom: scale(40),
-        left: scale(20),
-        right: scale(20),
-        height: scale(70),
-        backgroundColor: COLORS.white,
-        borderRadius: scale(35),
+        height: scale(60),
+        marginHorizontal: scale(16),
+        marginBottom: scale(16),
+        borderRadius: scale(47),
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
         flexDirection: 'row',
         justifyContent: 'space-around',
         alignItems: 'center',
-        paddingHorizontal: scale(10),
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.05,
-        shadowRadius: 20,
-        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
     },
     navItem: {
         padding: scale(12),
