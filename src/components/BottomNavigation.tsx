@@ -29,9 +29,8 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab })
 
     const handleTabPress = (tab: typeof tabs[number]) => {
         if (tab.key !== activeTab) {
-            // Navigate to main-tabs which has PagerView with smooth animation
-            // All main screens should use the same MainTabsScreen for consistent UX
-            router.replace('/main-tabs');
+            // Navigate to the specific tab route
+            router.push(tab.route as any);
         }
     };
 

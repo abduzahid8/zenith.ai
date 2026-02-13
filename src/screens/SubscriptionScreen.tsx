@@ -7,59 +7,56 @@ import {
     StatusBar,
     TouchableOpacity,
     ScrollView,
+    Dimensions,
 } from 'react-native';
-import { useRouter, useNavigation } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { LogoSimple } from '../components/Logo';
+import { useRouter } from 'expo-router';
+import { LogoNew } from '../components/Logo';
 import { Button } from '../components/Button';
-import { colors, typography, spacing, borderRadius } from '../theme';
-import { scaleWidth, scaleHeight, scaleFont } from '../theme/responsive';
-import { useAuthStore } from '../store/authStore';
+import { colors, spacing } from '../theme';
+import { useUserProfileStore } from '../store/userProfileStore';
+
+// Scale helper
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const FIGMA_WIDTH = 402;
+const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
 
 interface PlanFeature {
     text: string;
-    included: boolean;
 }
 
 const FREE_FEATURES: PlanFeature[] = [
-    { text: 'Подбор хобби по характеру (анкета + AI)', included: true },
-    { text: 'Выбор 1 хобби', included: true },
-    { text: 'Ежедневная цель по хобби', included: true },
-    { text: 'Трекер экранного времени', included: true },
+    { text: 'Подбор хобби по характеру (анкета + AI)' },
+    { text: 'Выбор 1 хобби' },
+    { text: 'Ежедневная цель по хобби' },
+    { text: 'Трекер экранного времени (базовый)' },
+    { text: 'Прогресс в процентах' },
+    { text: 'AI-наставник — 2 диалога в день' },
 ];
 
 const PREMIUM_FEATURES: PlanFeature[] = [
-    { text: 'Всё из Free', included: true },
-    { text: 'Глубокий AI-наставник (без ограничений)', included: true },
-    { text: 'Персональный план развития', included: true },
-    { text: 'План на неделю', included: true },
-    { text: 'Детальная аналитика прогресса', included: true },
+    { text: 'Всё из Free' },
+    { text: 'Глубокий AI-наставник (без ограничений)' },
+    { text: 'Персональный план развития' },
+    { text: 'План на неделю' },
+    { text: 'Анализ прогресса и объяснения' },
+    { text: 'Объяснение прогресса' },
+    { text: 'Недельный AI-отчёт' },
 ];
 
 export const SubscriptionScreen: React.FC = () => {
     const router = useRouter();
-    const { setPremium, completeOnboarding } = useAuthStore();
-    const [selectedPlan, setSelectedPlan] = useState<'free' | 'premium'>('free');
-
-    // const navigation = useNavigation();
+    const { setPremium, completeOnboarding } = useUserProfileStore();
+    const [selectedPlan, setSelectedPlan] = useState<'free' | 'premium'>('premium'); // Default to premium usually converts better, or stick to free if simpler. Let's default to free as per image order or premium as per business goal. User selected Free in image, let's default to Free to match screenshot state? No, normally apps default to Premium. I'll stick to 'premium' as default or 'free' if that was previous behavior. Previous was 'free'.
 
     const handleContinue = async () => {
         if (selectedPlan === 'premium') {
             // TODO: Implement in-app purchase
             setPremium(true);
+        } else {
+            setPremium(false);
         }
         completeOnboarding();
-
-        // Navigate to the main app layout
-        router.replace('/(app)/');
-    };
-
-    const handleSkip = () => {
-        setPremium(false);
-        completeOnboarding();
-
-        // Navigate to the main app layout
-        router.replace('/(app)/');
+        router.replace('/(app)/' as any);
     };
 
     return (
@@ -68,7 +65,7 @@ export const SubscriptionScreen: React.FC = () => {
 
             {/* Logo at top */}
             <View style={styles.logoContainer}>
-                <LogoSimple size="large" />
+                <LogoNew width={scale(177)} height={scale(40)} variant="full" />
             </View>
 
             {/* Title */}
@@ -88,7 +85,7 @@ export const SubscriptionScreen: React.FC = () => {
                 <TouchableOpacity
                     style={[
                         styles.planCard,
-                        selectedPlan === 'free' && styles.planCardSelected,
+                        styles.freeCard,
                     ]}
                     onPress={() => setSelectedPlan('free')}
                     activeOpacity={0.9}
@@ -112,14 +109,10 @@ export const SubscriptionScreen: React.FC = () => {
                     style={[
                         styles.planCard,
                         styles.premiumCard,
-                        selectedPlan === 'premium' && styles.planCardSelected,
                     ]}
                     onPress={() => setSelectedPlan('premium')}
                     activeOpacity={0.9}
                 >
-                    <View style={styles.premiumBadge}>
-                        <Text style={styles.premiumBadgeText}>Рекомендуем</Text>
-                    </View>
                     <View style={styles.planHeader}>
                         <Text style={[styles.planTitle, styles.premiumTitle]}>Premium</Text>
                         <View style={styles.priceContainer}>
@@ -142,26 +135,28 @@ export const SubscriptionScreen: React.FC = () => {
 
             {/* Bottom buttons */}
             <View style={styles.buttonContainer}>
-                {selectedPlan === 'premium' ? (
-                    <>
-                        <Button
-                            title="Оформить Premium"
-                            onPress={handleContinue}
-                            variant="gradient"
-                            size="large"
-                        />
-                        <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
-                            <Text style={styles.skipText}>Продолжить бесплатно</Text>
-                        </TouchableOpacity>
-                    </>
-                ) : (
-                    <Button
-                        title="Продолжить"
-                        onPress={handleContinue}
-                        variant="primary"
-                        size="large"
-                    />
-                )}
+                <Button
+                    title="Оформить Premium"
+                    onPress={() => {
+                        setPremium(true);
+                        completeOnboarding();
+                        router.replace('/(app)/' as any);
+                    }}
+                    variant="primary"
+                    size="large"
+                    style={styles.continueButton}
+                />
+                <TouchableOpacity
+                    style={styles.freeLink}
+                    onPress={() => {
+                        setPremium(false);
+                        completeOnboarding();
+                        router.replace('/(app)/' as any);
+                    }}
+                    activeOpacity={0.7}
+                >
+                    <Text style={styles.freeLinkText}>Продолжить с Free</Text>
+                </TouchableOpacity>
             </View>
         </SafeAreaView>
     );
@@ -174,128 +169,119 @@ const styles = StyleSheet.create({
     },
     logoContainer: {
         alignItems: 'center',
-        marginTop: scaleHeight(60),
+        marginTop: scale(40),
     },
     titleContainer: {
-        paddingHorizontal: scaleWidth(spacing.lg),
-        marginTop: scaleHeight(spacing.lg),
-        marginBottom: scaleHeight(spacing.md),
+        alignItems: 'center',
+        marginTop: scale(40),
+        marginBottom: scale(30),
     },
     titleText: {
-        fontFamily: typography.h2.fontFamily,
-        fontSize: scaleFont(20),
-        lineHeight: scaleHeight(28),
-        color: colors.text,
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(24),
+        lineHeight: scale(30),
+        color: '#08132A',
         textAlign: 'center',
+        width: scale(271),
     },
     plansContainer: {
         flex: 1,
     },
     plansContent: {
-        paddingHorizontal: scaleWidth(spacing.lg),
-        paddingBottom: scaleHeight(spacing.lg),
+        paddingHorizontal: scale(24),
+        paddingBottom: scale(10),
     },
     planCard: {
-        backgroundColor: colors.surfaceLight,
-        borderRadius: borderRadius.md,
-        padding: scaleWidth(spacing.lg),
-        marginBottom: scaleHeight(spacing.md),
+        borderRadius: scale(25),
+        paddingVertical: scale(14),
+        paddingHorizontal: scale(18),
+        marginBottom: scale(12),
         borderWidth: 2,
         borderColor: 'transparent',
     },
-    planCardSelected: {
-        borderColor: colors.primary,
+    freeCard: {
+        backgroundColor: '#C4DCFB',
     },
     premiumCard: {
-        backgroundColor: colors.dark,
-    },
-    premiumBadge: {
-        position: 'absolute',
-        top: scaleHeight(-10),
-        right: scaleWidth(spacing.md),
-        backgroundColor: colors.primary,
-        paddingHorizontal: scaleWidth(12),
-        paddingVertical: scaleHeight(4),
-        borderRadius: borderRadius.sm,
-    },
-    premiumBadgeText: {
-        fontFamily: typography.label.fontFamily,
-        fontSize: scaleFont(12),
-        color: colors.text,
-        fontWeight: '600',
+        backgroundColor: '#102852',
     },
     planHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: scaleHeight(spacing.md),
+        marginBottom: scale(6),
     },
     planTitle: {
-        fontFamily: typography.h2.fontFamily,
-        fontSize: scaleFont(22),
-        color: colors.text,
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(22),
+        color: '#08132A',
     },
     premiumTitle: {
-        color: colors.background,
+        color: '#FFFFFF',
     },
     planPrice: {
-        fontFamily: typography.h2.fontFamily,
-        fontSize: scaleFont(24),
-        color: colors.text,
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(22),
+        color: '#08132A',
     },
     premiumPrice: {
-        color: colors.primary,
+        color: '#00FFC2',
     },
     priceContainer: {
         flexDirection: 'row',
         alignItems: 'baseline',
     },
     planPeriod: {
-        fontFamily: typography.body.fontFamily,
-        fontSize: scaleFont(14),
-        color: colors.textLight,
-        marginLeft: scaleWidth(4),
+        fontFamily: 'Gramatika-Regular',
+        fontSize: scale(14),
+        color: 'rgba(255,255,255,0.7)',
+        marginLeft: scale(4),
     },
     featuresContainer: {
-        gap: scaleHeight(8),
+        gap: scale(3),
     },
     featureRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
     },
     featureBullet: {
-        fontFamily: typography.body.fontFamily,
-        fontSize: scaleFont(14),
-        color: colors.textSecondary,
-        marginRight: scaleWidth(8),
-        lineHeight: scaleHeight(20),
+        fontFamily: 'Gramatika-Regular',
+        fontSize: scale(13),
+        color: '#08132A',
+        marginRight: scale(8),
+        lineHeight: scale(18),
     },
     premiumBullet: {
-        color: colors.primary,
+        color: '#00FFC2',
     },
     featureText: {
         flex: 1,
-        fontFamily: typography.body.fontFamily,
-        fontSize: scaleFont(14),
-        color: colors.textSecondary,
-        lineHeight: scaleHeight(20),
+        fontFamily: 'Gramatika-Regular',
+        fontSize: scale(13),
+        color: '#08132A',
+        lineHeight: scale(17),
     },
     premiumFeatureText: {
-        color: 'rgba(255,255,255,0.8)',
+        color: '#FFFFFF',
     },
     buttonContainer: {
-        paddingHorizontal: scaleWidth(spacing.lg),
-        paddingBottom: scaleHeight(spacing.xxl),
+        paddingHorizontal: scale(24),
+        paddingBottom: scale(10),
+        paddingTop: scale(20),
     },
-    skipButton: {
+    continueButton: {
+        backgroundColor: '#102852',
+        borderRadius: scale(30),
+    },
+    freeLink: {
+        marginTop: scale(16),
         alignItems: 'center',
-        marginTop: scaleHeight(spacing.md),
+        paddingVertical: scale(5),
     },
-    skipText: {
-        fontFamily: typography.body.fontFamily,
-        fontSize: scaleFont(14),
-        color: colors.textSecondary,
-        textDecorationLine: 'underline',
+    freeLinkText: {
+        fontFamily: 'Gramatika-Medium',
+        fontSize: scale(16),
+        color: '#08132A',
     },
 });
 

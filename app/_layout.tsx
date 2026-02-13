@@ -5,10 +5,13 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet, View, Text, ActivityIndicator } from 'react-native';
 import { useAuthStore } from '../src/store/authStore';
+import { useUserProfileStore } from '../src/store/userProfileStore';
+import { ErrorBoundary } from '../src/components/ErrorBoundary';
 
 export default function RootLayout() {
     const [appIsReady, setAppIsReady] = useState(false);
-    const { isAuthenticated, hasCompletedOnboarding, initialize, isLoading } = useAuthStore();
+    const { isAuthenticated, initialize, isLoading } = useAuthStore();
+    const { hasCompletedOnboarding } = useUserProfileStore();
     const segments = useSegments();
     const router = useRouter();
 
@@ -43,7 +46,7 @@ export default function RootLayout() {
 
         if (!isAuthenticated) {
             if (!inAuthGroup) {
-                router.replace('/(auth)/');
+                router.replace('/(auth)/' as any);
             }
         } else {
             // User is authenticated
@@ -57,7 +60,7 @@ export default function RootLayout() {
                 // Check if user is in auth group or onboarding flow (optional: allow revisiting subscription?)
                 // For strict prototype, force to app if in auth
                 if (inAuthGroup) {
-                    router.replace('/(app)/');
+                    router.replace('/(app)/' as any);
                 }
             }
         }
@@ -80,24 +83,26 @@ export default function RootLayout() {
 
     return (
         <GestureHandlerRootView style={styles.container}>
-            <SafeAreaProvider>
-                <Stack screenOptions={{ headerShown: false }}>
-                    <Stack.Screen name="(auth)" />
-                    <Stack.Screen name="(app)" />
-                    <Stack.Screen name="quiz-intro" />
-                    <Stack.Screen name="quiz" />
-                    <Stack.Screen name="profile-complete" />
-                    <Stack.Screen name="hobby-selection" />
-                    <Stack.Screen name="subscription" />
-                    <Stack.Screen
-                        name="session-timer"
-                        options={{
-                            presentation: 'fullScreenModal',
-                            animation: 'slide_from_bottom',
-                        }}
-                    />
-                </Stack>
-            </SafeAreaProvider>
+            <ErrorBoundary>
+                <SafeAreaProvider>
+                    <Stack screenOptions={{ headerShown: false }}>
+                        <Stack.Screen name="(auth)" />
+                        <Stack.Screen name="(app)" />
+                        <Stack.Screen name="quiz-intro" />
+                        <Stack.Screen name="quiz" />
+
+                        <Stack.Screen name="hobby-selection" />
+                        <Stack.Screen name="subscription" />
+                        <Stack.Screen
+                            name="session-timer"
+                            options={{
+                                presentation: 'fullScreenModal',
+                                animation: 'slide_from_bottom',
+                            }}
+                        />
+                    </Stack>
+                </SafeAreaProvider>
+            </ErrorBoundary>
         </GestureHandlerRootView>
     );
 }

@@ -16,7 +16,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme';
 import { scaleWidth, scaleHeight, scaleFont } from '../theme/responsive';
-import { useAuthStore } from '../store/authStore';
+import { useUserProfileStore } from '../store/userProfileStore';
 import { aiService, ChatMessage } from '../services/ai';
 
 interface DisplayMessage {
@@ -28,7 +28,7 @@ interface DisplayMessage {
 
 export const AICoachScreen: React.FC = () => {
     const router = useRouter();
-    const { selectedHobby } = useAuthStore();
+    const { selectedHobby } = useUserProfileStore();
     const [messages, setMessages] = useState<DisplayMessage[]>([]);
     const [inputText, setInputText] = useState('');
     const [isLoading, setIsLoading] = useState(false);

@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, ActivityIndicator, SafeAreaView, FlatList, TextInput, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
-// @ts-ignore
 import { requestUsagePermission, hasUsagePermission, getUsageStats } from 'device-activity';
-// @ts-ignore
 import { requestSmsPermission, getAllSms } from 'sms-reader';
 import { Ionicons } from '@expo/vector-icons';
 

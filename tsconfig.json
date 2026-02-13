@@ -36,5 +36,8 @@
         ".expo/types/**/*.ts",
         "expo-env.d.ts"
     ],
+    "exclude": [
+        "supabase/functions/**"
+    ],
     "extends": "expo/tsconfig.base"
 }

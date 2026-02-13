@@ -1,50 +1,69 @@
 {
-    "expo": {
-        "name": "zenyth.ai",
-        "slug": "zenyth-ai",
-        "version": "1.0.0",
-        "orientation": "portrait",
-        "icon": "./assets/images/icon.png",
-        "scheme": "zenyth",
-        "userInterfaceStyle": "automatic",
-        "newArchEnabled": true,
-        "splash": {
-            "image": "./assets/images/splash-icon.png",
-            "resizeMode": "contain",
-            "backgroundColor": "#ffffff"
-        },
-        "ios": {
-            "supportsTablet": true,
-            "bundleIdentifier": "com.zenyth.ai",
-            "usesAppleSignIn": true,
-            "infoPlist": {
-                "NSHealthShareUsageDescription": "We need access to track your screen time",
-                "NSHealthUpdateUsageDescription": "We use this to help you manage your screen time"
-            }
-        },
-        "android": {
-            "adaptiveIcon": {
-                "foregroundImage": "./assets/images/adaptive-icon.png",
-                "backgroundColor": "#ffffff"
-            },
-            "package": "com.zenyth.ai",
-            "permissions": [
-                "android.permission.PACKAGE_USAGE_STATS",
-                "android.permission.READ_SMS"
-            ]
-        },
-        "web": {
-            "bundler": "metro",
-            "output": "static",
-            "favicon": "./assets/images/favicon.png"
-        },
-        "plugins": [
-            "expo-router",
-            "expo-font",
-            "expo-apple-authentication"
-        ],
-        "experiments": {
-            "typedRoutes": true
+  "expo": {
+    "name": "zenyth.ai",
+    "slug": "zenyth-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "zenyth",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zenyth.ai",
+      "usesAppleSignIn": true,
+      "entitlements": {
+        "com.apple.developer.family-controls": true
+      },
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "We need access to track your screen time",
+        "NSHealthUpdateUsageDescription": "We use this to help you manage your screen time",
+        "NSFamilyControlsUsageDescription": "We need access to manage screen time limits",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.zenyth.ai",
+      "permissions": [
+        "android.permission.PACKAGE_USAGE_STATS",
+        "android.permission.READ_SMS"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-apple-authentication",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.0"
+          }
         }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "70b10f9a-86f1-4deb-8cb2-03ce69f235f2"
+      }
     }
+  }
 }

@@ -58,6 +58,8 @@ export const Button: React.FC<ButtonProps> = ({
 
     const getTextStyle = (): TextStyle => {
         switch (variant) {
+            case 'primary':
+                return { ...styles.buttonText, color: colors.buttonTextPrimary };
             case 'outline':
                 return styles.outlineText;
             default:
@@ -97,7 +99,7 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     primaryButton: {
-        backgroundColor: '#E8E4DF', // Cream/beige color from Figma
+        backgroundColor: colors.buttonPrimary, // Dark blue from theme
     },
     secondaryButton: {
         backgroundColor: '#F5F5F5',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -15,8 +15,9 @@ import Svg, { Path } from 'react-native-svg';
 import { colors } from '../theme';
 import { WeeklyBarChart } from '../components/WeeklyBarChart';
 import { MenuDrawer } from '../components/NavigationSidebar';
-import { useAuthStore } from '../store/authStore';
+import { useUserProfileStore } from '../store/userProfileStore';
 import { BottomNavigation } from '../components/BottomNavigation';
+import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FIGMA_WIDTH = 402;
@@ -54,9 +55,26 @@ const mockWeeklyData: WeeklyData[] = [
 
 export const StatisticsScreen: React.FC = () => {
     const router = useRouter();
-    const { streakDays } = useAuthStore();
+    const { streakDays } = useUserProfileStore();
+    const {
+        changeFromLastWeek,
+        weeklyData,
+        fetchWeeklyData
+    } = useDeviceScreenTimeStore();
     const [menuVisible, setMenuVisible] = useState(false);
-    const [totalChange] = useState(-24);
+
+    useEffect(() => {
+        const loadData = async () => {
+            await fetchWeeklyData();
+        };
+        loadData();
+    }, []);
+
+    // Format weekly data for chart
+    const chartData = weeklyData.length > 0 ? weeklyData.map(d => ({
+        day: d.date.split('-')[2], // Extract day from YYYY-MM-DD
+        value: d.seconds / 3600 // Convert to hours
+    })) : mockWeeklyData;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -84,8 +102,8 @@ export const StatisticsScreen: React.FC = () => {
             >
                 {/* Weekly Bar Chart - Figma: width: 362px, height: 304px, border-radius: 30px, background: #D6DEF8 */}
                 <WeeklyBarChart
-                    data={mockWeeklyData}
-                    changePercent={totalChange}
+                    data={chartData}
+                    changePercent={changeFromLastWeek}
                     periodLabel={`за последнюю\nнеделю`}
                 />
 

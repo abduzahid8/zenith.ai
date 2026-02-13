@@ -9,21 +9,20 @@ import {
     Dimensions,
     Image,
     Alert,
+    Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme';
-import { useAuthStore, getGreeting } from '../store/authStore';
+import { scale } from '../constants';
+import { useAuthStore } from '../store/authStore';
+import { useUserProfileStore, getGreeting } from '../store/userProfileStore';
 import { MenuDrawer } from '../components/NavigationSidebar';
 import { BottomNavigation } from '../components/BottomNavigation';
-import { Platform } from 'react-native';
-// @ts-ignore
-import { hasUsagePermission } from 'device-activity';
-
-// Scale from Figma (402x874) to device
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const FIGMA_WIDTH = 402;
-const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
+import { HomeScreenSkeleton } from '../components/UIStateComponents';
+import { useDeviceScreenTimeStore, formatScreenTime } from '../store/deviceScreenTimeStore';
+import { hasUsagePermission, requestScreenTimePermission } from 'device-activity';
+import { DailyTasksList } from '../components/DailyTasksList';
 
 // Fire emoji SVG component
 const FireIcon = () => (
@@ -38,33 +37,34 @@ const ChessIcon = () => (
 );
 
 export const HomeScreen: React.FC = () => {
+    // HomeScreen mounted
     const router = useRouter();
-    const { selectedHobby, isPremium, streakDays, userName } = useAuthStore();
+    const { selectedHobby, isPremium, streakDays, userName } = useUserProfileStore();
+    const { todayTotalSeconds, fetchTodayData, checkPermission, requestPermission, isAuthorized } = useDeviceScreenTimeStore();
     const [menuVisible, setMenuVisible] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        if (Platform.OS === 'android') {
-            checkAutoPrompt();
-        }
+        // Check permissions and fetch data on mount
+        const initScreenTime = async () => {
+            try {
+                if (Platform.OS === 'ios' || Platform.OS === 'android') {
+                    const authorized = await checkPermission();
+                    if (!authorized) {
+                        await requestPermission();
+                    } else {
+                        await fetchTodayData();
+                    }
+                }
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        initScreenTime();
     }, []);
 
-    const checkAutoPrompt = async () => {
-        try {
-            const hasPerm = await hasUsagePermission();
-            if (!hasPerm) {
-                Alert.alert(
-                    "Allow Phone Analysis",
-                    "We need access to your usage stats to provide insights. Would you like to enable this?",
-                    [
-                        { text: "No", style: "cancel" },
-                        { text: "Yes", onPress: () => router.push('/phone-analysis') }
-                    ]
-                );
-            }
-        } catch (e) {
-            console.log('Error checking permissions', e);
-        }
-    };
+
+    // ... existing code ...
 
     // Get dynamic greeting based on time and user name
     const greeting = getGreeting();
@@ -74,7 +74,7 @@ export const HomeScreen: React.FC = () => {
     };
 
     const handleDailyGoal = () => {
-        router.replace('/main-tabs');
+        router.push('/(app)/weekly-plan' as any);
     };
 
     const handleAICoach = () => {
@@ -82,8 +82,18 @@ export const HomeScreen: React.FC = () => {
     };
 
     const handleScreenTime = () => {
-        router.replace('/main-tabs');
+        router.push('/(app)/screen-time' as any);
     };
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+                <HomeScreenSkeleton />
+                <BottomNavigation activeTab="home" />
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>
@@ -99,7 +109,7 @@ export const HomeScreen: React.FC = () => {
                         <FireIcon />
                     </View>
                     <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)} activeOpacity={0.7}>
-                        <Feather name="menu" size={scale(24)} color="#000" />
+                        <Feather name="menu" size={scale(24)} color={colors.text} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -115,14 +125,8 @@ export const HomeScreen: React.FC = () => {
                     <Text style={styles.cardTitle}>Начать занятие</Text>
                 </TouchableOpacity>
 
-                {/* Daily Goal Button */}
-                <TouchableOpacity
-                    style={styles.dailyGoalButton}
-                    onPress={handleDailyGoal}
-                    activeOpacity={0.8}
-                >
-                    <Text style={styles.cardTitle}>Цель дня</Text>
-                </TouchableOpacity>
+                {/* Daily Tasks List */}
+                <DailyTasksList />
 
                 {/* Two side-by-side cards */}
                 <View style={styles.bottomCardsRow}>
@@ -145,6 +149,8 @@ export const HomeScreen: React.FC = () => {
                     </TouchableOpacity>
                 </View>
             </View>
+
+
 
             {/* Bottom Navigation */}
             <BottomNavigation activeTab="home" />
@@ -174,7 +180,7 @@ const styles = StyleSheet.create({
         fontFamily: 'Gramatika-Bold',
         fontSize: scale(32),
         lineHeight: scale(38),
-        color: '#000',
+        color: colors.text,
     },
     headerRight: {
         flexDirection: 'row',
@@ -195,7 +201,7 @@ const styles = StyleSheet.create({
     streakNumber: {
         fontFamily: 'Gramatika-Bold',
         fontSize: scale(24),
-        color: '#000',
+        color: colors.text,
     },
     menuButton: {
         padding: scale(4),
@@ -210,7 +216,7 @@ const styles = StyleSheet.create({
     startSessionCard: {
         height: scale(150),
         borderRadius: scale(25),
-        backgroundColor: '#DCDCDC',
+        backgroundColor: colors.home.cardBorder,
         paddingHorizontal: scale(17),
         paddingTop: scale(26),
         marginBottom: scale(24),
@@ -225,12 +231,12 @@ const styles = StyleSheet.create({
         fontFamily: 'Gramatika-Bold',
         fontSize: scale(24),
         lineHeight: scale(26),
-        color: '#1E1E2E',
+        color: colors.home.darkText,
     },
     // Daily Goal Button - Figma: border-radius 50px, padding 26px
     dailyGoalButton: {
         borderRadius: scale(50),
-        backgroundColor: '#DCDCDC',
+        backgroundColor: colors.home.cardBorder,
         paddingVertical: scale(26),
         paddingHorizontal: scale(26),
         marginBottom: scale(24),
@@ -251,7 +257,7 @@ const styles = StyleSheet.create({
         flex: 1.3,
         height: scale(155),
         borderRadius: scale(25),
-        backgroundColor: '#DCDCDC',
+        backgroundColor: colors.home.cardBorder,
         paddingHorizontal: scale(17),
         paddingVertical: scale(19),
         shadowColor: '#000',
@@ -266,7 +272,7 @@ const styles = StyleSheet.create({
         flex: 1,
         height: scale(155),
         borderRadius: scale(25),
-        backgroundColor: '#DCDCDC',
+        backgroundColor: colors.home.cardBorder,
         paddingHorizontal: scale(17),
         paddingVertical: scale(19),
         shadowColor: '#000',
@@ -280,7 +286,7 @@ const styles = StyleSheet.create({
         fontFamily: 'Gramatika-Bold',
         fontSize: scale(22),
         lineHeight: scale(24),
-        color: '#1E1E2E',
+        color: colors.home.darkText,
     },
 });
 

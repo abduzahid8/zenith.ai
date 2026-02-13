@@ -13,7 +13,8 @@ import {
     Ionicons
 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useAuthStore, getSubscriptionDisplayText } from '../store/authStore';
+import { useAuthStore } from '../store/authStore';
+import { useUserProfileStore, getSubscriptionDisplayText } from '../store/userProfileStore';
 
 // Scale from Figma (402x874) to device
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -34,7 +35,8 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
     activeItem = 'основное',
 }) => {
     const router = useRouter();
-    const { signOut, userName, subscriptionLevel } = useAuthStore();
+    const { signOut } = useAuthStore();
+    const { userName, subscriptionLevel } = useUserProfileStore();
 
     // Get display values
     const displayName = userName || 'Пользователь';
@@ -86,6 +88,9 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
         };
     }, [visible, slideAnim, fadeAnim]);
 
+    // State for expanded section
+    const [expandedSection, setExpandedSection] = React.useState<string | null>('основное');
+
     const handleLogout = () => {
         onClose();
         signOut();
@@ -94,48 +99,62 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
         }, 300);
     };
 
-    const handleNavItemPress = (item: 'основное' | 'развитие' | 'управление' | 'о продукте') => {
-        // Spring animation with mass: 1, stiffness: 45, damping: 15
-        Animated.sequence([
-            Animated.spring(scaleAnims[item], {
-                toValue: 0.95,
-                useNativeDriver: true,
-                speed: 45,
-                bounciness: 15,
-            }),
-            Animated.spring(scaleAnims[item], {
-                toValue: 1,
-                useNativeDriver: true,
-                speed: 45,
-                bounciness: 15,
-            }),
-        ]).start();
+    const handleNavItemPress = (item: string) => {
+        // Toggle expansion
+        if (expandedSection === item) {
+            setExpandedSection(null);
+        } else {
+            setExpandedSection(item);
+        }
+    };
 
-        // Navigation logic - can be extended based on routes
-        onClose();
-        setTimeout(() => {
-            switch (item) {
-                case 'основное':
-                    router.replace('/main-tabs');
-                    break;
-                case 'развитие':
-                    // Add route when available
-                    break;
-                case 'управление':
-                    // Add route when available
-                    break;
-                case 'о продукте':
-                    // Add route when available
-                    break;
-            }
-        }, 300);
+    const handleSubItemPress = (route?: string) => {
+        if (route) {
+            onClose();
+            setTimeout(() => {
+                router.push(route as any);
+            }, 300);
+        }
     };
 
     const navigationItems = [
-        { key: 'основное' as const, label: 'Основное' },
-        { key: 'развитие' as const, label: 'Развитие' },
-        { key: 'управление' as const, label: 'Управление' },
-        { key: 'о продукте' as const, label: 'О продукте' },
+        {
+            key: 'основное',
+            label: 'Основное',
+            subItems: [
+                { label: 'Главная', route: '/(app)/' },
+                { label: 'Прогресс' },
+                { label: 'Хобби и план' },
+                { label: 'AI-наставник' },
+            ],
+        },
+        {
+            key: 'развитие',
+            label: 'Развитие',
+            subItems: [
+                { label: 'Подборка контента' },
+                { label: 'Недельный отчёт' },
+                { label: 'Достижения и бейджи' },
+            ],
+        },
+        {
+            key: 'управление',
+            label: 'Управление',
+            subItems: [
+                { label: 'Настройки' },
+                { label: 'Уведомления' },
+                { label: 'Экранное время' },
+            ],
+        },
+        {
+            key: 'о продукте',
+            label: 'О продукте',
+            subItems: [
+                { label: 'Как это работает' },
+                { label: 'Обратная связь' },
+                { label: 'Поделиться с другом' },
+            ],
+        },
     ];
 
     if (!visible) return null;
@@ -192,31 +211,31 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                     {/* Navigation Items */}
                     <View style={styles.navigationSection}>
                         {navigationItems.map((item) => (
-                            <Animated.View
-                                key={item.key}
-                                style={[
-                                    styles.navItemContainer,
-                                    { transform: [{ scale: scaleAnims[item.key] }] },
-                                ]}
-                            >
+                            <View key={item.key} style={styles.navItemContainer}>
                                 <TouchableOpacity
-                                    style={[
-                                        styles.navItem,
-                                        activeItem === item.key && styles.navItemActive,
-                                    ]}
+                                    style={styles.navItem}
                                     onPress={() => handleNavItemPress(item.key)}
                                     activeOpacity={0.7}
                                 >
-                                    <Text
-                                        style={[
-                                            styles.navItemText,
-                                            activeItem === item.key && styles.navItemTextActive,
-                                        ]}
-                                    >
-                                        {item.label}
-                                    </Text>
+                                    <Text style={styles.navItemText}>{item.label}</Text>
                                 </TouchableOpacity>
-                            </Animated.View>
+
+                                {/* Sub-items Accordion */}
+                                {expandedSection === item.key && (
+                                    <View style={styles.subItemsContainer}>
+                                        {item.subItems.map((subItem, index) => (
+                                            <TouchableOpacity
+                                                key={index}
+                                                style={styles.subItem}
+                                                onPress={() => handleSubItemPress(subItem.route)}
+                                                activeOpacity={0.7}
+                                            >
+                                                <Text style={styles.subItemText}>{subItem.label}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
+                            </View>
                         ))}
                     </View>
 
@@ -325,13 +344,10 @@ const styles = StyleSheet.create({
         marginTop: scale(40),
     },
     navItemContainer: {
-        marginBottom: scale(8),
+        marginBottom: scale(16), // Increased spacing between sections
     },
     navItem: {
         paddingVertical: scale(4),
-    },
-    navItemActive: {
-        // Active state styling if needed
     },
     navItemText: {
         color: '#000',
@@ -340,8 +356,18 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         lineHeight: 22,
     },
-    navItemTextActive: {
-        // Could add underline or different styling for active state
+    subItemsContainer: {
+        marginTop: scale(8),
+        marginLeft: scale(0), // No indent on container, text logic usually handles it or just aligned left
+    },
+    subItem: {
+        paddingVertical: scale(6),
+    },
+    subItemText: {
+        color: '#2E2E43', // Slightly lighter/blue-ish dark
+        fontFamily: 'Gramatika-Light', // Lighter font for hierarchy
+        fontSize: 16,
+        lineHeight: 20,
     },
 
     // Footer Section

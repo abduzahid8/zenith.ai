@@ -12,11 +12,15 @@ export const colors = {
         end: '#00B7BF',
     },
 
+    // Buttons
+    buttonPrimary: '#102852',
+    buttonTextPrimary: '#FFFFFF',
+
     // Logo/Brand colors
     dark: '#15211F',
 
     // Backgrounds
-    background: '#FFFFFF',
+    background: '#EAF0F8',
     surface: '#D9D9D9',
     surfaceLight: '#F5F5F5',
 
@@ -33,6 +37,41 @@ export const colors = {
     // Screen time colors
     decrease: '#34C759',  // Green for reduced screen time
     increase: '#FF3B30',  // Red for increased screen time
+
+    // Component palette tokens (replaces hardcoded hex in individual screens)
+    sessionTimer: {
+        primary: '#37A0EF',
+        primaryFaded: '#D6EBFD',
+        background: '#EAF0F8',
+        text: '#2E2E43',
+        muted: '#B0B0B0',
+    },
+    statistics: {
+        screenTimeCard: '#8CDEFF',
+        screenTimeCardDark: '#78BAFF',
+        hobbyCardLight: '#F4C0FD',
+        hobbyCardDark: '#E2D6F8',
+        muted: '#C0C0C0',
+        darkText: '#2E2E43',
+    },
+    aiCoach: {
+        bubble: '#D6DEF8',
+        bubbleFaded: 'rgba(214, 222, 248, 0.20)',
+        text: '#4E4E4E',
+        darkText: '#2E2E43',
+    },
+    home: {
+        cardBorder: '#DCDCDC',
+        darkText: '#1E1E2E',
+        lightBg: '#F5F5F5',
+    },
+    errorBoundary: {
+        background: '#F2F6FC',
+        primary: '#37A0EF',
+        text: '#2E2E43',
+        muted: '#666',
+        mutedLight: '#999',
+    },
 } as const;
 
 export const fonts = {

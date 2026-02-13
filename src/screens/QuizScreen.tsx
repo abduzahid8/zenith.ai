@@ -7,12 +7,17 @@ import {
     StatusBar,
     TouchableOpacity,
     Image,
+    Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Logo } from '../components/Logo';
+import { LogoNew } from '../components/Logo';
 import { Button } from '../components/Button';
 import { colors } from '../theme';
 import { useQuizStore, QUIZ_QUESTIONS } from '../store/quizStore';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const FIGMA_WIDTH = 402;
+const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
 
 export default function QuizScreen() {
     const router = useRouter();
@@ -33,7 +38,7 @@ export default function QuizScreen() {
     const handleNext = () => {
         if (isLastQuestion) {
             completeQuiz();
-            router.push('/profile-complete');
+            router.push('/hobby-selection');
         } else {
             nextQuestion();
         }
@@ -57,7 +62,7 @@ export default function QuizScreen() {
 
             {/* Logo at top */}
             <View style={styles.logoContainer}>
-                <Logo size="large" />
+                <LogoNew width={scale(40)} height={scale(40)} variant="icon" />
             </View>
 
             {/* Question area - fixed height */}

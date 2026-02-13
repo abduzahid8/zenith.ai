@@ -4,12 +4,17 @@ import {
     Text,
     StyleSheet,
     StatusBar,
+    Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Logo } from '../components/Logo';
+import { LogoNew } from '../components/Logo';
 import { Button } from '../components/Button';
 import { colors } from '../theme';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const FIGMA_WIDTH = 402;
+const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
 
 export default function WelcomeScreen() {
     const router = useRouter();
@@ -24,7 +29,7 @@ export default function WelcomeScreen() {
 
             {/* Logo at top */}
             <View style={styles.logoContainer}>
-                <Logo size="large" />
+                <LogoNew width={scale(177)} height={scale(40)} variant="full" />
             </View>
 
             {/* Center content */}

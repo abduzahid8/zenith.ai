@@ -9,10 +9,9 @@ import {
     Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Logo } from '../components/Logo';
-import { LucidGlassButton } from '../components/LucidGlassButton';
+import { LogoNew } from '../components/Logo';
 import { colors } from '../theme';
-import { useAuthStore } from '../store/authStore';
+import { useUserProfileStore } from '../store/userProfileStore';
 import { useQuizStore } from '../store/quizStore';
 import { matchHobbies, quizAnswersToProfile, HobbyMatch } from '../services/hobbyMatcher';
 
@@ -21,9 +20,28 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FIGMA_WIDTH = 402;
 const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
 
+// Custom circle indicator matching Figma design
+const SelectionCircle: React.FC<{ isSelected: boolean }> = ({ isSelected }) => (
+    <View style={[circleStyles.circle, isSelected && circleStyles.circleSelected]} />
+);
+
+const CIRCLE_SIZE = scale(24);
+
+const circleStyles = StyleSheet.create({
+    circle: {
+        width: CIRCLE_SIZE,
+        height: CIRCLE_SIZE,
+        borderRadius: CIRCLE_SIZE / 2,
+        backgroundColor: '#C8D0DC',
+    },
+    circleSelected: {
+        backgroundColor: '#08132A',
+    },
+});
+
 export default function HobbySelectionScreen() {
     const router = useRouter();
-    const { setSelectedHobby } = useAuthStore();
+    const { setSelectedHobby } = useUserProfileStore();
     const { answers } = useQuizStore();
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [matchedHobbies, setMatchedHobbies] = useState<HobbyMatch[]>([]);
@@ -36,7 +54,8 @@ export default function HobbySelectionScreen() {
     }, [answers]);
 
     const handleSelect = (hobbyId: string) => {
-        setSelectedId(hobbyId);
+        // Toggle: deselect if already selected, otherwise select new one
+        setSelectedId(prev => (prev === hobbyId ? null : hobbyId));
     };
 
     const handleContinue = () => {
@@ -52,7 +71,7 @@ export default function HobbySelectionScreen() {
 
             {/* Logo at top */}
             <View style={styles.logoContainer}>
-                <Logo size="large" />
+                <LogoNew width={scale(40)} height={scale(40)} variant="icon" />
             </View>
 
             {/* Content */}
@@ -66,17 +85,32 @@ export default function HobbySelectionScreen() {
                 </Text>
             </View>
 
-            {/* Hobby pills with lucid glass effect */}
+            {/* Hobby rows with custom toggles */}
             <View style={styles.hobbiesContainer}>
-                {matchedHobbies.map((match) => (
-                    <LucidGlassButton
-                        key={match.hobby.id}
-                        label={match.hobby.titleRu}
-                        emoji={match.hobby.emoji}
-                        isSelected={selectedId === match.hobby.id}
-                        onPress={() => handleSelect(match.hobby.id)}
-                    />
-                ))}
+                {matchedHobbies.map((match) => {
+                    const isSelected = selectedId === match.hobby.id;
+                    return (
+                        <TouchableOpacity
+                            key={match.hobby.id}
+                            style={[
+                                styles.hobbyRow,
+                                isSelected && styles.hobbyRowSelected,
+                            ]}
+                            onPress={() => handleSelect(match.hobby.id)}
+                            activeOpacity={0.8}
+                        >
+                            <Text
+                                style={[
+                                    styles.hobbyLabel,
+                                    isSelected && styles.hobbyLabelSelected,
+                                ]}
+                            >
+                                {match.hobby.titleRu}
+                            </Text>
+                            <SelectionCircle isSelected={isSelected} />
+                        </TouchableOpacity>
+                    );
+                })}
             </View>
 
             {/* Spacer */}
@@ -87,7 +121,7 @@ export default function HobbySelectionScreen() {
                 <TouchableOpacity
                     style={[
                         styles.continueButton,
-                        !selectedId && styles.continueButtonDisabled
+                        !selectedId && styles.continueButtonDisabled,
                     ]}
                     onPress={handleContinue}
                     disabled={!selectedId}
@@ -114,28 +148,47 @@ const styles = StyleSheet.create({
     },
     contentContainer: {
         paddingHorizontal: scale(24),
-        marginTop: scale(50),
+        marginTop: scale(80),
     },
-    // Figma: Gramatika 24px, 700, line-height 30px
     titleText: {
         fontFamily: 'Gramatika-Bold',
         fontSize: scale(24),
         lineHeight: scale(30),
-        color: '#000',
+        color: '#08132A',
+        width: scale(175),
         marginBottom: scale(16),
     },
-    // Figma: Geometria 20px, 300 (using Gramatika-Light as fallback)
     subtitleText: {
         fontFamily: 'Gramatika-Light',
         fontSize: scale(20),
-        lineHeight: scale(26),
-        color: '#000',
+        color: '#08132A',
+        width: scale(342),
     },
     hobbiesContainer: {
         paddingHorizontal: scale(24),
-        marginTop: scale(48),
+        marginTop: scale(40),
+        gap: scale(15),
+    },
+    hobbyRow: {
+        flexDirection: 'row',
         alignItems: 'center',
-        gap: scale(16),
+        justifyContent: 'space-between',
+        height: scale(50),
+        paddingVertical: scale(11),
+        paddingHorizontal: scale(20),
+        borderRadius: scale(40),
+        backgroundColor: '#DAE7F8',
+    },
+    hobbyRowSelected: {
+        backgroundColor: '#37A0EF',
+    },
+    hobbyLabel: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(16),
+        color: '#08132A',
+    },
+    hobbyLabelSelected: {
+        color: '#08132A',
     },
     spacer: {
         flex: 1,
@@ -145,30 +198,28 @@ const styles = StyleSheet.create({
         paddingBottom: scale(32),
         alignItems: 'center',
     },
-    // Figma: 315px width, 60px height, border-radius 30px, BLACK background
     continueButton: {
         width: scale(315),
         height: scale(60),
         borderRadius: scale(30),
-        backgroundColor: '#000',
+        backgroundColor: '#102852',
         justifyContent: 'center',
         alignItems: 'center',
+        padding: scale(10),
     },
     continueButtonDisabled: {
         opacity: 0.5,
     },
-    // Figma: Gramatika 20px, 700, WHITE text
     continueButtonText: {
         fontFamily: 'Gramatika-Bold',
         fontSize: scale(20),
         color: '#FFF',
         textAlign: 'center',
     },
-    // Figma: Geometria 10px, 300
     noteText: {
         fontFamily: 'Gramatika-Light',
         fontSize: scale(10),
-        color: '#000',
+        color: '#08132A',
         textAlign: 'center',
         marginTop: scale(12),
     },

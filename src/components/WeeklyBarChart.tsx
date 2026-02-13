@@ -13,6 +13,8 @@ interface DayData {
 
 interface WeeklyBarChartProps {
     data?: DayData[];
+    changePercent?: number;
+    periodLabel?: string;
 }
 
 const defaultData: DayData[] = [
@@ -40,7 +42,7 @@ const BAR_COLORS = [
 
 
 // Grid image for chart background
-const gridImage = require('../../frame auth/Group 39.png');
+const gridImage = require('../../assets/images/grid_pattern.png');
 
 export const WeeklyBarChart: React.FC<WeeklyBarChartProps> = ({
     data = defaultData,

@@ -1,2 +1,2 @@
 // Re-export screen content
-export { default } from '../../src/screens/ScreenTimeScreen';
+export { ScreenTimeScreen as default } from '../../src/screens/ScreenTimeScreen';

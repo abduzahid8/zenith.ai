@@ -42,3 +42,14 @@ local.properties
 
 # Expo
 expo-env.d.ts
+
+# Design assets / Figma exports (not source code)
+first page/
+frame auth/
+gramatika-font-family-*/
+figma_nodes.json
+figma_structure.json
+style_updates.txt
+*.backup
+# Large binary module artifacts
+modules/device-activity/ios/zenythai.app/

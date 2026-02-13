@@ -1,67 +1,40 @@
-import OpenAI from 'openai';
+// AI Service — proxied through Supabase Edge Function
+// All API keys are stored server-side; the client never sees them.
 
-// OpenAI / Gemini configuration
-const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
-const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-
-// Prefer Gemini if available, otherwise OpenAI (or dummy for safety)
-const API_KEY = GEMINI_API_KEY || OPENAI_API_KEY || 'dummy-key';
-const IS_GEMINI = !!GEMINI_API_KEY;
-
-const openai = new OpenAI({
-    apiKey: API_KEY,
-    baseURL: IS_GEMINI ? 'https://generativelanguage.googleapis.com/v1beta/openai/' : undefined,
-    dangerouslyAllowBrowser: true,
-});
-
-// Model to use
-const AI_MODEL = IS_GEMINI ? 'gemini-1.5-flash' : 'gpt-4o-mini';
+import { getSupabase } from './supabase/client';
 
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
     content: string;
 }
 
-// AI Coach system prompt
-const AI_COACH_SYSTEM_PROMPT = `Ты - ИИ-наставник в приложении zenyth.ai. Твоя задача - помогать пользователю с его хобби и личным развитием.
+// ── Helper: invoke the ai-proxy Edge Function ────────────
 
-Твои основные функции:
-1. Давать советы по выбранному хобби пользователя (шахматы, видео монтаж, рисование)
-2. Мотивировать и поддерживать прогресс
-3. Помогать с планированием занятий
-4. Отвечать на вопросы о техниках и методах обучения
+async function invokeAI<T>(action: string, payload: Record<string, unknown>): Promise<T> {
+    const supabase = getSupabase();
+    const { data, error } = await supabase.functions.invoke('ai-proxy', {
+        body: { action, ...payload },
+    });
 
-Стиль общения:
-- Дружелюбный и поддерживающий
-- Конкретный и практичный
-- Мотивирующий, но не навязчивый
-- Отвечай на русском языке
+    if (error) {
+        console.error(`AI proxy error (${action}):`, error);
+        throw error;
+    }
 
-Если пользователь делится своим прогрессом, обязательно похвали его и дай конструктивный совет для следующего шага.`;
+    // The Edge Function returns { data: string }
+    // Parse the inner data if it's a JSON string
+    const raw = data?.data ?? data;
+    if (typeof raw === 'string') {
+        try {
+            return JSON.parse(raw.replace(/```json|```/g, '').trim()) as T;
+        } catch {
+            return raw as unknown as T;
+        }
+    }
+    return raw as T;
+}
 
-// Hobby-specific prompts
-const HOBBY_PROMPTS: Record<string, string> = {
-    chess: `Ты специализируешься на шахматах. Твои знания включают:
-- Базовые и продвинутые дебюты
-- Тактические приёмы (вилки, связки, двойные удары)
-- Стратегические принципы
-- Эндшпильная техника
-- Анализ партий`,
-
-    video_editing: `Ты специализируешься на видео монтаже. Твои знания включают:
-- Основы монтажа и ритма
-- Работа с программами (DaVinci Resolve, Premiere Pro)
-- Цветокоррекция
-- Звуковой дизайн
-- Эффекты и переходы`,
-
-    drawing: `Ты специализируешься на рисовании. Твои знания включают:
-- Основы перспективы
-- Анатомия и пропорции
-- Светотень и объём
-- Композиция
-- Различные техники (карандаш, акварель, цифровое рисование)`,
-};
+// ── Public AI Service ────────────────────────────────────
 
 export const aiService = {
     // Send message to AI coach
@@ -70,26 +43,9 @@ export const aiService = {
         hobby?: string
     ): Promise<string> => {
         try {
-            // Build system prompt based on hobby
-            let systemPrompt = AI_COACH_SYSTEM_PROMPT;
-            if (hobby && HOBBY_PROMPTS[hobby]) {
-                systemPrompt += '\n\n' + HOBBY_PROMPTS[hobby];
-            }
-
-            const completion = await openai.chat.completions.create({
-                model: AI_MODEL,
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    ...messages,
-                ],
-                max_tokens: 500,
-                temperature: 0.7,
-            });
-
-            return completion.choices[0]?.message?.content || 'Извините, не могу ответить сейчас.';
-        } catch (error) {
-            console.error('AI Service Error:', error);
-            throw new Error('Ошибка при обращении к ИИ-наставнику');
+            return await invokeAI<string>('sendMessage', { messages, hobby });
+        } catch {
+            return 'Извините, сейчас я не могу ответить. Проверьте соединение или попробуйте позже.';
         }
     },
 
@@ -98,29 +54,9 @@ export const aiService = {
         answers: Record<number, number>
     ): Promise<string[]> => {
         try {
-            const prompt = `На основе ответов пользователя на анкету, рекомендуй 3 хобби из списка: шахматы, видео монтаж, рисование.
-
-Ответы пользователя (номер вопроса: индекс выбранного ответа):
-${JSON.stringify(answers)}
-
-Верни только JSON массив с ID хобби в порядке приоритета, например: ["chess", "drawing", "video_editing"]`;
-
-            const completion = await openai.chat.completions.create({
-                model: AI_MODEL,
-                messages: [
-                    { role: 'system', content: 'Ты помощник, который анализирует ответы анкеты и рекомендует хобби. Отвечай только JSON массивом.' },
-                    { role: 'user', content: prompt },
-                ],
-                max_tokens: 100,
-                temperature: 0.3,
-            });
-
-            const response = completion.choices[0]?.message?.content || '[]';
-            const parsed = JSON.parse(response.replace(/```json|```/g, '').trim());
+            const parsed = await invokeAI<string[]>('getHobbyRecommendations', { answers });
             return Array.isArray(parsed) ? parsed : ['chess', 'video_editing', 'drawing'];
-        } catch (error) {
-            console.error('Hobby Recommendation Error:', error);
-            // Default order if AI fails
+        } catch {
             return ['chess', 'video_editing', 'drawing'];
         }
     },
@@ -132,32 +68,146 @@ ${JSON.stringify(answers)}
         weekNumber: number
     ): Promise<string[]> => {
         try {
-            const hobbyName = {
-                chess: 'шахматы',
-                video_editing: 'видео монтаж',
-                drawing: 'рисование',
-            }[hobby] || hobby;
-
-            const prompt = `Создай 2-3 задачи для занятия "${hobbyName}" на ${dayOfWeek} день недели ${weekNumber}.
-Задачи должны быть конкретными и выполнимыми за 30-60 минут.
-Верни JSON массив строк с задачами на русском языке.`;
-
-            const completion = await openai.chat.completions.create({
-                model: AI_MODEL,
-                messages: [
-                    { role: 'system', content: 'Ты генератор учебных задач. Отвечай только JSON массивом строк.' },
-                    { role: 'user', content: prompt },
-                ],
-                max_tokens: 200,
-                temperature: 0.7,
-            });
-
-            const response = completion.choices[0]?.message?.content || '[]';
-            const parsed = JSON.parse(response.replace(/```json|```/g, '').trim());
+            const parsed = await invokeAI<string[]>('generateDailyTasks', { hobby, dayOfWeek, weekNumber });
             return Array.isArray(parsed) ? parsed : ['Изучить основы', 'Практиковаться 30 минут'];
-        } catch (error) {
-            console.error('Daily Tasks Error:', error);
+        } catch {
             return ['Изучить основы', 'Практиковаться 30 минут'];
+        }
+    },
+
+    // Generate substitute content when user tries to open social media
+    generateSubstituteContent: async (
+        blockedApp: string,
+        userHobby: string
+    ): Promise<{ type: string; message: string; action: string }> => {
+        try {
+            const parsed = await invokeAI<{ type?: string; message?: string; action?: string }>(
+                'generateSubstituteContent', { blockedApp, userHobby }
+            );
+            return {
+                type: parsed.type || 'reminder',
+                message: parsed.message || 'Хочешь заняться чем-то полезным?',
+                action: parsed.action || 'Открой приложение и начни сессию',
+            };
+        } catch {
+            return {
+                type: 'reminder',
+                message: 'Есть минутка? Может, практика вместо скроллинга? 🎯',
+                action: 'Начать 15-минутную сессию',
+            };
+        }
+    },
+
+    // Analyze screen time patterns and suggest improvements
+    analyzeScreenTimePatterns: async (
+        weeklyData: { app: string; category: string; minutes: number }[]
+    ): Promise<{ insights: string[]; suggestions: string[] }> => {
+        try {
+            const parsed = await invokeAI<{ insights?: string[]; suggestions?: string[] }>(
+                'analyzeScreenTimePatterns', { weeklyData }
+            );
+            return {
+                insights: parsed.insights || ['Анализ данных недоступен'],
+                suggestions: parsed.suggestions || ['Попробуй сократить время в соцсетях'],
+            };
+        } catch {
+            return {
+                insights: ['Требуется больше данных для анализа'],
+                suggestions: ['Продолжай отслеживать экранное время'],
+            };
+        }
+    },
+
+    // Get personalized content recommendations
+    getContentRecommendations: async (
+        userProfile: Record<string, unknown>,
+        goals: string[]
+    ): Promise<Array<{ title: string; category: string; reason: string }>> => {
+        try {
+            const parsed = await invokeAI<Array<{ title: string; category: string; reason: string }>>(
+                'getContentRecommendations', { userProfile, goals }
+            );
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    },
+
+    // Get personalized earning ideas
+    getPersonalizedEarningIdeas: async (
+        userProfile: Record<string, unknown>,
+        hobbies: string[]
+    ): Promise<Array<{
+        title: string;
+        category: string;
+        description: string;
+        difficulty: string;
+        income_min: number;
+        income_max: number;
+        time_to_start: string;
+        match_score: number;
+        reasons: string[];
+    }>> => {
+        try {
+            const parsed = await invokeAI<Array<Record<string, unknown>>>(
+                'getPersonalizedEarningIdeas', { userProfile, hobbies }
+            );
+            return Array.isArray(parsed) ? parsed as any : [];
+        } catch {
+            return [];
+        }
+    },
+
+    // Generate a full weekly plan for a hobby
+    generateWeeklyPlan: async (
+        hobby: string,
+        userLevel: string,
+        weekNumber: number
+    ): Promise<Array<{ day: number; tasks: string[]; focus: string }>> => {
+        try {
+            const parsed = await invokeAI<Array<{ day: number; tasks: string[]; focus: string }>>(
+                'generateWeeklyPlan', { hobby, userLevel, weekNumber }
+            );
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    },
+
+    // Analyze user profile from quiz answers and behavior
+    analyzeUserProfile: async (
+        quizAnswers: Record<number, number>,
+        behaviorData?: {
+            avgSessionMinutes?: number;
+            streakDays?: number;
+            preferredTimes?: string[];
+        }
+    ): Promise<{
+        personality_type: string;
+        temperament: string;
+        motivation_style: string;
+        strengths: string[];
+        growth_areas: string[];
+    }> => {
+        try {
+            const parsed = await invokeAI<Record<string, unknown>>(
+                'analyzeUserProfile', { quizAnswers, behaviorData }
+            );
+            return {
+                personality_type: (parsed.personality_type as string) || 'аналитик',
+                temperament: (parsed.temperament as string) || 'сбалансированный',
+                motivation_style: (parsed.motivation_style as string) || 'soft',
+                strengths: (parsed.strengths as string[]) || ['Целеустремлённость'],
+                growth_areas: (parsed.growth_areas as string[]) || ['Регулярность практики'],
+            };
+        } catch {
+            return {
+                personality_type: 'аналитик',
+                temperament: 'сбалансированный',
+                motivation_style: 'soft',
+                strengths: ['Целеустремлённость'],
+                growth_areas: ['Регулярность практики'],
+            };
         }
     },
 };

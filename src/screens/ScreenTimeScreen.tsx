@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -15,8 +15,9 @@ import Svg, { Path } from 'react-native-svg';
 import { colors } from '../theme';
 import { WeeklyBarChart } from '../components/WeeklyBarChart';
 import { MenuDrawer } from '../components/NavigationSidebar';
-import { useAuthStore } from '../store/authStore';
+import { useUserProfileStore } from '../store/userProfileStore';
 import { BottomNavigation } from '../components/BottomNavigation';
+import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FIGMA_WIDTH = 402;
@@ -54,19 +55,36 @@ const mockWeeklyData: WeeklyData[] = [
 
 export const ScreenTimeScreen: React.FC = () => {
     const router = useRouter();
-    const { streakDays } = useAuthStore();
+    const { streakDays } = useUserProfileStore();
+    const {
+        averageDailySeconds,
+        changeFromLastWeek,
+        weeklyData,
+        topApps,
+        fetchWeeklyData,
+        fetchTodayData
+    } = useDeviceScreenTimeStore();
     const [menuVisible, setMenuVisible] = useState(false);
-    const [totalChange] = useState(-24);
+
+    useEffect(() => {
+        fetchWeeklyData();
+        fetchTodayData();
+    }, []);
+
+    // Format weekly data for chart
+    const chartData = weeklyData.length > 0 ? weeklyData.map(d => ({
+        day: d.date.split('-')[2], // Extract day from YYYY-MM-DD
+        value: d.seconds / 3600 // Convert to hours for display
+    })) : mockWeeklyData;
 
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
-            {/* Header - Streak counter and menu */}
+            {/* Header */}
             <View style={styles.header}>
                 <View style={styles.headerLeft} />
                 <View style={styles.headerRight}>
-                    {/* Figma: font-size: 24px, font-weight: 700, line-height: 21px */}
                     <View style={styles.streakContainer}>
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
@@ -82,51 +100,58 @@ export const ScreenTimeScreen: React.FC = () => {
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Weekly Bar Chart - Figma: #D6DEF8 background, #37A0EF bars */}
+                {/* Weekly Bar Chart */}
                 <WeeklyBarChart
-                    data={mockWeeklyData}
-                    changePercent={totalChange}
+                    data={chartData}
+                    changePercent={changeFromLastWeek}
                     periodLabel={`за последнюю\nнеделю`}
                 />
 
-                {/* Page Indicators - Figma: pill 65x13, circle 13x13, background: #2E2E43 */}
+                {/* Page Indicators */}
                 <View style={styles.pageIndicators}>
                     <View style={styles.indicatorPill} />
                     <View style={styles.indicatorCircle} />
                 </View>
 
-                {/* Maintenance/Coming Soon Section */}
-                <View style={styles.maintenanceSection}>
-                    {/* Tools Icon - Figma: width: 80px, height: 80px */}
-                    <View style={styles.iconContainer}>
-                        <ToolsIcon />
-                    </View>
+                {/* Top Apps List (Instead of Maintenance) */}
+                <View style={styles.statsSection}>
+                    <Text style={styles.sectionTitle}>Время по приложениям</Text>
 
-                    {/* Title - "Ой! Мы еще наводим здесь порядок" */}
-                    <Text style={styles.maintenanceTitle}>
-                        Ой! Мы еще наводим здесь порядок
-                    </Text>
-
-                    {/* Subtitle - Figma: font-size: 12px, width: 251px */}
-                    <Text style={styles.maintenanceSubtitle}>
-                        Этот блок временно недоступен.{'\n'}
-                        Совсем скоро здесь будет много{'\n'}
-                        интересного!
-                    </Text>
-
-                    <TouchableOpacity
-                        style={{ marginTop: 20, backgroundColor: '#000', padding: 12, borderRadius: 8 }}
-                        onPress={() => router.push('/phone-analysis')}
-                    >
-                        <Text style={{ color: '#fff', fontWeight: 'bold' }}>Analyze Phone Usage</Text>
-                    </TouchableOpacity>
+                    {topApps.length > 0 ? (
+                        topApps.map((app, index) => (
+                            <View key={index} style={styles.appRow}>
+                                <View style={styles.appInfo}>
+                                    <View style={styles.appIconPlaceholder}>
+                                        <Text style={styles.appInitial}>{app.appName.charAt(0)}</Text>
+                                    </View>
+                                    <Text style={styles.appName}>{app.appName}</Text>
+                                </View>
+                                <Text style={styles.appTime}>
+                                    {Math.floor(app.totalTimeSeconds / 3600)}ч {Math.floor((app.totalTimeSeconds % 3600) / 60)}м
+                                </Text>
+                            </View>
+                        ))
+                    ) : (
+                        <View style={styles.maintenanceSection}>
+                            <View style={styles.iconContainer}>
+                                <ToolsIcon />
+                            </View>
+                            <Text style={styles.maintenanceTitle}>Нет данных</Text>
+                            <Text style={styles.maintenanceSubtitle}>
+                                Данные о времени появятся здесь после начала использования.
+                            </Text>
+                            <TouchableOpacity
+                                style={{ marginTop: 20, backgroundColor: '#000', padding: 12, borderRadius: 8 }}
+                                onPress={() => router.push('/phone-analysis')}
+                            >
+                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Настроить доступ</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
             </ScrollView>
 
-            {/* Bottom Navigation */}
             <BottomNavigation activeTab="statistics" />
-
-            {/* Menu Drawer */}
             <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />
         </SafeAreaView>
     );
@@ -223,6 +248,54 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: scale(15),
         width: scale(251),
+    },
+    // Stats Section
+    statsSection: {
+        marginTop: scale(24),
+        paddingHorizontal: scale(24),
+    },
+    sectionTitle: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(18),
+        color: '#000',
+        marginBottom: scale(16),
+    },
+    appRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: scale(16),
+        paddingVertical: scale(8),
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
+    },
+    appInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: scale(12),
+    },
+    appIconPlaceholder: {
+        width: scale(40),
+        height: scale(40),
+        borderRadius: scale(12),
+        backgroundColor: '#F0F0F0',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    appInitial: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(18),
+        color: '#000',
+    },
+    appName: {
+        fontFamily: 'Gramatika-Medium',
+        fontSize: scale(16),
+        color: '#000',
+    },
+    appTime: {
+        fontFamily: 'Gramatika-Regular',
+        fontSize: scale(14),
+        color: '#666',
     },
 });
 

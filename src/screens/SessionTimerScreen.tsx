@@ -12,26 +12,15 @@ import {
     Easing,
     Image,
     Platform,
+    Pressable,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import Svg, { Circle, Path } from 'react-native-svg';
-
-// Screen Dimensions
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const FIGMA_WIDTH = 402;
-const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
-
-// Colors - Blue Theme (Goal)
-const COLORS = {
-    background: '#F2F6FC', // Very light blue/grey typical of the design
-    primary: '#37A0EF',   // Updated Blue color
-    primaryFaded: '#D6EBFD', // Lighter faded blue for track matching Goal
-    text: '#2E2E43',
-    white: '#FFFFFF',
-    navBg: 'rgba(255, 255, 255, 0.95)',
-    controlDark: '#2E2E43', // Dark background for Reset/Stop buttons
-};
+import Svg, { Circle, Path, Rect, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
+import PagerView from 'react-native-pager-view';
+import { scale } from '../constants';
+import { colors } from '../theme';
 
 // Types
 const TABS = [
@@ -86,7 +75,57 @@ export const SessionTimerScreen: React.FC = () => {
 
     const controlsAnim = useRef(new Animated.Value(0)).current;
     const drawerAnim = useRef(new Animated.Value(-scale(286))).current; // Start hidden (left)
+
     const backdropAnim = useRef(new Animated.Value(0)).current; // Opacity 0
+
+    // Session Summary State
+    const [showSummary, setShowSummary] = useState(false);
+    const [startTime, setStartTime] = useState<number | null>(null);
+
+    // Initial Start Time
+    useEffect(() => {
+        // Set start time when component mounts or first timer start?
+        // Let's set it when timer status first becomes 'running' or just on mount if it auto-starts?
+        // User flow: "Start Session" -> enters screen -> usually explicit start.
+        // Assuming session starts when they hit play or enter screen?
+        // Let's set it on mount for simplicity of "Elapsed since entry".
+        const now = Date.now();
+
+        setStartTime(now);
+    }, []);
+
+    // Stop Confirmation State
+    const [isStopModalVisible, setIsStopModalVisible] = useState(false);
+    const [dontShowAgainChecked, setDontShowAgainChecked] = useState(false);
+    const [prefDontShowStop, setPrefDontShowStop] = useState(false);
+
+    // Load preference
+    useEffect(() => {
+        AsyncStorage.getItem('session_stop_confirm_pref').then(val => {
+            if (val === 'true') setPrefDontShowStop(true);
+        });
+    }, []);
+
+    // Task State
+    const [tasks, setTasks] = useState([
+        { id: '1', title: 'Дебют', subtitle: 'Изучить Королевский Гамбит', completed: false, completedAt: null as number | null },
+        { id: '2', title: 'Практика', subtitle: 'Сыграть 2 партии', completed: false, completedAt: null as number | null },
+    ]);
+
+    const handleCompleteTask = (id: string) => {
+        // Only allow completing if timer is running? User request: "When user start clocks and then he can click..."
+        // We'll allow it anytime for flexibility, or restrict if strictly required.
+        // Let's assume we capture the time regardless.
+
+        setTasks(prev => prev.map(task => {
+            if (task.id === id && !task.completed) {
+                const timestamp = Date.now();
+
+                return { ...task, completed: true, completedAt: timestamp };
+            }
+            return task;
+        }));
+    };
 
     // Timer Logic
     useEffect(() => {
@@ -174,11 +213,44 @@ export const SessionTimerScreen: React.FC = () => {
         setTimerStatus('idle');
     };
 
+    const handleStopPress = () => {
+        if (prefDontShowStop) {
+            handleStop();
+        } else {
+            setIsStopModalVisible(true);
+        }
+    };
+
+    const confirmStop = async () => {
+        if (dontShowAgainChecked) {
+            await AsyncStorage.setItem('session_stop_confirm_pref', 'true');
+            setPrefDontShowStop(true);
+        }
+        setIsStopModalVisible(false);
+
+        // Check if there are completed tasks to show summary for
+        const completedTasks = tasks.filter(t => t.completed);
+
+
+        if (completedTasks.length > 0) {
+
+            setShowSummary(true);
+        } else {
+
+            handleStop();
+        }
+    };
+
     const handleStop = () => {
         setTimeLeft(totalTime);
         setTimerStatus('idle');
         router.back();
     };
+
+    // Render Summary if active
+    if (showSummary && startTime) {
+        return <SessionSummaryView tasks={tasks} startTime={startTime} onExit={handleStop} />;
+    }
 
     const renderTabIcon = (tab: typeof TABS[0], index: number) => {
         const isActive = tab.key === 'home';
@@ -229,8 +301,8 @@ export const SessionTimerScreen: React.FC = () => {
                 <TimerProgress
                     size={scale(300)}
                     strokeWidth={scale(25)}
-                    color={COLORS.primary}
-                    trackColor={COLORS.primaryFaded}
+                    color={colors.sessionTimer.primary}
+                    trackColor={colors.sessionTimer.primaryFaded}
                     progress={progress}
                 >
                     <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
@@ -248,7 +320,7 @@ export const SessionTimerScreen: React.FC = () => {
                             <Ionicons
                                 name="play"
                                 size={scale(40)}
-                                color={COLORS.white}
+                                color={colors.buttonTextPrimary}
                                 style={{ marginLeft: scale(5) }}
                             />
                         </TouchableOpacity>
@@ -262,7 +334,7 @@ export const SessionTimerScreen: React.FC = () => {
                                     onPress={handleReset}
                                     activeOpacity={0.8}
                                 >
-                                    <MaterialCommunityIcons name="replay" size={scale(32)} color={COLORS.white} />
+                                    <MaterialCommunityIcons name="replay" size={scale(32)} color={colors.buttonTextPrimary} />
                                 </TouchableOpacity>
                             </Animated.View>
 
@@ -275,7 +347,7 @@ export const SessionTimerScreen: React.FC = () => {
                                 <Ionicons
                                     name={timerStatus === 'running' ? "pause" : "play"}
                                     size={scale(40)}
-                                    color={COLORS.white}
+                                    color={colors.buttonTextPrimary}
                                     style={timerStatus === 'running' ? {} : { marginLeft: scale(5) }}
                                 />
                             </TouchableOpacity>
@@ -284,10 +356,10 @@ export const SessionTimerScreen: React.FC = () => {
                             <Animated.View style={{ transform: [{ translateX: translateXStop }] }}>
                                 <TouchableOpacity
                                     style={styles.secondaryControl}
-                                    onPress={handleStop}
+                                    onPress={handleStopPress}
                                     activeOpacity={0.8}
                                 >
-                                    <Ionicons name="stop" size={scale(32)} color={COLORS.white} />
+                                    <Ionicons name="stop" size={scale(32)} color={colors.buttonTextPrimary} />
                                 </TouchableOpacity>
                             </Animated.View>
                         </View>
@@ -311,22 +383,20 @@ export const SessionTimerScreen: React.FC = () => {
                 ))}
             </View>
 
-            {/* Drawer Overlay (Backdrop) */}
-            {(isTaskListVisible || drawerAnim._value > -scale(286)) && (
-                <Animated.View
-                    style={[
-                        styles.drawerBackdrop,
-                        { opacity: backdropAnim }
-                    ]}
-                    pointerEvents={isTaskListVisible ? 'auto' : 'none'}
-                >
-                    <TouchableOpacity
-                        style={{ flex: 1 }}
-                        activeOpacity={1}
-                        onPress={() => setIsTaskListVisible(false)}
-                    />
-                </Animated.View>
-            )}
+            <Animated.View
+                style={[
+                    styles.drawerBackdrop,
+                    { opacity: backdropAnim }
+                ]}
+            >
+                <Pressable
+                    style={StyleSheet.absoluteFill}
+                    onPress={() => {
+
+                        setIsTaskListVisible(false);
+                    }}
+                />
+            </Animated.View>
 
             {/* Side Drawer */}
             <Animated.View style={[styles.drawerContainer, { transform: [{ translateX: drawerAnim }] }]}>
@@ -335,33 +405,204 @@ export const SessionTimerScreen: React.FC = () => {
                 <Text style={styles.drawerTitle}>Твои задачи</Text>
 
                 <View style={styles.componentsContainer}>
-                    {/* Task Card 1: Debut */}
-                    <View style={styles.taskCard}>
-                        <Text style={styles.taskTitle}>Дебют</Text>
-                        <Text style={styles.taskSubtitle}>Изучить Королевский Гамбит</Text>
-                        <TouchableOpacity style={styles.addButton}>
-                            <Ionicons name="add" size={scale(24)} color="#1E1E2E" />
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Task Card 2: Practice */}
-                    <View style={styles.taskCard}>
-                        <Text style={styles.taskTitle}>Практика</Text>
-                        <Text style={styles.taskSubtitle}>Сыграть 2 партии</Text>
-                        <TouchableOpacity style={styles.addButton}>
-                            <Ionicons name="add" size={scale(24)} color="#1E1E2E" />
-                        </TouchableOpacity>
-                    </View>
+                    {tasks.map(task => (
+                        <View key={task.id} style={styles.taskCard}>
+                            <Text style={styles.taskTitle}>{task.title}</Text>
+                            <Text style={styles.taskSubtitle}>{task.subtitle}</Text>
+                            <TouchableOpacity
+                                style={[styles.addButton, task.completed && styles.completedButton]}
+                                onPress={() => handleCompleteTask(task.id)}
+                                disabled={task.completed}
+                            >
+                                <Ionicons
+                                    name={task.completed ? "checkmark" : "add"}
+                                    size={scale(24)}
+                                    color={task.completed ? "#FFFFFF" : "#1E1E2E"}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                    ))}
                 </View>
             </Animated.View>
-        </SafeAreaView>
+
+
+            {/* Stop Confirmation Modal */}
+            {
+                isStopModalVisible && (
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContainer}>
+                            {/* Red Hand Icon */}
+                            <View style={{ marginBottom: scale(20), alignItems: 'center', justifyContent: 'center', width: scale(80), height: scale(80) }}>
+                                <Svg width={scale(80)} height={scale(80)} viewBox="0 0 100 100" fill="none" style={{ position: 'absolute' }}>
+                                    <Circle cx="50" cy="50" r="50" fill="#FF4B55" />
+                                </Svg>
+                                <MaterialCommunityIcons name="hand-back-right" size={scale(40)} color="white" />
+                            </View>
+
+                            <Text style={styles.modalTitle}>Вы действительно хотите завершить занятие?</Text>
+
+                            {/* Checkbox */}
+                            <TouchableOpacity
+                                style={styles.checkboxContainer}
+                                activeOpacity={0.8}
+                                onPress={() => setDontShowAgainChecked(!dontShowAgainChecked)}
+                            >
+                                <View style={[styles.checkboxData, dontShowAgainChecked && styles.checkboxChecked]}>
+                                    {dontShowAgainChecked && <Ionicons name="checkmark" size={scale(12)} color="white" />}
+                                </View>
+                                <Text style={styles.checkboxLabel}>Больше не показывать</Text>
+                            </TouchableOpacity>
+
+                            {/* Buttons */}
+                            <View style={styles.modalButtonsRow}>
+                                <TouchableOpacity
+                                    style={styles.modalButtonGray}
+                                    onPress={() => setIsStopModalVisible(false)}
+                                >
+                                    <Text style={styles.modalButtonText}>Назад</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.modalButtonGray}
+                                    onPress={confirmStop}
+                                >
+                                    <Text style={styles.modalButtonTextBold}>Завершить</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                )
+            }
+        </SafeAreaView >
+    );
+};
+
+const TOTAL_SESSION_SECONDS = 30 * 60; // 30 minutes = 100% of circle
+
+const SessionSummaryView = ({ tasks, startTime, onExit }: { tasks: any[], startTime: number, onExit: () => void }) => {
+    const completedTasks = tasks.filter(t => t.completed).sort((a, b) => (a.completedAt || 0) - (b.completedAt || 0));
+    const scrollX = useRef(new Animated.Value(0)).current; // Track scroll position
+    const pagerRef = useRef<PagerView>(null);
+
+    // Formatting helper
+    const getElapsedString = (completedAt: number) => {
+        if (!startTime) return "0:00";
+        const diffSeconds = Math.max(0, Math.floor((completedAt - startTime) / 1000));
+        const mins = Math.floor(diffSeconds / 60);
+        const secs = diffSeconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    // Calculate circle progress: elapsed time / 30 minutes, capped at 1.0
+    const getTaskProgress = (completedAt: number) => {
+        if (!startTime || !completedAt) return 0;
+        const diffSeconds = Math.max(0, Math.floor((completedAt - startTime) / 1000));
+        return Math.min(diffSeconds / TOTAL_SESSION_SECONDS, 1.0);
+    };
+
+    return (
+        <View style={styles.summaryContainer}>
+            <PagerView
+                style={styles.pagerView}
+                initialPage={0}
+                ref={pagerRef}
+                onPageScroll={Animated.event(
+                    [{ nativeEvent: { position: scrollX, offset: scrollX } }], // Simplify to just passed directly? No, onPageScroll payload is {position, offset}
+                    {
+                        useNativeDriver: false,
+                        listener: (e: any) => {
+                            const { position, offset } = e.nativeEvent;
+                            scrollX.setValue(position + offset);
+                        }
+                    }
+                ) as any}
+            >
+                {completedTasks.map((task, index) => {
+                    const taskProgress = getTaskProgress(task.completedAt);
+                    const circumference = 2 * Math.PI * 109;
+                    return (
+                        <View key={task.id} style={styles.summaryPage}>
+                            {/* Circle with Number */}
+                            <View style={styles.summaryCircleContainer}>
+                                <Svg
+                                    style={{ position: 'absolute' }}
+                                    width={256}
+                                    height={256}
+                                    viewBox="0 0 256 256"
+                                    fill="none"
+                                >
+                                    <Circle cx="128" cy="128" r="109" stroke="#B3C6F2" strokeWidth="38" />
+                                    <Circle
+                                        cx="128"
+                                        cy="128"
+                                        r="109"
+                                        stroke="#3975E5"
+                                        strokeWidth="38"
+                                        strokeDasharray={`${circumference * taskProgress} ${circumference}`}
+                                        strokeLinecap="round"
+                                        rotation="-90"
+                                        origin="128, 128"
+                                    />
+                                </Svg>
+                                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
+                                    <Text style={styles.summaryCountText}>{index + 1}</Text>
+                                </View>
+                            </View>
+
+                            <Text style={styles.summaryTimeText}>{getElapsedString(task.completedAt)}</Text>
+                            <Text style={styles.summaryLabelText}>
+                                Время выполнения{'\n'}
+                                {index + 1} задачи
+                            </Text>
+
+
+                        </View>
+                    );
+                })}
+            </PagerView>
+
+            <View style={styles.paginationRow}>
+                {completedTasks.map((_, i) => {
+                    const inputRange = [i - 1, i, i + 1];
+                    const dotWidth = scrollX.interpolate({
+                        inputRange,
+                        outputRange: [scale(13), scale(65), scale(13)],
+                        extrapolate: 'clamp',
+                    });
+                    const dotOpacity = scrollX.interpolate({
+                        inputRange,
+                        outputRange: [0.2, 1, 0.2], // Inactive dots have 20% opacity
+                        extrapolate: 'clamp',
+                    });
+
+                    return (
+                        <Animated.View
+                            key={i}
+                            style={[
+                                styles.activeDot, // Base style (height, radius)
+                                {
+                                    width: dotWidth,
+                                    backgroundColor: '#2E2E43', // Uniform color as requested
+                                    opacity: dotOpacity
+                                }
+                            ]}
+                        />
+                    );
+                })}
+            </View>
+
+            <View style={styles.summaryFooter}>
+                <TouchableOpacity style={styles.summaryButton} onPress={onExit}>
+                    <Text style={styles.summaryButtonText}>Завершить</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.background,
+        backgroundColor: colors.sessionTimer.background,
         paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
     },
     header: {
@@ -371,7 +612,7 @@ const styles = StyleSheet.create({
         width: scale(48),
         height: scale(48),
         borderRadius: scale(24),
-        backgroundColor: COLORS.white,
+        backgroundColor: colors.buttonTextPrimary,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: "#000",
@@ -389,7 +630,7 @@ const styles = StyleSheet.create({
     timerText: {
         fontSize: scale(64),
         fontFamily: 'Gramatika-Bold', // Ensure this font exists or use System/Roboto
-        color: COLORS.text,
+        color: colors.sessionTimer.text,
         fontWeight: 'bold',
         position: 'absolute',
     },
@@ -404,10 +645,10 @@ const styles = StyleSheet.create({
         width: scale(80),
         height: scale(80),
         borderRadius: scale(40),
-        backgroundColor: COLORS.primary,
+        backgroundColor: colors.sessionTimer.primary,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: COLORS.primary,
+        shadowColor: colors.sessionTimer.primary,
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.3,
         shadowRadius: 12,
@@ -423,7 +664,7 @@ const styles = StyleSheet.create({
         width: scale(60),
         height: scale(60),
         borderRadius: scale(30),
-        backgroundColor: COLORS.controlDark,
+        backgroundColor: colors.sessionTimer.text,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: "#000",
@@ -519,6 +760,167 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginTop: scale(8),
+    },
+    completedButton: {
+        backgroundColor: '#4ADE80', // Green color (Tailwind green-400 equivalent)
+    },
+    // Modal Styles
+    modalOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 200,
+    },
+    modalContainer: {
+        width: '85%', // Responsive width
+        backgroundColor: 'white',
+        borderRadius: scale(24),
+        padding: scale(24),
+        alignItems: 'center',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 10,
+    },
+    modalIconContainer: {
+        marginBottom: scale(16),
+    },
+    modalTitle: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(20),
+        color: '#1E1E2E',
+        textAlign: 'center',
+        marginBottom: scale(24),
+        lineHeight: scale(26),
+    },
+    checkboxContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: scale(32),
+    },
+    checkboxData: {
+        width: scale(20),
+        height: scale(20),
+        borderRadius: scale(10), // Circle
+        borderWidth: 1,
+        borderColor: '#C4C4C4',
+        marginRight: scale(10),
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#F5F5F5',
+    },
+    checkboxChecked: {
+        backgroundColor: '#37A0EF', // Primary Blue
+        borderColor: '#37A0EF',
+    },
+    checkboxLabel: {
+        fontFamily: 'Gramatika-Regular',
+        fontSize: scale(14),
+        color: '#8E8E93',
+    },
+    modalButtonsRow: {
+        flexDirection: 'row',
+        gap: scale(12),
+        width: '100%',
+    },
+    modalButtonGray: {
+        flex: 1,
+        backgroundColor: '#E5E5EA', // Light gray standard iOS style
+        borderRadius: scale(14),
+        paddingVertical: scale(16),
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    modalButtonText: {
+        fontFamily: 'Gramatika-Regular',
+        fontSize: scale(16),
+        color: '#000',
+    },
+    modalButtonTextBold: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(16),
+        color: '#000',
+    },
+    // Summary Styles
+    summaryContainer: {
+        flex: 1,
+        backgroundColor: colors.sessionTimer.background,
+    },
+    pagerView: {
+        flex: 1,
+    },
+    summaryPage: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    summaryCircleContainer: {
+        width: 256,
+        height: 256,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: scale(24),
+    },
+    summaryCountText: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: 96,
+        color: '#08132A',
+        textAlign: 'center',
+    },
+    summaryTimeText: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: 48,
+        lineHeight: 56,
+        color: '#08132A',
+        marginBottom: scale(8),
+        textAlign: 'center',
+    },
+    summaryLabelText: {
+        fontFamily: 'Geometria-Light',
+        fontSize: 24,
+        lineHeight: 24,
+        color: '#08132A',
+        textAlign: 'center',
+    },
+    // ... items before ...
+    activeDot: {
+        width: 65,
+        height: 13,
+        borderRadius: 31,
+        backgroundColor: '#2E2E43', // Reverted to Dark Grey to match Goal (was #102852)
+    },
+    inactiveDot: {
+        width: 13,
+        height: 13,
+        borderRadius: 31,
+        backgroundColor: '#2E2E43',
+        opacity: 0.5,
+    },
+    paginationRow: {
+        flexDirection: 'row',
+        paddingBottom: scale(40), // Match MainTabsScreen style
+        gap: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    summaryFooter: {
+        alignItems: 'center',
+        paddingBottom: scale(48),
+    },
+    summaryButton: {
+        backgroundColor: '#102852',
+        width: 359,
+        height: 55,
+        borderRadius: 45,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    summaryButtonText: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: 18,
+        color: 'white',
     },
 });
 
