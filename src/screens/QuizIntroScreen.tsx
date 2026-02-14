@@ -79,15 +79,15 @@ const styles = StyleSheet.create({
         fontFamily: 'Gramatika-Bold',
         fontSize: 26,
         lineHeight: 34,
-        color: colors.text,
+        color: '#08132A', // Color change
         textAlign: 'center',
         marginBottom: 16,
     },
     subtitleText: {
-        fontFamily: 'Gramatika-Light',
+        fontFamily: 'Geometria-Light', // Font change
         fontSize: 16,
         lineHeight: 24,
-        color: colors.textSecondary,
+        color: '#08132A', // Color change
         textAlign: 'center',
     },
     buttonContainer: {

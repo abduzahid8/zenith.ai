@@ -75,9 +75,9 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     subtitleText: {
-        fontFamily: 'Gramatika-Light',
+        fontFamily: 'Geometria-Light', // Font change only
         fontSize: 20,
-        lineHeight: 28,
+        lineHeight: 28, // Kept original line height
         color: colors.text,
         textAlign: 'center',
     },

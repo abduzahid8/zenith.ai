@@ -71,7 +71,7 @@ export default function HobbySelectionScreen() {
 
             {/* Logo at top */}
             <View style={styles.logoContainer}>
-                <LogoNew width={scale(40)} height={scale(40)} variant="icon" />
+                <LogoNew width={scale(160)} height={scale(36)} variant="full" />
             </View>
 
             {/* Content */}

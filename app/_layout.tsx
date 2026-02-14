@@ -26,6 +26,7 @@ export default function RootLayout() {
         'Gramatika-Light': require('../assets/fonts/GramatikaTrial-Light-BF65dea4c59cf23.otf'),
         'Gramatika-ExtraLight': require('../assets/fonts/GramatikaTrial-ExtraLight-BF65dea4c5b0dc5.otf'),
         'Geometria-Light': require('../assets/fonts/Geometria-Light.ttf'),
+        'Geometria-Medium': require('../assets/fonts/geometria_medium.otf'),
     });
 
     useEffect(() => {

@@ -231,8 +231,8 @@ const styles = StyleSheet.create({
     },
     smallCardTitle: {
         fontFamily: 'Gramatika-Bold',
-        fontSize: scale(20),
-        lineHeight: scale(24),
+        fontSize: scale(24),
+        lineHeight: scale(28),
         color: '#1E1E2E',
     },
 });

@@ -43,8 +43,7 @@ export default function AuthScreen() {
 
             {/* Header with Star Logo - LEFT aligned */}
             <View style={styles.headerContainer}>
-                <LogoNew variant="icon" width={40} height={40} />
-                <Text style={styles.headerTitle}>Давайте начнем !</Text>
+                <LogoNew variant="full" width={110} height={25} />
             </View>
 
             {/* Subtitle - LEFT aligned */}

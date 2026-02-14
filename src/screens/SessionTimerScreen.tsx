@@ -13,14 +13,18 @@ import {
     Image,
     Platform,
     Pressable,
+    ScrollView,
+    TextInput,
+    KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import Svg, { Circle, Path, Rect, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import PagerView from 'react-native-pager-view';
-import { scale } from '../constants';
+import { scale, SCREEN_WIDTH } from '../constants';
 import { colors } from '../theme';
+import { aiService, ChatMessage } from '../services/ai'; // Import AI Service
 
 // Types
 const TABS = [
@@ -82,6 +86,39 @@ export const SessionTimerScreen: React.FC = () => {
     const [showSummary, setShowSummary] = useState(false);
     const [startTime, setStartTime] = useState<number | null>(null);
 
+    // Weekly Plan UI State (Page 2)
+    // AI Chat UI State (Page 2)
+    // AI Chat UI State (Page 2)
+    const [chatInput, setChatInput] = useState('');
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [isAiLoading, setIsAiLoading] = useState(false);
+    const pagerViewRef = useRef<PagerView>(null);
+
+    const handleSendMessage = async () => {
+        if (!chatInput.trim()) return;
+
+        const userMsg: ChatMessage = { role: 'user', content: chatInput.trim() };
+        const newMessages = [...messages, userMsg];
+        setMessages(newMessages);
+        setChatInput('');
+        setIsAiLoading(true);
+
+        try {
+            // Context: You can pass the current task/hobby if available. For now, general chat.
+            // Using "General" or deriving from current task could be better.
+            const response = await aiService.sendMessage(newMessages, 'General');
+            const assistantMsg: ChatMessage = { role: 'assistant', content: response };
+            setMessages(prev => [...prev, assistantMsg]);
+        } catch (error) {
+            console.error(error);
+            const errorMsg: ChatMessage = { role: 'assistant', content: "Извините, ошибка соединения." };
+            setMessages(prev => [...prev, errorMsg]);
+        } finally {
+            setIsAiLoading(false);
+        }
+    };
+
+
     // Initial Start Time
     useEffect(() => {
         // Set start time when component mounts or first timer start?
@@ -108,8 +145,10 @@ export const SessionTimerScreen: React.FC = () => {
 
     // Task State
     const [tasks, setTasks] = useState([
-        { id: '1', title: 'Дебют', subtitle: 'Изучить Королевский Гамбит', completed: false, completedAt: null as number | null },
+        { id: '1', title: 'Теория', subtitle: 'Изучить Королевский Гамбит', completed: false, completedAt: null as number | null },
         { id: '2', title: 'Практика', subtitle: 'Сыграть 2 партии', completed: false, completedAt: null as number | null },
+        { id: '3', title: 'Анализ', subtitle: 'Рассмотреть партию', completed: false, completedAt: null as number | null },
+        { id: '4', title: 'Задачи', subtitle: 'Решить 15 тактических задач', completed: false, completedAt: null as number | null },
     ]);
 
     const handleCompleteTask = (id: string) => {
@@ -279,93 +318,183 @@ export const SessionTimerScreen: React.FC = () => {
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
 
-            <View style={styles.header} />
+            <PagerView style={{ flex: 1 }} initialPage={0} ref={pagerViewRef}>
+                {[
+                    // Page 1: Timer
+                    <View key="1" style={{ flex: 1 }}>
+                        <View style={styles.header} />
 
-            {/* Visual Menu Button (Top Left) - Only visible when active */}
-            {timerStatus !== 'idle' && (
-                <Animated.View style={{ opacity: controlsAnim, position: 'absolute', top: scale(100), left: scale(24), zIndex: 10 }}>
-                    <TouchableOpacity
-                        style={styles.floatingMenu}
-                        activeOpacity={0.7}
-                        onPress={() => setIsTaskListVisible(true)}
-                    >
-                        <MaterialCommunityIcons name="format-list-checks" size={scale(24)} color="#1E1E2E" />
-                    </TouchableOpacity>
-                </Animated.View>
-            )}
-
-            {/* Main Content */}
-            <View style={styles.content}>
-
-                {/* Timer Circle */}
-                <TimerProgress
-                    size={scale(300)}
-                    strokeWidth={scale(25)}
-                    color={colors.sessionTimer.primary}
-                    trackColor={colors.sessionTimer.primaryFaded}
-                    progress={progress}
-                >
-                    <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
-                </TimerProgress>
-
-                {/* Controls */}
-                <View style={styles.controlsContainer}>
-                    {timerStatus === 'idle' ? (
-                        // Initial State: Single Play Button
-                        <TouchableOpacity
-                            style={styles.playButton}
-                            onPress={handlePlay}
-                            activeOpacity={0.8}
-                        >
-                            <Ionicons
-                                name="play"
-                                size={scale(40)}
-                                color={colors.buttonTextPrimary}
-                                style={{ marginLeft: scale(5) }}
-                            />
-                        </TouchableOpacity>
-                    ) : (
-                        // Active State: 3 Buttons
-                        <View style={styles.activeControls}>
-                            {/* Reset Button */}
-                            <Animated.View style={{ transform: [{ translateX: translateXReset }] }}>
+                        {/* Visual Menu Button (Top Left) - Only visible when active */}
+                        {timerStatus !== 'idle' && (
+                            <Animated.View style={{ opacity: controlsAnim, position: 'absolute', top: scale(20), left: scale(24), zIndex: 10 }}>
                                 <TouchableOpacity
-                                    style={styles.secondaryControl}
-                                    onPress={handleReset}
-                                    activeOpacity={0.8}
+                                    style={styles.floatingMenu}
+                                    activeOpacity={0.7}
+                                    onPress={() => setIsTaskListVisible(true)}
                                 >
-                                    <MaterialCommunityIcons name="replay" size={scale(32)} color={colors.buttonTextPrimary} />
+                                    <MaterialCommunityIcons name="format-list-checks" size={scale(24)} color="#1E1E2E" />
                                 </TouchableOpacity>
                             </Animated.View>
+                        )}
 
-                            {/* Pause/Resume Button */}
-                            <TouchableOpacity
-                                style={[styles.playButton, { zIndex: 10 }]}
-                                onPress={handlePause}
-                                activeOpacity={0.8}
+                        {/* Main Content */}
+                        <View style={styles.content}>
+
+                            {/* Timer Circle */}
+                            <TimerProgress
+                                size={scale(300)}
+                                strokeWidth={scale(25)}
+                                color={timerStatus === 'paused' ? colors.sessionTimer.pausedPrimary : colors.sessionTimer.primary}
+                                trackColor={colors.sessionTimer.primaryFaded}
+                                progress={progress}
                             >
-                                <Ionicons
-                                    name={timerStatus === 'running' ? "pause" : "play"}
-                                    size={scale(40)}
-                                    color={colors.buttonTextPrimary}
-                                    style={timerStatus === 'running' ? {} : { marginLeft: scale(5) }}
-                                />
-                            </TouchableOpacity>
+                                <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
+                            </TimerProgress>
 
-                            {/* Stop Button */}
-                            <Animated.View style={{ transform: [{ translateX: translateXStop }] }}>
-                                <TouchableOpacity
-                                    style={styles.secondaryControl}
-                                    onPress={handleStopPress}
-                                    activeOpacity={0.8}
-                                >
-                                    <Ionicons name="stop" size={scale(32)} color={colors.buttonTextPrimary} />
-                                </TouchableOpacity>
-                            </Animated.View>
+                            {/* Controls */}
+                            <View style={styles.controlsContainer}>
+                                {timerStatus === 'idle' ? (
+                                    // Initial State: Single Play Button
+                                    <TouchableOpacity
+                                        style={styles.playButton}
+                                        onPress={handlePlay}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Ionicons
+                                            name="play"
+                                            size={scale(40)}
+                                            color={colors.buttonTextPrimary}
+                                            style={{ marginLeft: scale(5) }}
+                                        />
+                                    </TouchableOpacity>
+                                ) : (
+                                    // Active State: 3 Buttons
+                                    <View style={styles.activeControls}>
+                                        {/* Reset Button */}
+                                        <Animated.View style={{ transform: [{ translateX: translateXReset }] }}>
+                                            <TouchableOpacity
+                                                style={styles.secondaryControl}
+                                                onPress={handleReset}
+                                                activeOpacity={0.8}
+                                            >
+                                                <MaterialCommunityIcons name="replay" size={scale(32)} color={colors.buttonTextPrimary} />
+                                            </TouchableOpacity>
+                                        </Animated.View>
+
+                                        {/* Pause/Resume Button */}
+                                        <TouchableOpacity
+                                            style={[styles.playButton, { zIndex: 10, backgroundColor: timerStatus === 'paused' ? colors.sessionTimer.pausedPrimary : colors.sessionTimer.primary, shadowColor: timerStatus === 'paused' ? colors.sessionTimer.pausedPrimary : colors.sessionTimer.primary }]}
+                                            onPress={handlePause}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons
+                                                name={timerStatus === 'running' ? "pause" : "play"}
+                                                size={scale(40)}
+                                                color={colors.buttonTextPrimary}
+                                                style={timerStatus === 'running' ? {} : { marginLeft: scale(5) }}
+                                            />
+                                        </TouchableOpacity>
+
+                                        {/* Stop Button */}
+                                        <Animated.View style={{ transform: [{ translateX: translateXStop }] }}>
+                                            <TouchableOpacity
+                                                style={styles.secondaryControl}
+                                                onPress={handleStopPress}
+                                                activeOpacity={0.8}
+                                            >
+                                                <Ionicons name="stop" size={scale(32)} color={colors.buttonTextPrimary} />
+                                            </TouchableOpacity>
+                                        </Animated.View>
+                                    </View>
+                                )}
+                            </View>
                         </View>
-                    )}
-                </View>
-            </View>
+                    </View>,
+
+                    // Page 2: AI Chat UI - Only visible when timer is active
+                    ...(timerStatus !== 'idle' ? [
+                        <KeyboardAvoidingView
+                            key="2"
+                            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                            style={{ flex: 1 }}
+                            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+                        >
+                            <View key="2" style={styles.chatPage}>
+                                {/* Header */}
+                                <View style={styles.chatHeader}>
+                                    <TouchableOpacity
+                                        style={styles.chatMenuButton}
+                                        activeOpacity={0.7}
+                                        onPress={() => setIsTaskListVisible(true)}
+                                    >
+                                        <MaterialCommunityIcons name="format-list-checks" size={scale(24)} color="#1E1E2E" />
+                                    </TouchableOpacity>
+                                </View>
+
+                                {/* Chat Area */}
+                                <ScrollView
+                                    style={styles.chatArea}
+                                    contentContainerStyle={styles.chatContent}
+                                    keyboardShouldPersistTaps="handled"
+                                >
+                                    {messages.length === 0 ? (
+                                        <View style={{ marginTop: scale(100), alignItems: 'center' }}>
+                                            <MaterialCommunityIcons name="robot-happy-outline" size={scale(48)} color="#A3A3A3" />
+                                            <Text style={{ marginTop: scale(10), color: '#A3A3A3', fontFamily: 'Geometria-Light' }}>
+                                                Я готов помочь!
+                                            </Text>
+                                        </View>
+                                    ) : (
+                                        messages.map((msg, index) => (
+                                            <View
+                                                key={index}
+                                                style={[
+                                                    styles.messageBubble,
+                                                    msg.role === 'user' ? styles.userBubble : styles.assistantBubble
+                                                ]}
+                                            >
+                                                <Text style={[
+                                                    styles.messageText,
+                                                    msg.role === 'user' ? styles.userText : styles.assistantText
+                                                ]}>
+                                                    {msg.content}
+                                                </Text>
+                                            </View>
+                                        ))
+                                    )}
+                                    {isAiLoading && (
+                                        <View style={[styles.messageBubble, styles.assistantBubble]}>
+                                            <Text style={[styles.messageText, styles.assistantText]}>...</Text>
+                                        </View>
+                                    )}
+                                </ScrollView>
+
+                                {/* Input Area */}
+                                <View style={styles.chatInputContainer}>
+                                    <TextInput
+                                        style={styles.chatInput}
+                                        placeholder="Чем я могу помочь?"
+                                        placeholderTextColor="#A3A3A3"
+                                        value={chatInput}
+                                        onChangeText={setChatInput}
+                                        onSubmitEditing={handleSendMessage}
+                                        returnKeyType="send"
+                                    />
+                                    <TouchableOpacity
+                                        style={styles.sendButton}
+                                        activeOpacity={0.8}
+                                        onPress={handleSendMessage}
+                                        disabled={isAiLoading}
+                                    >
+                                        <Ionicons name="send" size={scale(20)} color="white" />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </KeyboardAvoidingView>
+                    ] : [])
+                ]}
+
+            </PagerView>
 
             {/* Bottom Navigation */}
             <View style={styles.bottomNav}>
@@ -530,12 +659,12 @@ const SessionSummaryView = ({ tasks, startTime, onExit }: { tasks: any[], startT
                                     viewBox="0 0 256 256"
                                     fill="none"
                                 >
-                                    <Circle cx="128" cy="128" r="109" stroke="#B3C6F2" strokeWidth="38" />
+                                    <Circle cx="128" cy="128" r="109" stroke={index % 2 === 0 ? "#B3C6F2" : "#B0D5F3"} strokeWidth="38" />
                                     <Circle
                                         cx="128"
                                         cy="128"
                                         r="109"
-                                        stroke="#3975E5"
+                                        stroke={index % 2 === 0 ? "#3975E5" : "#43C2F8"} // Alternate colors
                                         strokeWidth="38"
                                         strokeDasharray={`${circumference * taskProgress} ${circumference}`}
                                         strokeLinecap="round"
@@ -625,7 +754,7 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center', // Center vertically
         alignItems: 'center', // Center horizontally
-        marginBottom: scale(80), // Lift it up slightly from bottom nav
+        marginTop: scale(20), // Added to push the timer further down
     },
     timerText: {
         fontSize: scale(64),
@@ -638,7 +767,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: scale(60), // Space between Timer and Controls
+        marginTop: scale(20), // Space between Timer and Controls
         height: scale(100), // Fixed height to prevent layout jumps
     },
     playButton: {
@@ -862,6 +991,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: scale(24),
+        marginTop: scale(120), // Push lower as requested
     },
     summaryCountText: {
         fontFamily: 'Gramatika-Bold',
@@ -921,6 +1051,233 @@ const styles = StyleSheet.create({
         fontFamily: 'Gramatika-Bold',
         fontSize: 18,
         color: 'white',
+    },
+    yourDayPage: {
+        width: SCREEN_WIDTH,
+        flex: 1,
+        backgroundColor: '#EAF0F8',
+        paddingHorizontal: scale(20),
+    },
+    yourDayTitle: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(32),
+        lineHeight: scale(34),
+        color: '#2E2E43',
+        marginBottom: scale(80),
+        paddingHorizontal: scale(0),
+    },
+    theoryCard: {
+        height: scale(119),
+        alignSelf: 'stretch',
+        borderRadius: scale(25),
+        backgroundColor: '#8CDEFF',
+        paddingLeft: scale(28),
+        paddingRight: scale(20),
+        paddingVertical: scale(18),
+        marginBottom: scale(10),
+    },
+    practiceCard: {
+        height: scale(100),
+        alignSelf: 'stretch',
+        borderRadius: scale(25),
+        backgroundColor: '#78BAFF',
+        paddingLeft: scale(28),
+        paddingRight: scale(20),
+        paddingVertical: scale(18),
+        marginBottom: scale(10),
+    },
+    analysisCard: {
+        height: scale(101),
+        alignSelf: 'stretch',
+        borderRadius: scale(25),
+        backgroundColor: '#F4C0FD',
+        paddingLeft: scale(28),
+        paddingRight: scale(20),
+        paddingVertical: scale(18),
+        marginBottom: scale(10),
+    },
+    analysisTitle: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(24),
+        lineHeight: scale(26),
+        color: '#000',
+        marginBottom: scale(6),
+    },
+    analysisDescription: {
+        fontFamily: 'Geometria-Light',
+        fontSize: scale(19),
+        lineHeight: scale(22),
+        color: '#000',
+        alignSelf: 'stretch',
+    },
+    analysisIconContainer: {
+        width: scale(40),
+        height: scale(40),
+        backgroundColor: '#08132A',
+        borderRadius: scale(10),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    tasksCard: {
+        height: scale(123),
+        alignSelf: 'stretch',
+        borderRadius: scale(25),
+        backgroundColor: '#F9A9FD',
+        paddingLeft: scale(28),
+        paddingRight: scale(20),
+        paddingVertical: scale(18),
+        marginBottom: scale(10),
+    },
+    tasksTitle: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(24),
+        lineHeight: scale(26),
+        color: '#000',
+        marginBottom: scale(6),
+    },
+    tasksDescription: {
+        fontFamily: 'Geometria-Light',
+        fontSize: scale(20),
+        lineHeight: scale(22),
+        color: '#2E2E43',
+        width: scale(322),
+    },
+    tasksIconContainer: {
+        width: scale(40),
+        height: scale(100),
+        backgroundColor: '#08132A',
+        borderRadius: scale(10),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    taskCardContent: {
+        flex: 1,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    taskCardTextContainer: {
+        flex: 1,
+    },
+    taskCardTitle: {
+        fontFamily: 'Gramatika-Bold',
+        fontSize: scale(24),
+        lineHeight: scale(26),
+        color: '#08132A',
+        marginBottom: scale(6),
+        paddingHorizontal: scale(0),
+    },
+    taskCardDescription: {
+        fontFamily: 'Geometria-Light',
+        fontSize: scale(19),
+        lineHeight: scale(23),
+        color: '#08132A',
+    },
+    theoryIconContainer: {
+        width: scale(42),
+        height: scale(42),
+        backgroundColor: '#08132A',
+        borderRadius: scale(10),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    practiceIconContainer: {
+        width: scale(40),
+        height: scale(40),
+        backgroundColor: '#08132A',
+        borderRadius: scale(10),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    addTaskCard: {
+        alignSelf: 'stretch',
+        borderRadius: scale(25),
+        backgroundColor: '#D3DEEE',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: scale(25),
+    },
+    // AI Chat Styles
+    chatPage: {
+        flex: 1,
+        backgroundColor: '#EAF0F8', // Matches screenshot background
+        paddingTop: Platform.OS === 'android' ? scale(60) : scale(60), // Space for status bar/header
+    },
+    chatHeader: {
+        position: 'absolute',
+        top: scale(20), // Higher position
+        left: scale(24),
+        zIndex: 10,
+    },
+    chatMenuButton: {
+        width: scale(48),
+        height: scale(48),
+        borderRadius: scale(24),
+        backgroundColor: '#E2E8F0', // Slightly darker than background for button
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    chatArea: {
+        flex: 1,
+        paddingHorizontal: scale(20),
+    },
+    chatContent: {
+        paddingBottom: scale(100), // Space for input area
+    },
+    chatInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#E2E8F0', // Input background
+        borderRadius: scale(30),
+        marginHorizontal: scale(20),
+        marginBottom: scale(20), // Lift up above bottom nav
+        paddingHorizontal: scale(6), // Padding for the container
+        paddingVertical: scale(6),
+        height: scale(60),
+    },
+    // Message Bubbles
+    messageBubble: {
+        maxWidth: '80%',
+        padding: scale(12),
+        borderRadius: scale(16),
+        marginBottom: scale(10),
+    },
+    userBubble: {
+        alignSelf: 'flex-end',
+        backgroundColor: '#102852', // Dark blue for user
+        borderBottomRightRadius: scale(4),
+    },
+    assistantBubble: {
+        alignSelf: 'flex-start',
+        backgroundColor: '#FFFFFF', // White for AI
+        borderBottomLeftRadius: scale(4),
+    },
+    messageText: {
+        fontSize: scale(16),
+        fontFamily: 'Geometria-Light',
+        lineHeight: scale(22),
+    },
+    userText: {
+        color: '#FFFFFF',
+    },
+    assistantText: {
+        color: '#1E1E2E',
+    },
+    chatInput: {
+        flex: 1,
+        height: '100%',
+        paddingHorizontal: scale(16),
+        fontFamily: 'Geometria-Light',
+        fontSize: scale(16),
+        color: '#1E1E2E',
+    },
+    sendButton: {
+        width: scale(48),
+        height: scale(48),
+        borderRadius: scale(24),
+        backgroundColor: '#102852', // Dark blue specific to app theme
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 });
 

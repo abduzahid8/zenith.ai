@@ -25,7 +25,7 @@ export const colors = {
     surfaceLight: '#F5F5F5',
 
     // Text
-    text: '#000000',
+    text: '#08132A', // Updated color
     textSecondary: '#666666',
     textLight: '#999999',
 
@@ -45,6 +45,7 @@ export const colors = {
         background: '#EAF0F8',
         text: '#2E2E43',
         muted: '#B0B0B0',
+        pausedPrimary: '#DA37EF',
     },
     statistics: {
         screenTimeCard: '#8CDEFF',
@@ -84,11 +85,12 @@ export const fonts = {
         light: 'Gramatika-Light',
         extraLight: 'Gramatika-ExtraLight',
     },
-    // Geometria - Body (will use Gramatika Light as fallback)
+    // Geometria - Body
     body: {
-        regular: 'Gramatika-Regular',
-        light: 'Gramatika-Light',
-        extraLight: 'Gramatika-ExtraLight',
+        regular: 'Geometria-Light', // Using Light as regular fallback
+        light: 'Geometria-Light',
+        medium: 'Geometria-Medium',
+        extraLight: 'Geometria-Light',
     },
     // System font for status bar
     system: 'System',

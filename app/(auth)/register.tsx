@@ -176,22 +176,22 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontFamily: 'Gramatika-Bold',
         fontSize: 26,
-        color: '#102852',
+        color: '#08132A', // Color change
     },
     formContainer: {
         marginBottom: 16,
     },
     inputLabel: {
-        fontFamily: 'Gramatika-Regular',
+        fontFamily: 'Geometria-Light', // Font change
         fontSize: 14,
-        color: '#333',
+        color: '#08132A', // Color change
         marginBottom: 8,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#C8C8C8',
+        borderColor: 'rgba(8, 19, 42, 0.3)', // Color change
         borderRadius: 28,
         paddingHorizontal: 16,
         height: 52,
@@ -203,9 +203,9 @@ const styles = StyleSheet.create({
     },
     input: {
         flex: 1,
-        fontFamily: 'Gramatika-Regular',
+        fontFamily: 'Geometria-Light', // Font change
         fontSize: 15,
-        color: '#000',
+        color: '#4A515B', // Color change
     },
     eyeIcon: {
         padding: 4,
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
         width: 20,
         height: 20,
         borderWidth: 1,
-        borderColor: '#C8C8C8',
+        borderColor: '#808B9B', // Color change
         borderRadius: 4,
         alignItems: 'center',
         justifyContent: 'center',
@@ -233,9 +233,9 @@ const styles = StyleSheet.create({
         borderColor: '#102852',
     },
     termsText: {
-        fontFamily: 'Gramatika-Regular',
+        fontFamily: 'Geometria-Medium', // Font change
         fontSize: 13,
-        color: '#888',
+        color: '#808B9B', // Color change
     },
     dividerContainer: {
         flexDirection: 'row',
@@ -246,12 +246,12 @@ const styles = StyleSheet.create({
     dividerLine: {
         flex: 1,
         height: 1,
-        backgroundColor: '#C8C8C8',
+        backgroundColor: 'rgba(8, 19, 42, 0.5)', // Color change
     },
     dividerText: {
-        fontFamily: 'Gramatika-Regular',
+        fontFamily: 'Geometria-Light', // Font change
         fontSize: 14,
-        color: '#999',
+        color: 'rgba(8, 19, 42, 0.5)', // Color change
         marginHorizontal: 16,
     },
     socialContainer: {
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
         height: 56,
         borderRadius: 28,
         borderWidth: 1,
-        borderColor: '#C8C8C8',
+        borderColor: 'rgba(8, 19, 42, 0.3)', // Color change
         backgroundColor: 'transparent',
         gap: 12,
     },
@@ -274,8 +274,8 @@ const styles = StyleSheet.create({
         height: 24,
     },
     socialButtonText: {
-        fontFamily: 'Gramatika-Medium',
+        fontFamily: 'Gramatika-Bold', // Font change
         fontSize: 18,
-        color: '#000',
+        color: '#08132A', // Color change
     },
 });

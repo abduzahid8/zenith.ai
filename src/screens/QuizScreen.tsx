@@ -62,7 +62,7 @@ export default function QuizScreen() {
 
             {/* Logo at top */}
             <View style={styles.logoContainer}>
-                <LogoNew width={scale(40)} height={scale(40)} variant="icon" />
+                <LogoNew width={scale(160)} height={scale(36)} variant="full" />
             </View>
 
             {/* Question area - fixed height */}
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
         fontFamily: 'Gramatika-Bold',
         fontSize: 24,
         lineHeight: 32,
-        color: colors.text,
+        color: '#08132A', // Color change
     },
     optionsContainer: {
         paddingHorizontal: 24,
@@ -157,27 +157,27 @@ const styles = StyleSheet.create({
         height: 24,
         borderRadius: 12,
         borderWidth: 1.5,
-        borderColor: colors.text,
+        borderColor: '#08132A', // Color change
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 16,
         marginTop: 2,
     },
     radioCircleSelected: {
-        borderColor: colors.text,
+        borderColor: '#08132A', // Color change
     },
     radioInner: {
         width: 12,
         height: 12,
         borderRadius: 6,
-        backgroundColor: colors.text,
+        backgroundColor: '#08132A', // Color change
     },
     optionText: {
         flex: 1,
-        fontFamily: 'Gramatika-Regular',
+        fontFamily: 'Geometria-Light', // Font change
         fontSize: 16,
         lineHeight: 24,
-        color: colors.text,
+        color: '#08132A', // Color change
     },
     spacer: {
         flex: 1,
