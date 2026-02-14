@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, StatusBar, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -7,25 +7,18 @@ import { scale } from '../constants';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { MenuDrawer } from '../components/NavigationSidebar';
 import { BottomNavigation } from '../components/BottomNavigation';
-import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
-import StatisticsTab from './tabs/StatisticsTab';
+import WeeklyPlanTab from './tabs/WeeklyPlanTab';
 
 const FireIcon = () => <Text style={{ fontSize: scale(24) }}>🔥</Text>;
 
-export const StatisticsScreen: React.FC = () => {
-    const { streakDays } = useUserProfileStore();
-    const { fetchWeeklyData, fetchTodayData } = useDeviceScreenTimeStore();
+export const WeeklyPlanScreen: React.FC = () => {
     const [menuVisible, setMenuVisible] = useState(false);
-
-    useEffect(() => {
-        fetchWeeklyData();
-        fetchTodayData();
-    }, []);
+    const { streakDays, subscriptionLevel } = useUserProfileStore();
+    const isPremium = subscriptionLevel === 'premium' || subscriptionLevel === 'trial';
 
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-
             <View style={styles.header}>
                 <View style={styles.headerLeft} />
                 <View style={styles.headerRight}>
@@ -42,12 +35,10 @@ export const StatisticsScreen: React.FC = () => {
                     </TouchableOpacity>
                 </View>
             </View>
-
             <View style={styles.content}>
-                <StatisticsTab />
+                <WeeklyPlanTab isPremium={isPremium} />
             </View>
-
-            <BottomNavigation activeTab="statistics" />
+            <BottomNavigation activeTab="weekly-plan" />
             <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />
         </SafeAreaView>
     );
@@ -80,10 +71,9 @@ const styles = StyleSheet.create({
         fontFamily: 'Gramatika-Bold',
         fontSize: scale(24),
         color: colors.text,
-        lineHeight: scale(21),
     },
     menuButton: { padding: scale(4) },
     content: { flex: 1 },
 });
 
-export default StatisticsScreen;
+export default WeeklyPlanScreen;

@@ -62,9 +62,12 @@ export const useTaskStore = create<TaskState>()(
                     }
                 } catch (e: any) {
                     console.error('Failed to complete task:', e);
-                    // Revert optimistic update on error
-                    // In a real app we'd fetch the task again to be sure
-                    set({ error: 'Failed to update task status' });
+                    set((state) => ({
+                        dailyTasks: state.dailyTasks.map((t) =>
+                            t.id === taskId ? { ...t, status: 'pending' } : t
+                        ),
+                        error: 'Failed to update task status',
+                    }));
                 }
             },
 
@@ -86,6 +89,11 @@ export const useTaskStore = create<TaskState>()(
                     }
                 } catch (e: any) {
                     console.error('Failed to skip task:', e);
+                    set((state) => ({
+                        dailyTasks: state.dailyTasks.map((t) =>
+                            t.id === taskId ? { ...t, status: 'pending' } : t
+                        ),
+                    }));
                 }
             },
 

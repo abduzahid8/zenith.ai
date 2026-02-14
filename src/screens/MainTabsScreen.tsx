@@ -3,7 +3,6 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     StatusBar,
     TouchableOpacity,
     Dimensions,
@@ -12,6 +11,7 @@ import {
     Animated,
     Easing,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 if (Platform.OS === 'android') {
     if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -47,6 +47,11 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
     const router = useRouter();
     const pagerRef = useRef<PagerView>(null);
     const [activeTab, setActiveTab] = useState(initialTab);
+
+    useEffect(() => {
+        setActiveTab(initialTab);
+        pagerRef.current?.setPage(initialTab);
+    }, [initialTab]);
 
     const { user } = useAuthStore();
     const { streakDays, subscriptionLevel } = useUserProfileStore();
@@ -125,7 +130,7 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
 
     const renderTabIcon = (tab: (typeof TABS)[number], index: number) => {
         const isActive = activeTab === index;
-        const color = isActive ? '#000' : '#A3A3A3';
+        const color = isActive ? colors.text : colors.textLight;
         const iconName = isActive ? tab.icon : tab.iconOutline;
 
         if (tab.type === 'ionicon') {
@@ -144,7 +149,7 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor="#EAF0F8" />
+            <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
             {/* Shared Header */}
             <View style={styles.header}>
@@ -156,7 +161,7 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
                         <FireIcon />
                     </View>
                     <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)} activeOpacity={0.7}>
-                        <Feather name="menu" size={scale(24)} color="#000" />
+                        <Feather name="menu" size={scale(24)} color={colors.text} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -169,7 +174,13 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
                 onPageSelected={handlePageSelected}
             >
                 <View key="1" style={styles.page}>
-                    <HomeTab fadeAnim={fadeAnim} iconTranslateY={iconTranslateY} />
+                    <HomeTab
+                        fadeAnim={fadeAnim}
+                        iconTranslateY={iconTranslateY}
+                        onDailyGoal={() => handleTabPress(1)}
+                        onAICoach={() => handleTabPress(2)}
+                        onScreenTime={() => handleTabPress(3)}
+                    />
                 </View>
 
                 <View key="2" style={styles.page}>
@@ -206,7 +217,7 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#EAF0F8',
+        backgroundColor: colors.background,
     },
     header: {
         flexDirection: 'row',
@@ -220,7 +231,7 @@ const styles = StyleSheet.create({
         fontFamily: 'Gramatika-Bold',
         fontSize: scale(32),
         lineHeight: scale(38),
-        color: '#000',
+        color: colors.text,
     },
     headerRight: {
         flexDirection: 'row',
@@ -240,7 +251,7 @@ const styles = StyleSheet.create({
     streakNumber: {
         fontFamily: 'Gramatika-Bold',
         fontSize: scale(24),
-        color: '#000',
+        color: colors.text,
     },
     menuButton: {
         padding: scale(4),
@@ -261,7 +272,7 @@ const styles = StyleSheet.create({
         marginBottom: scale(16),
         borderRadius: scale(47),
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        shadowColor: '#000',
+        shadowColor: colors.text,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,

@@ -3,7 +3,6 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     StatusBar,
     TouchableOpacity,
     Dimensions,
@@ -17,6 +16,7 @@ import {
     TextInput,
     KeyboardAvoidingView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
@@ -24,15 +24,10 @@ import Svg, { Circle, Path, Rect, Defs, LinearGradient as SvgLinearGradient, Sto
 import PagerView from 'react-native-pager-view';
 import { scale, SCREEN_WIDTH } from '../constants';
 import { colors } from '../theme';
-import { aiService, ChatMessage } from '../services/ai'; // Import AI Service
+import { aiService, ChatMessage } from '../services/ai';
+import { APP_TAB_ROUTES, getMainTabUrl } from '../config/navigation';
 
-// Types
-const TABS = [
-    { key: 'home', icon: 'home', iconOutline: 'home-outline', type: 'ionicon' },
-    { key: 'weekly-plan', icon: 'clipboard-text', iconOutline: 'clipboard-text-outline', type: 'material' },
-    { key: 'ai-coach', icon: 'lightbulb', iconOutline: 'lightbulb-outline', type: 'material' },
-    { key: 'statistics', icon: 'bar-chart', iconOutline: 'bar-chart-outline', type: 'ionicon' },
-];
+const TABS = APP_TAB_ROUTES;
 
 // Circular Progress Component
 const TimerProgress = ({ progress, size, strokeWidth, color, trackColor, children }: any) => {
@@ -81,6 +76,7 @@ export const SessionTimerScreen: React.FC = () => {
     const drawerAnim = useRef(new Animated.Value(-scale(286))).current; // Start hidden (left)
 
     const backdropAnim = useRef(new Animated.Value(0)).current; // Opacity 0
+    const bottomNavVisible = useRef(new Animated.Value(1)).current; // 1 = visible, 0 = hidden
 
     // Session Summary State
     const [showSummary, setShowSummary] = useState(false);
@@ -142,6 +138,17 @@ export const SessionTimerScreen: React.FC = () => {
             if (val === 'true') setPrefDontShowStop(true);
         });
     }, []);
+
+    // Animate bottom nav hide/show when timer starts or returns to idle
+    useEffect(() => {
+        const isVisible = timerStatus === 'idle';
+        Animated.timing(bottomNavVisible, {
+            toValue: isVisible ? 1 : 0,
+            duration: 250,
+            useNativeDriver: true,
+            easing: Easing.out(Easing.cubic),
+        }).start();
+    }, [timerStatus]);
 
     // Task State
     const [tasks, setTasks] = useState([
@@ -314,11 +321,36 @@ export const SessionTimerScreen: React.FC = () => {
         outputRange: [scale(-120), 0], // Starts far left (behind center button), moves right to position
     });
 
+    // Main Pager Scroll Animation
+    const mainPagerPosition = useRef(new Animated.Value(0)).current;
+    const mainPagerOffset = useRef(new Animated.Value(0)).current;
+    const mainScrollX = useRef(Animated.add(mainPagerPosition, mainPagerOffset)).current;
+
+    const timerDot1Width = mainScrollX.interpolate({
+        inputRange: [0, 1],
+        outputRange: [scale(65), scale(13)],
+        extrapolate: 'clamp',
+    });
+
+    const timerDot2Width = mainScrollX.interpolate({
+        inputRange: [0, 1],
+        outputRange: [scale(13), scale(65)],
+        extrapolate: 'clamp',
+    });
+
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <StatusBar barStyle="dark-content" />
 
-            <PagerView style={{ flex: 1 }} initialPage={0} ref={pagerViewRef}>
+            <PagerView
+                style={{ flex: 1 }}
+                initialPage={0}
+                ref={pagerViewRef}
+                onPageScroll={Animated.event(
+                    [{ nativeEvent: { position: mainPagerPosition, offset: mainPagerOffset } }],
+                    { useNativeDriver: false }
+                )}
+            >
                 {[
                     // Page 1: Timer
                     <View key="1" style={{ flex: 1 }}>
@@ -437,31 +469,22 @@ export const SessionTimerScreen: React.FC = () => {
                                     contentContainerStyle={styles.chatContent}
                                     keyboardShouldPersistTaps="handled"
                                 >
-                                    {messages.length === 0 ? (
-                                        <View style={{ marginTop: scale(100), alignItems: 'center' }}>
-                                            <MaterialCommunityIcons name="robot-happy-outline" size={scale(48)} color="#A3A3A3" />
-                                            <Text style={{ marginTop: scale(10), color: '#A3A3A3', fontFamily: 'Geometria-Light' }}>
-                                                Я готов помочь!
+                                    {messages.map((msg, index) => (
+                                        <View
+                                            key={index}
+                                            style={[
+                                                styles.messageBubble,
+                                                msg.role === 'user' ? styles.userBubble : styles.assistantBubble
+                                            ]}
+                                        >
+                                            <Text style={[
+                                                styles.messageText,
+                                                msg.role === 'user' ? styles.userText : styles.assistantText
+                                            ]}>
+                                                {msg.content}
                                             </Text>
                                         </View>
-                                    ) : (
-                                        messages.map((msg, index) => (
-                                            <View
-                                                key={index}
-                                                style={[
-                                                    styles.messageBubble,
-                                                    msg.role === 'user' ? styles.userBubble : styles.assistantBubble
-                                                ]}
-                                            >
-                                                <Text style={[
-                                                    styles.messageText,
-                                                    msg.role === 'user' ? styles.userText : styles.assistantText
-                                                ]}>
-                                                    {msg.content}
-                                                </Text>
-                                            </View>
-                                        ))
-                                    )}
+                                    ))}
                                     {isAiLoading && (
                                         <View style={[styles.messageBubble, styles.assistantBubble]}>
                                             <Text style={[styles.messageText, styles.assistantText]}>...</Text>
@@ -496,21 +519,48 @@ export const SessionTimerScreen: React.FC = () => {
 
             </PagerView>
 
-            {/* Bottom Navigation */}
-            <View style={styles.bottomNav}>
+
+            {/* Main Session Pagination (Timer vs Chat) */}
+            {
+                timerStatus !== 'idle' && (
+                    <View style={styles.mainPaginationContainer}>
+                        <Animated.View style={[styles.mainDot, { width: timerDot1Width }]} />
+                        <Animated.View style={[styles.mainDot, { width: timerDot2Width }]} />
+                    </View>
+                )
+            }
+
+            {/* Bottom Navigation — animates out when timer is running or paused */}
+            <Animated.View
+                style={[
+                    styles.bottomNav,
+                    {
+                        opacity: bottomNavVisible,
+                        transform: [
+                            {
+                                translateY: bottomNavVisible.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: [scale(80), 0],
+                                }),
+                            },
+                        ],
+                    },
+                ]}
+                pointerEvents={timerStatus === 'idle' ? 'auto' : 'none'}
+            >
                 {TABS.map((tab, index) => (
                     <TouchableOpacity
                         key={tab.key}
                         style={styles.navItem}
                         onPress={() => {
                             if (tab.key === 'home') router.dismissAll();
-                            else router.push('/' + tab.key as any);
+                            else router.replace(getMainTabUrl(tab.key) as any);
                         }}
                     >
                         {renderTabIcon(tab, index)}
                     </TouchableOpacity>
                 ))}
-            </View>
+            </Animated.View>
 
             <Animated.View
                 style={[
@@ -1230,7 +1280,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#E2E8F0', // Input background
         borderRadius: scale(30),
         marginHorizontal: scale(20),
-        marginBottom: scale(20), // Lift up above bottom nav
+        marginBottom: scale(0), // Lift up above bottom nav
         paddingHorizontal: scale(6), // Padding for the container
         paddingVertical: scale(6),
         height: scale(60),
@@ -1278,6 +1328,23 @@ const styles = StyleSheet.create({
         backgroundColor: '#102852', // Dark blue specific to app theme
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    // Main Pagination Styles
+    mainPaginationContainer: {
+        position: 'absolute',
+        top: scale(72), // Below standard header
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: scale(8),
+        zIndex: 20, // Ensure above other absolute elements if any
+    },
+    mainDot: {
+        height: scale(13),
+        borderRadius: scale(31),
+        backgroundColor: '#2E2E43', // From user spec
     },
 });
 

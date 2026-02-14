@@ -6,7 +6,6 @@ import {
     TouchableOpacity,
     Modal,
     Animated,
-    Dimensions,
     TouchableWithoutFeedback,
 } from 'react-native';
 import {
@@ -15,11 +14,8 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { useUserProfileStore, getSubscriptionDisplayText } from '../store/userProfileStore';
-
-// Scale from Figma (402x874) to device
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const FIGMA_WIDTH = 402;
-const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
+import { scale } from '../constants';
+import { colors, fonts } from '../theme';
 
 const SIDEBAR_WIDTH = scale(180);
 
@@ -112,7 +108,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
         if (route) {
             onClose();
             setTimeout(() => {
-                router.push(route as any);
+                router.replace(route as any);
             }, 300);
         }
     };
@@ -123,9 +119,9 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             label: 'Основное',
             subItems: [
                 { label: 'Главная', route: '/(app)/' },
-                { label: 'Прогресс' },
-                { label: 'Хобби и план' },
-                { label: 'AI-наставник' },
+                { label: 'Прогресс', route: '/(app)/?tab=3' },
+                { label: 'Хобби и план', route: '/(app)/?tab=1' },
+                { label: 'AI-наставник', route: '/(app)/?tab=2' },
             ],
         },
         {
@@ -133,7 +129,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             label: 'Развитие',
             subItems: [
                 { label: 'Подборка контента' },
-                { label: 'Недельный отчёт' },
+                { label: 'Недельный отчёт', route: '/(app)/?tab=3' },
                 { label: 'Достижения и бейджи' },
             ],
         },
@@ -143,7 +139,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             subItems: [
                 { label: 'Настройки' },
                 { label: 'Уведомления' },
-                { label: 'Экранное время' },
+                { label: 'Экранное время', route: '/(app)/?tab=3' },
             ],
         },
         {
@@ -191,7 +187,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                     <View style={styles.profileSection}>
                         <View style={styles.profileHeader}>
                             <View style={styles.userIconContainer}>
-                                <Ionicons name="person" size={22} color="#FFFFFF" />
+                                <Ionicons name="person" size={22} color={colors.buttonTextPrimary} />
                             </View>
                             <View style={styles.userInfo}>
                                 <Text style={styles.userName}>{displayName}</Text>
@@ -201,7 +197,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                     onPress={handleLogout}
                                     activeOpacity={0.7}
                                 >
-                                    <Ionicons name="log-out-outline" size={scale(12)} color="#000" />
+                                    <Ionicons name="log-out-outline" size={scale(12)} color={colors.text} />
                                     <Text style={styles.logoutText}>Выйти</Text>
                                 </TouchableOpacity>
                             </View>
@@ -273,14 +269,14 @@ const styles = StyleSheet.create({
         top: scale(80),
         bottom: scale(60),
         width: SIDEBAR_WIDTH,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: colors.surfaceLight,
         paddingTop: scale(24),
         paddingHorizontal: scale(16),
         paddingBottom: scale(20),
         justifyContent: 'space-between',
         borderTopLeftRadius: scale(20),
         borderBottomLeftRadius: scale(20),
-        shadowColor: '#000',
+        shadowColor: colors.text,
         shadowOffset: { width: -2, height: 0 },
         shadowOpacity: 0.15,
         shadowRadius: 10,
@@ -299,7 +295,7 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: '#000000',
+        backgroundColor: colors.buttonPrimary,
         justifyContent: 'center',
         alignItems: 'center',
         flexShrink: 0,
@@ -310,15 +306,15 @@ const styles = StyleSheet.create({
         marginTop: 10,
     },
     userName: {
-        color: '#000',
-        fontFamily: 'Gramatika-Bold',
+        color: colors.text,
+        fontFamily: fonts.heading.bold,
         fontSize: 14,
         fontWeight: '700',
         lineHeight: 16,
     },
     subscriptionLevel: {
-        color: '#000',
-        fontFamily: 'Geometria-Light',
+        color: colors.text,
+        fontFamily: fonts.body.light,
         fontSize: 8,
         fontWeight: '300',
         lineHeight: 12,
@@ -330,8 +326,8 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     logoutText: {
-        color: '#000',
-        fontFamily: 'Gramatika-Bold',
+        color: colors.text,
+        fontFamily: fonts.heading.bold,
         fontSize: 10,
         fontWeight: '700',
         lineHeight: 22,
@@ -350,22 +346,22 @@ const styles = StyleSheet.create({
         paddingVertical: scale(4),
     },
     navItemText: {
-        color: '#000',
-        fontFamily: 'Gramatika-Bold',
+        color: colors.text,
+        fontFamily: fonts.heading.bold,
         fontSize: 20,
         fontWeight: '700',
         lineHeight: 22,
     },
     subItemsContainer: {
         marginTop: scale(8),
-        marginLeft: scale(0), // No indent on container, text logic usually handles it or just aligned left
+        marginLeft: scale(0),
     },
     subItem: {
         paddingVertical: scale(6),
     },
     subItemText: {
-        color: '#2E2E43', // Slightly lighter/blue-ish dark
-        fontFamily: 'Gramatika-Light', // Lighter font for hierarchy
+        color: colors.statistics.darkText,
+        fontFamily: fonts.heading.light,
         fontSize: 16,
         lineHeight: 20,
     },
@@ -379,20 +375,20 @@ const styles = StyleSheet.create({
         alignItems: 'flex-start',
     },
     faqText: {
-        color: '#000',
-        fontFamily: 'Gramatika-Regular',
+        color: colors.text,
+        fontFamily: fonts.heading.regular,
         fontSize: 10,
         lineHeight: 14,
     },
     footerDivider: {
         width: 1,
         height: scale(24),
-        backgroundColor: '#000',
+        backgroundColor: colors.text,
         marginHorizontal: scale(8),
     },
     privacyText: {
-        color: '#000',
-        fontFamily: 'Gramatika-Regular',
+        color: colors.text,
+        fontFamily: fonts.heading.regular,
         fontSize: 10,
         lineHeight: 14,
     },

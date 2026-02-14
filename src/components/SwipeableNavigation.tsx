@@ -2,23 +2,15 @@ import React, { useState, useRef } from 'react';
 import {
     View,
     StyleSheet,
-    Dimensions,
     TouchableOpacity,
     ScrollView,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { scale, SCREEN_WIDTH } from '../constants';
+import { colors } from '../theme';
+import { APP_TAB_ROUTES } from '../config/navigation';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const FIGMA_WIDTH = 402;
-const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
-
-// Tab configuration
-const TABS = [
-    { key: 'home', icon: 'home', iconOutline: 'home-outline', type: 'ionicon' },
-    { key: 'statistics', icon: 'bar-chart', iconOutline: 'bar-chart-outline', type: 'ionicon' },
-    { key: 'ai-coach', icon: 'lightbulb', iconOutline: 'lightbulb-outline', type: 'material' },
-    { key: 'weekly-plan', icon: 'calendar-text', iconOutline: 'calendar-text-outline', type: 'material' },
-];
+const TABS = APP_TAB_ROUTES;
 
 interface SwipeableNavigationProps {
     children: React.ReactNode[];
@@ -45,9 +37,9 @@ export const SwipeableNavigation: React.FC<SwipeableNavigationProps> = ({
         }
     };
 
-    const renderTabIcon = (tab: typeof TABS[0], index: number) => {
+    const renderTabIcon = (tab: typeof TABS[number], index: number) => {
         const isActive = activeTab === index;
-        const color = isActive ? '#000' : '#A3A3A3';
+        const color = isActive ? colors.text : colors.textLight;
         const iconName = isActive ? tab.icon : tab.iconOutline;
 
         if (tab.type === 'ionicon') {
@@ -116,7 +108,7 @@ const styles = StyleSheet.create({
         marginBottom: scale(16),
         borderRadius: scale(47),
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        shadowColor: '#000',
+        shadowColor: colors.text,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,

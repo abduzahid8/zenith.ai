@@ -20,9 +20,19 @@ const chartImage = require('../../../assets/images/home-chart.png');
 interface HomeTabProps {
     fadeAnim: Animated.Value;
     iconTranslateY: Animated.AnimatedInterpolation<number>;
+    /** When inside MainTabsScreen, use these to switch tabs instead of pushing routes */
+    onDailyGoal?: () => void;
+    onAICoach?: () => void;
+    onScreenTime?: () => void;
 }
 
-const HomeTab: React.FC<HomeTabProps> = ({ fadeAnim, iconTranslateY }) => {
+const HomeTab: React.FC<HomeTabProps> = ({
+    fadeAnim,
+    iconTranslateY,
+    onDailyGoal,
+    onAICoach,
+    onScreenTime,
+}) => {
     const router = useRouter();
 
     const handleNavigate = (route: string) => {
@@ -61,7 +71,11 @@ const HomeTab: React.FC<HomeTabProps> = ({ fadeAnim, iconTranslateY }) => {
                 </LinearGradient>
             </TouchableOpacity>
 
-            <TouchableOpacity activeOpacity={0.8} style={styles.cardShadowProp}>
+            <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.cardShadowProp}
+                onPress={() => (onDailyGoal ? onDailyGoal() : handleNavigate('/weekly-plan'))}
+            >
                 <LinearGradient
                     start={{ x: 0, y: 0.5 }}
                     end={{ x: 1, y: 0.5 }}
@@ -86,7 +100,7 @@ const HomeTab: React.FC<HomeTabProps> = ({ fadeAnim, iconTranslateY }) => {
 
             <View style={styles.bottomCardsRow}>
                 <TouchableOpacity
-                    onPress={() => handleNavigate('/ai-coach')}
+                    onPress={() => (onAICoach ? onAICoach() : handleNavigate('/ai-coach'))}
                     activeOpacity={0.8}
                     style={[styles.cardShadowProp, { flex: 1.3 }]}
                 >
@@ -115,7 +129,7 @@ const HomeTab: React.FC<HomeTabProps> = ({ fadeAnim, iconTranslateY }) => {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    onPress={() => handleNavigate('/screen-time')}
+                    onPress={() => (onScreenTime ? onScreenTime() : handleNavigate('/statistics'))}
                     activeOpacity={0.8}
                     style={[styles.cardShadowProp, { flex: 1 }]}
                 >

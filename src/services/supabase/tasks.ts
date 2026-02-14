@@ -32,7 +32,7 @@ export const tasksDbService = {
         return data || [];
     },
 
-    // Update the status of a single task
+    // Update the status of a single task (use maybeSingle to avoid PGRST116 when 0 rows)
     updateTaskStatus: async (userId: string, taskId: string, status: TaskStatus): Promise<Task | null> => {
         const supabase = getSupabase();
         const { data, error } = await supabase
@@ -41,7 +41,7 @@ export const tasksDbService = {
             .eq('id', taskId)
             .eq('user_id', userId)
             .select()
-            .single();
+            .maybeSingle();
 
         if (error) throw error;
         return data;

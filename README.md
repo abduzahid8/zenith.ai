@@ -34,7 +34,7 @@ cp .env.example .env
 3. Configure `.env` with your API keys:
 - `EXPO_PUBLIC_SUPABASE_URL` - Your Supabase project URL
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anon key
-- `EXPO_PUBLIC_OPENAI_API_KEY` - Your OpenAI API key
+- `EXPO_PUBLIC_OPENAI_API_KEY` - Used only by the Supabase Edge Function (ai-proxy); the app never sends this key to the client.
 
 4. Start the development server:
 ```bash

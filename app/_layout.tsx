@@ -7,6 +7,7 @@ import { StyleSheet, View, Text, ActivityIndicator } from 'react-native';
 import { useAuthStore } from '../src/store/authStore';
 import { useUserProfileStore } from '../src/store/userProfileStore';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
+import { colors } from '../src/theme';
 
 export default function RootLayout() {
     const [appIsReady, setAppIsReady] = useState(false);
@@ -70,9 +71,9 @@ export default function RootLayout() {
     // Show loading screen while fonts or auth load
     if (!appIsReady || isLoading) {
         return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#1AFFD5" />
-                <Text style={styles.loadingText}>Загрузка...</Text>
+            <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={[styles.loadingText, { color: colors.text }]}>Загрузка...</Text>
             </View>
         );
     }
@@ -116,11 +117,9 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#FFFFFF',
     },
     loadingText: {
         marginTop: 16,
         fontSize: 16,
-        color: '#000000',
     },
 });

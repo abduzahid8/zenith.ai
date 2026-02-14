@@ -1,51 +1,36 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { scale } from '../constants';
+import { colors } from '../theme';
+import { APP_TAB_ROUTES, getMainTabUrl, type AppTabKey } from '../config/navigation';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const FIGMA_WIDTH = 402;
-const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
-
-export type TabKey = 'home' | 'statistics' | 'ai-coach' | 'weekly-plan';
+export type TabKey = AppTabKey;
 
 interface BottomNavigationProps {
     activeTab: TabKey;
 }
 
-/**
- * Shared bottom navigation component used across multiple screens.
- * Provides consistent styling and navigation behavior.
- */
 export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab }) => {
     const router = useRouter();
 
-    const tabs: { key: TabKey; route: string; icon: string; iconActive: string; type: 'ionicon' | 'material' }[] = [
-        { key: 'home', route: '/home', icon: 'home-outline', iconActive: 'home', type: 'ionicon' },
-        { key: 'statistics', route: '/statistics', icon: 'bar-chart-outline', iconActive: 'bar-chart', type: 'ionicon' },
-        { key: 'ai-coach', route: '/ai-coach-chat', icon: 'lightbulb-outline', iconActive: 'lightbulb', type: 'material' },
-        { key: 'weekly-plan', route: '/weekly-plan', icon: 'clipboard-text-outline', iconActive: 'clipboard-text', type: 'material' },
-    ];
-
-    const handleTabPress = (tab: typeof tabs[number]) => {
-        if (tab.key !== activeTab) {
-            // Navigate to the specific tab route
-            router.push(tab.route as any);
-        }
+    const handleTabPress = (key: AppTabKey) => {
+        router.replace(getMainTabUrl(key) as any);
     };
 
     return (
         <View style={styles.bottomNav}>
-            {tabs.map((tab) => {
+            {APP_TAB_ROUTES.map((tab) => {
                 const isActive = tab.key === activeTab;
-                const iconColor = isActive ? '#000' : '#A3A3A3';
-                const iconName = isActive ? tab.iconActive : tab.icon;
+                const iconColor = isActive ? colors.text : colors.textLight;
+                const iconName = isActive ? tab.icon : tab.iconOutline;
 
                 return (
                     <TouchableOpacity
                         key={tab.key}
                         style={styles.navItem}
-                        onPress={() => handleTabPress(tab)}
+                        onPress={() => handleTabPress(tab.key)}
                     >
                         {tab.type === 'ionicon' ? (
                             <Ionicons
@@ -78,7 +63,7 @@ const styles = StyleSheet.create({
         marginTop: 'auto',
         borderRadius: scale(47),
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        shadowColor: '#000',
+        shadowColor: colors.text,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,

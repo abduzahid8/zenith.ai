@@ -1,19 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     StatusBar,
     TouchableOpacity,
     Image,
     Dimensions,
+    Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LogoNew } from '../components/Logo';
 import { Button } from '../components/Button';
 import { colors } from '../theme';
 import { useQuizStore, QUIZ_QUESTIONS } from '../store/quizStore';
+import { useAuthStore } from '../store/authStore';
+import { dbService } from '../services/supabase';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FIGMA_WIDTH = 402;
@@ -21,6 +24,7 @@ const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
 
 export default function QuizScreen() {
     const router = useRouter();
+    const user = useAuthStore((s) => s.user);
     const {
         currentQuestion,
         answers,
@@ -29,14 +33,29 @@ export default function QuizScreen() {
         prevQuestion,
         completeQuiz,
     } = useQuizStore();
+    const [saving, setSaving] = useState(false);
 
     const question = QUIZ_QUESTIONS[currentQuestion - 1];
     const selectedOption = answers[currentQuestion];
     const isLastQuestion = currentQuestion === QUIZ_QUESTIONS.length;
     const canProceed = selectedOption !== undefined;
 
-    const handleNext = () => {
+    const handleNext = async () => {
         if (isLastQuestion) {
+            if (user) {
+                setSaving(true);
+                try {
+                    await dbService.saveQuizAnswers(user.id, answers);
+                } catch (e: any) {
+                    setSaving(false);
+                    Alert.alert(
+                        'Ошибка',
+                        e?.message || 'Не удалось сохранить ответы. Проверьте интернет и попробуйте снова.',
+                        [{ text: 'OK' }]
+                    );
+                    return;
+                }
+            }
             completeQuiz();
             router.push('/hobby-selection');
         } else {
@@ -113,7 +132,7 @@ export default function QuizScreen() {
                         <Button
                             title={isLastQuestion ? 'Завершить' : 'Далее'}
                             onPress={handleNext}
-                            disabled={!canProceed}
+                            disabled={!canProceed || saving}
                         />
                     </View>
                 </View>

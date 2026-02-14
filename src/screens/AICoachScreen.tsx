@@ -3,7 +3,6 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     StatusBar,
     TextInput,
     TouchableOpacity,
@@ -12,12 +11,14 @@ import {
     Platform,
     ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme';
 import { scaleWidth, scaleHeight, scaleFont } from '../theme/responsive';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { aiService, ChatMessage } from '../services/ai';
+import { BottomNavigation } from '../components/BottomNavigation';
 
 interface DisplayMessage {
     id: string;
@@ -188,6 +189,8 @@ export const AICoachScreen: React.FC = () => {
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
+
+            <BottomNavigation activeTab="ai-coach" />
         </SafeAreaView>
     );
 };

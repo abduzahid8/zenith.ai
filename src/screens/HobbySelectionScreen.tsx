@@ -1,24 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    SafeAreaView,
-    StatusBar,
-    TouchableOpacity,
-    Dimensions,
-} from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LogoNew } from '../components/Logo';
 import { colors } from '../theme';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { useQuizStore } from '../store/quizStore';
+import { useAuthStore } from '../store/authStore';
 import { matchHobbies, quizAnswersToProfile, HobbyMatch } from '../services/hobbyMatcher';
-
-// Scale from Figma (402x874) to iPhone 17 Pro
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const FIGMA_WIDTH = 402;
-const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
+import { dbService } from '../services/supabase';
+import { scale } from '../constants';
 
 // Custom circle indicator matching Figma design
 const SelectionCircle: React.FC<{ isSelected: boolean }> = ({ isSelected }) => (
@@ -41,10 +32,12 @@ const circleStyles = StyleSheet.create({
 
 export default function HobbySelectionScreen() {
     const router = useRouter();
-    const { setSelectedHobby } = useUserProfileStore();
+    const user = useAuthStore((s) => s.user);
+    const { setSelectedHobby, completeOnboarding } = useUserProfileStore();
     const { answers } = useQuizStore();
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [matchedHobbies, setMatchedHobbies] = useState<HobbyMatch[]>([]);
+    const [saving, setSaving] = useState(false);
 
     // Calculate matches when screen loads
     useEffect(() => {
@@ -54,14 +47,24 @@ export default function HobbySelectionScreen() {
     }, [answers]);
 
     const handleSelect = (hobbyId: string) => {
-        // Toggle: deselect if already selected, otherwise select new one
         setSelectedId(prev => (prev === hobbyId ? null : hobbyId));
     };
 
-    const handleContinue = () => {
-        if (selectedId) {
+    const handleContinue = async () => {
+        if (!selectedId || !user) return;
+        setSaving(true);
+        try {
+            await dbService.saveHobby(user.id, selectedId, true);
             setSelectedHobby(selectedId);
+            completeOnboarding();
             router.push('/subscription');
+        } catch (e: any) {
+            setSaving(false);
+            Alert.alert(
+                'Ошибка',
+                e?.message || 'Не удалось сохранить выбор. Проверьте интернет и попробуйте снова.',
+                [{ text: 'OK' }]
+            );
         }
     };
 
@@ -121,13 +124,17 @@ export default function HobbySelectionScreen() {
                 <TouchableOpacity
                     style={[
                         styles.continueButton,
-                        !selectedId && styles.continueButtonDisabled,
+                        (!selectedId || saving) && styles.continueButtonDisabled,
                     ]}
                     onPress={handleContinue}
-                    disabled={!selectedId}
+                    disabled={!selectedId || saving}
                     activeOpacity={0.8}
                 >
-                    <Text style={styles.continueButtonText}>Приступим</Text>
+                    {saving ? (
+                        <ActivityIndicator color="#FFF" />
+                    ) : (
+                        <Text style={styles.continueButtonText}>Приступим</Text>
+                    )}
                 </TouchableOpacity>
                 <Text style={styles.noteText}>
                     Не переживай — это не навсегда.
