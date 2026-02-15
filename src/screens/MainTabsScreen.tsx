@@ -29,7 +29,8 @@ import { useAuthStore } from '../store/authStore';
 import { useUserProfileStore, getGreeting } from '../store/userProfileStore';
 import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
 import { requestScreenTimePermission } from 'device-activity';
-import { scale, SCREEN_WIDTH, TABS } from '../constants';
+import { scale, SCREEN_WIDTH } from '../constants';
+import { BottomTabBar } from '../components/navigation/BottomTabBar';
 
 // Tab components
 import HomeTab from './tabs/HomeTab';
@@ -129,20 +130,7 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
         }
     };
 
-    const renderTabIcon = (tab: (typeof TABS)[number], index: number) => {
-        const isActive = activeTab === index;
-        return (
-            <Image
-                source={tab.image}
-                style={{
-                    width: scale(28),
-                    height: scale(28),
-                    opacity: isActive ? 1 : 0.5
-                }}
-                resizeMode="contain"
-            />
-        );
-    };
+
 
     const getHeaderTitle = () => {
         switch (activeTab) {
@@ -201,17 +189,7 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
             </PagerView>
 
             {/* Bottom Navigation */}
-            <View style={styles.bottomNav}>
-                {TABS.map((tab, index) => (
-                    <TouchableOpacity
-                        key={tab.key}
-                        style={styles.navItem}
-                        onPress={() => handleTabPress(index)}
-                    >
-                        {renderTabIcon(tab, index)}
-                    </TouchableOpacity>
-                ))}
-            </View>
+            <BottomTabBar activeTab={activeTab} onTabPress={handleTabPress} />
 
             <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />
         </SafeAreaView>
@@ -267,26 +245,7 @@ const styles = StyleSheet.create({
         width: SCREEN_WIDTH,
         flex: 1,
     },
-    bottomNav: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        height: scale(60),
-        marginHorizontal: scale(16),
-        marginBottom: scale(16),
-        borderRadius: scale(47),
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        shadowColor: colors.text,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
-    },
-    navItem: {
-        padding: scale(12),
-    },
+
 });
 
 export default MainTabsScreen;

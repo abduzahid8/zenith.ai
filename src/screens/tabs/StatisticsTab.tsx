@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: scale(8),
-        paddingBottom: scale(16),
+        paddingBottom: scale(95),
     },
     statsDot: {
         width: scale(13),

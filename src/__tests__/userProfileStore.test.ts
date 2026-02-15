@@ -25,16 +25,16 @@ beforeEach(() => {
 // ─── Helper functions ────────────────────────────────
 
 describe('getSubscriptionDisplayText', () => {
-    it('returns "Бесплатный" for free', () => {
-        expect(getSubscriptionDisplayText('free')).toBe('Бесплатный');
+    it('returns "Free" for free', () => {
+        expect(getSubscriptionDisplayText('free')).toBe('Free');
     });
 
-    it('returns "Пробный период" for trial', () => {
-        expect(getSubscriptionDisplayText('trial')).toBe('Пробный период');
+    it('returns "Trial" for trial', () => {
+        expect(getSubscriptionDisplayText('trial')).toBe('Trial');
     });
 
-    it('returns "Премиум" for premium', () => {
-        expect(getSubscriptionDisplayText('premium')).toBe('Премиум');
+    it('returns "Premium" for premium', () => {
+        expect(getSubscriptionDisplayText('premium')).toBe('Premium');
     });
 });
 

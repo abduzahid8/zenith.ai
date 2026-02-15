@@ -26,6 +26,7 @@ import {
     StopConfirmationModal,
     SessionSummaryView,
 } from '../components/session';
+import { BottomTabBar } from '../components/navigation/BottomTabBar';
 
 const TABS = APP_TAB_ROUTES;
 
@@ -209,7 +210,13 @@ export const SessionTimerScreen: React.FC = () => {
             {/* Bottom Navigation — animates out when timer is running/paused */}
             <Animated.View
                 style={[
-                    styles.bottomNav,
+                    {
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        alignItems: 'center',
+                    },
                     {
                         opacity: bottomNavVisible,
                         transform: [{
@@ -222,26 +229,28 @@ export const SessionTimerScreen: React.FC = () => {
                 ]}
                 pointerEvents={timerStatus === 'idle' ? 'auto' : 'none'}
             >
-                {TABS.map((tab, index) => (
-                    <TouchableOpacity
-                        key={tab.key}
-                        style={styles.navItem}
-                        onPress={() => {
-                            if (tab.key === 'home') router.dismissAll();
-                            else router.replace(getMainTabUrl(tab.key) as any);
-                        }}
-                    >
-                        <Image
-                            source={tab.image}
-                            style={{
-                                width: scale(28),
-                                height: scale(28),
-                                tintColor: tab.key === 'home' ? colors.nav.active : colors.nav.inactive
-                            }}
-                            resizeMode="contain"
-                        />
-                    </TouchableOpacity>
-                ))}
+                <BottomTabBar
+                    activeTab={0} // Highlighting Home as per screenshot
+                    onTabPress={(index) => {
+                        // Map index to tab logic
+                        // If index is 0 (Home), we just want to go back to the main screen.
+                        // Since SessionTimer is likely pushed on top, router.back() or dismissAll() works.
+                        // For other tabs, we might need to reset navigation state or replace with params.
+
+                        // Simplest approach: Navigate to the main screen with parameter
+                        // We need to import BottomTabBar first!
+
+                        // NOTE: MainTabsScreen accepts { initialTab }.
+                        // We can use navigate (push/pop) to go back.
+
+                        if (index === 0) {
+                            router.dismissAll();
+                        } else {
+                            // If we want to switch tab, we can navigate to root with params
+                            router.replace({ pathname: '/(app)/', params: { initialTab: index } });
+                        }
+                    }}
+                />
             </Animated.View>
 
             {/* Task Drawer */}

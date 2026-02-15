@@ -314,17 +314,20 @@ const styles = StyleSheet.create({
         lineHeight: 16,
     },
     subscriptionLevel: {
-        color: colors.text,
-        fontFamily: fonts.body.light,
-        fontSize: 8,
+        alignSelf: 'stretch',
+        color: '#08132A',
+        fontFamily: fonts.body.light, // Geometria
+        fontSize: scale(8),
+        fontStyle: 'normal',
         fontWeight: '300',
-        lineHeight: 12,
-        marginTop: 2,
+        lineHeight: scale(10),
+        marginTop: 0,
+        marginBottom: scale(3),
     },
     logoutButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 2,
+        marginTop: -2,
     },
     logoutText: {
         color: colors.text,

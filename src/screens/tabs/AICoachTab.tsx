@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
         color: colors.aiCoach.text,
     },
     aiInputContainer: {
-        paddingBottom: scale(24),
+        paddingBottom: scale(90),
     },
     inputButton: {
         width: '100%',

@@ -1,6 +1,7 @@
 import React from 'react';
 import {
     View,
+    ScrollView,
     Text,
     StyleSheet,
     TouchableOpacity,
@@ -40,7 +41,11 @@ const HomeTab: React.FC<HomeTabProps> = ({
     };
 
     return (
-        <View style={styles.homeContent}>
+        <ScrollView
+            style={styles.homeContent}
+            contentContainerStyle={{ paddingBottom: scale(100) }}
+            showsVerticalScrollIndicator={false}
+        >
             <TouchableOpacity
                 onPress={() => handleNavigate('/session-timer')}
                 activeOpacity={0.8}
@@ -156,7 +161,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                     </LinearGradient>
                 </TouchableOpacity>
             </View>
-        </View>
+        </ScrollView>
     );
 };
 

@@ -5,15 +5,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Subscription level type for dynamic text display
 export type SubscriptionLevel = 'free' | 'trial' | 'premium';
 
-// Helper to get subscription display text
+// Helper to get subscription display text (English for UI)
 export const getSubscriptionDisplayText = (level: SubscriptionLevel): string => {
     switch (level) {
         case 'premium':
-            return 'Премиум';
+            return 'Premium';
         case 'trial':
-            return 'Пробный период';
         default:
-            return 'Бесплатный';
+            return 'Free';
     }
 };
 

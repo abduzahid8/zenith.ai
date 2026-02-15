@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
     View,
+    ScrollView,
     Text,
     StyleSheet,
     TouchableOpacity,
@@ -18,7 +19,11 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
     const [visibleTaskCount, setVisibleTaskCount] = useState(2);
 
     return (
-        <View style={styles.yourDayPage}>
+        <ScrollView
+            style={styles.yourDayPage}
+            contentContainerStyle={{ paddingBottom: scale(100) }}
+            showsVerticalScrollIndicator={false}
+        >
             <Text style={styles.yourDayTitle}>Твой день</Text>
 
             {/* Task Card 1: Theory */}
@@ -28,8 +33,8 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                         <Text style={styles.taskCardTitle}>Теория</Text>
                         <Text style={styles.taskCardDescription}>Изучить{"\n"}Королевский Гамбит</Text>
                     </View>
-                    <View style={[styles.theoryIconContainer, { backgroundColor: 'transparent' }]}>
-                        <Image source={require('../../../icons/book.png')} style={{ width: scale(24), height: scale(24), tintColor: '#000' }} resizeMode="contain" />
+                    <View style={styles.theoryIconContainer}>
+                        <Image source={require('../../../icons/book.png')} style={styles.iconTheory} resizeMode="contain" />
                     </View>
                 </View>
             </TouchableOpacity>
@@ -41,8 +46,8 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                         <Text style={styles.taskCardTitle}>Практика</Text>
                         <Text style={styles.taskCardDescription}>Сыграть 2 партии</Text>
                     </View>
-                    <View style={[styles.practiceIconContainer, { backgroundColor: 'transparent' }]}>
-                        <Image source={require('../../../icons/dumbbell.png')} style={{ width: scale(24), height: scale(24), tintColor: '#000' }} resizeMode="contain" />
+                    <View style={styles.practiceIconContainer}>
+                        <Image source={require('../../../icons/dumbbell.png')} style={styles.iconPractice} resizeMode="contain" />
                     </View>
                 </View>
             </TouchableOpacity>
@@ -55,8 +60,8 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                             <Text style={styles.analysisTitle}>Анализ</Text>
                             <Text style={styles.analysisDescription}>Рассмотреть партию</Text>
                         </View>
-                        <View style={[styles.analysisIconContainer, { backgroundColor: 'transparent' }]}>
-                            <Image source={require('../../../icons/magnifier.png')} style={{ width: scale(24), height: scale(24), tintColor: '#000' }} resizeMode="contain" />
+                        <View style={styles.analysisIconContainer}>
+                            <Image source={require('../../../icons/magnifier.png')} style={styles.iconAnalysis} resizeMode="contain" />
                         </View>
                     </View>
                 </View>
@@ -70,8 +75,8 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                             <Text style={styles.tasksTitle}>Задачи</Text>
                             <Text style={styles.tasksDescription}>Решить 15 тактических{"\n"}задач</Text>
                         </View>
-                        <View style={[styles.tasksIconContainer, { backgroundColor: 'transparent' }]}>
-                            <Image source={require('../../../icons/puzzle.png')} style={{ width: scale(28), height: scale(28), tintColor: '#000' }} resizeMode="contain" />
+                        <View style={styles.tasksIconContainer}>
+                            <Image source={require('../../../icons/puzzle.png')} style={styles.iconTasks} resizeMode="contain" />
                         </View>
                     </View>
                 </View>
@@ -90,7 +95,7 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                     <Image source={require('../../../icons/plus.png')} style={{ width: scale(32), height: scale(32), tintColor: colors.iconMuted }} resizeMode="contain" />
                 </TouchableOpacity>
             )}
-        </View>
+        </ScrollView>
     );
 };
 
@@ -155,11 +160,10 @@ const styles = StyleSheet.create({
     },
     analysisIconContainer: {
         width: scale(40),
-        height: scale(40),
-        backgroundColor: colors.weeklyPlan.iconBg,
-        borderRadius: scale(10),
+        height: scale(44),
         justifyContent: 'center',
         alignItems: 'center',
+        marginTop: scale(-25),
     },
     tasksCard: {
         height: scale(123),
@@ -188,10 +192,9 @@ const styles = StyleSheet.create({
     tasksIconContainer: {
         width: scale(40),
         height: scale(100),
-        backgroundColor: colors.weeklyPlan.iconBg,
-        borderRadius: scale(10),
         justifyContent: 'center',
         alignItems: 'center',
+        marginTop: scale(-50),
     },
     taskCardContent: {
         flex: 1,
@@ -219,18 +222,36 @@ const styles = StyleSheet.create({
     theoryIconContainer: {
         width: scale(42),
         height: scale(42),
-        backgroundColor: colors.weeklyPlan.iconBg,
-        borderRadius: scale(10),
         justifyContent: 'center',
         alignItems: 'center',
+        marginTop: scale(-35),
     },
     practiceIconContainer: {
         width: scale(40),
         height: scale(40),
-        backgroundColor: colors.weeklyPlan.iconBg,
-        borderRadius: scale(10),
         justifyContent: 'center',
         alignItems: 'center',
+        marginTop: scale(-25),
+    },
+    iconTheory: {
+        width: scale(42),
+        height: scale(42),
+        tintColor: '#08132A',
+    },
+    iconPractice: {
+        width: scale(40),
+        height: scale(40),
+        tintColor: '#08132A',
+    },
+    iconAnalysis: {
+        width: scale(40),
+        height: scale(44),
+        tintColor: '#08132A',
+    },
+    iconTasks: {
+        width: scale(40),
+        height: scale(100),
+        tintColor: '#08132A',
     },
     addTaskCard: {
         alignSelf: 'stretch',
