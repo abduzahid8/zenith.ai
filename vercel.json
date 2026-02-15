@@ -1,18 +1,12 @@
 {
-    "version": 2,
-    "builds": [
+    "framework": null,
+    "buildCommand": "expo export -p web",
+    "outputDirectory": "dist",
+    "cleanUrls": true,
+    "rewrites": [
         {
-            "src": "package.json",
-            "use": "@vercel/static-build",
-            "config": {
-                "distDir": "dist"
-            }
-        }
-    ],
-    "routes": [
-        {
-            "src": "/(.*)",
-            "dest": "/index.html"
+            "source": "/(.*)",
+            "destination": "/index.html"
         }
     ]
 }
