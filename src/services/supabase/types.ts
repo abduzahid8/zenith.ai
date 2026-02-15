@@ -226,6 +226,9 @@ export interface Task {
     duration_minutes?: number;
     is_ai_generated?: boolean;
     ai_rationale?: string;
+    difficulty_rating?: number;
+    engagement_rating?: number;
+    user_notes?: string;
     created_at?: string;
     updated_at?: string;
 }

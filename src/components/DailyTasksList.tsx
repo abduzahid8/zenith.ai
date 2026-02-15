@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ImageSourcePropType } from 'react-native';
 import { useTaskStore } from '../store/taskStore';
 import { useAuthStore } from '../store/authStore';
 import { Task, TaskType } from '../services/supabase/types';
 import { colors, fonts } from '../theme';
 import { scale } from '../constants';
+import { TaskFeedbackModal } from './TaskFeedbackModal';
 
 const getTaskColors = (type: TaskType) => {
     switch (type) {
@@ -26,28 +26,28 @@ const TaskCard = ({ task, onPress }: { task: Task, onPress: (task: Task) => void
     const theme = getTaskColors(task.type);
     const isCompleted = task.status === 'completed';
 
-    // Map icon name
-    let iconName: keyof typeof Ionicons.glyphMap = 'book-outline';
+    // Map icon source
+    let iconSource: ImageSourcePropType = require('../../icons/book.png');
     // Icon style adjustments
     let iconStyle = {};
 
     switch (task.type) {
         case 'learning':
-            iconName = 'book-outline';
+            iconSource = require('../../icons/book.png');
             break;
         case 'practice':
-            iconName = 'locate-outline'; // Changed to locate-outline (visually similar to target)
+            iconSource = require('../../icons/dumbbell.png');
             break;
         case 'action':
-            iconName = 'bulb-outline'; // Changed from search-outline
+            iconSource = require('../../icons/magnifier.png');
             iconStyle = { marginRight: scale(4) }; // Move a little to the left
             break;
         case 'wellbeing':
-            iconName = 'stats-chart-outline'; // Changed from extension-puzzle-outline
+            iconSource = require('../../icons/puzzle.png');
             iconStyle = { marginRight: scale(4) }; // Move a little to the left
             break;
     }
-    if (isCompleted) iconName = 'checkmark-circle';
+    if (isCompleted) iconSource = require('../../icons/checkbox-checked.png');
 
     return (
         <TouchableOpacity
@@ -66,8 +66,12 @@ const TaskCard = ({ task, onPress }: { task: Task, onPress: (task: Task) => void
                         {task.title}
                     </Text>
                 </View>
-                <View style={[styles.iconContainer, { backgroundColor: theme.iconBg }]}>
-                    <Ionicons name={iconName} size={scale(24)} color="#FFF" style={iconStyle} />
+                <View style={[styles.iconContainer, { backgroundColor: 'transparent' }]}>
+                    <Image
+                        source={iconSource}
+                        style={[{ width: scale(24), height: scale(24), tintColor: '#000' }, iconStyle]}
+                        resizeMode="contain"
+                    />
                 </View>
             </View>
         </TouchableOpacity>
@@ -79,17 +83,36 @@ export const DailyTasksList = () => {
     const { user } = useAuthStore();
     const userId = user?.id;
 
+    const [modalVisible, setModalVisible] = React.useState(false);
+    const [selectedTask, setSelectedTask] = React.useState<Task | null>(null);
+
     useEffect(() => {
         if (userId) {
             fetchDailyPlan(userId);
         }
     }, [userId]);
 
-    const handleTaskPress = async (task: Task) => {
+    const handleTaskPress = (task: Task) => {
         if (task.status === 'completed') return;
-        if (userId && task.id) {
-            await completeTask(userId, task.id);
+        setSelectedTask(task);
+        setModalVisible(true);
+    };
+
+    const handleFeedbackSubmit = async (feedback: { difficulty_rating: number; engagement_rating: number; user_notes: string }) => {
+        if (userId && selectedTask && selectedTask.id) {
+            await completeTask(userId, selectedTask.id, feedback);
+            setModalVisible(false);
+            setSelectedTask(null);
         }
+    };
+
+    const handleModalClose = () => {
+        setModalVisible(false);
+        // If they close without submitting, we can either not complete, or complete without feedback.
+        // For now, let's assume close = cancel action (do nothing)
+        // Or if you want "Skip feedback but complete":
+        // if (userId && selectedTask && selectedTask.id) completeTask(userId, selectedTask.id);
+        setSelectedTask(null);
     };
 
     if (loading && dailyTasks.length === 0) {
@@ -116,6 +139,13 @@ export const DailyTasksList = () => {
                     />
                 ))}
             </View>
+
+            <TaskFeedbackModal
+                visible={modalVisible}
+                onClose={handleModalClose}
+                onSubmit={handleFeedbackSubmit}
+                taskTitle={selectedTask?.title || ''}
+            />
         </View>
     );
 };

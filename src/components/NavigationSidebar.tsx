@@ -7,6 +7,7 @@ import {
     Modal,
     Animated,
     TouchableWithoutFeedback,
+    Image,
 } from 'react-native';
 import {
     Ionicons
@@ -197,7 +198,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                     onPress={handleLogout}
                                     activeOpacity={0.7}
                                 >
-                                    <Ionicons name="log-out-outline" size={scale(12)} color={colors.text} />
+                                    <Image source={require('../../icons/back.png')} style={{ width: scale(12), height: scale(12), tintColor: colors.text }} resizeMode="contain" />
                                     <Text style={styles.logoutText}>Выйти</Text>
                                 </TouchableOpacity>
                             </View>

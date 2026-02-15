@@ -4,17 +4,13 @@ import {
     Text,
     StyleSheet,
     StatusBar,
-    Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LogoNew } from '../components/Logo';
 import { Button } from '../components/Button';
-import { colors } from '../theme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const FIGMA_WIDTH = 402;
-const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
+import { colors, fonts } from '../theme';
+import { scale } from '../constants';
 
 export default function WelcomeScreen() {
     const router = useRouter();
@@ -67,7 +63,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 24,
     },
     welcomeText: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: 28,
         lineHeight: 38,
         color: colors.text,
@@ -75,7 +71,7 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     subtitleText: {
-        fontFamily: 'Geometria-Light', // Font change only
+        fontFamily: fonts.body.light, // Font change only
         fontSize: 20,
         lineHeight: 28, // Kept original line height
         color: colors.text,

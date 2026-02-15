@@ -3,7 +3,7 @@
 // Deploy: npx supabase functions deploy ai-proxy
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
-const GEMINI_MODEL = 'gemini-1.5-flash';
+const GEMINI_MODEL = 'gemini-2.0-flash';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -248,8 +248,14 @@ Deno.serve(async (req) => {
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         console.error('ai-proxy error:', message);
+
+        let status = 500;
+        if (message.includes('429') || message.includes('Quota')) {
+            status = 429;
+        }
+
         return new Response(JSON.stringify({ error: message }), {
-            status: 500,
+            status,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
     }

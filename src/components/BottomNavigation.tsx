@@ -1,7 +1,6 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { scale } from '../constants';
 import { colors } from '../theme';
 import { APP_TAB_ROUTES, getMainTabUrl, type AppTabKey } from '../config/navigation';
@@ -32,19 +31,15 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab })
                         style={styles.navItem}
                         onPress={() => handleTabPress(tab.key)}
                     >
-                        {tab.type === 'ionicon' ? (
-                            <Ionicons
-                                name={iconName as any}
-                                size={scale(28)}
-                                color={iconColor}
-                            />
-                        ) : (
-                            <MaterialCommunityIcons
-                                name={iconName as any}
-                                size={scale(28)}
-                                color={iconColor}
-                            />
-                        )}
+                        <Image
+                            source={tab.image}
+                            style={{
+                                width: scale(28),
+                                height: scale(28),
+                                opacity: isActive ? 1 : 0.5
+                            }}
+                            resizeMode="contain"
+                        />
                     </TouchableOpacity>
                 );
             })}

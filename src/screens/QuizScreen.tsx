@@ -6,21 +6,17 @@ import {
     StatusBar,
     TouchableOpacity,
     Image,
-    Dimensions,
     Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LogoNew } from '../components/Logo';
 import { Button } from '../components/Button';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
+import { scale } from '../constants';
 import { useQuizStore, QUIZ_QUESTIONS } from '../store/quizStore';
 import { useAuthStore } from '../store/authStore';
 import { dbService } from '../services/supabase';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const FIGMA_WIDTH = 402;
-const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
 
 export default function QuizScreen() {
     const router = useRouter();
@@ -46,11 +42,11 @@ export default function QuizScreen() {
                 setSaving(true);
                 try {
                     await dbService.saveQuizAnswers(user.id, answers);
-                } catch (e: any) {
+                } catch (e: unknown) {
                     setSaving(false);
                     Alert.alert(
                         'Ошибка',
-                        e?.message || 'Не удалось сохранить ответы. Проверьте интернет и попробуйте снова.',
+                        e instanceof Error ? e.message : 'Не удалось сохранить ответы. Проверьте интернет и попробуйте снова.',
                         [{ text: 'OK' }]
                     );
                     return;
@@ -157,10 +153,10 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-start',
     },
     questionText: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: 24,
         lineHeight: 32,
-        color: '#08132A', // Color change
+        color: colors.text, // Color change
     },
     optionsContainer: {
         paddingHorizontal: 24,
@@ -176,27 +172,27 @@ const styles = StyleSheet.create({
         height: 24,
         borderRadius: 12,
         borderWidth: 1.5,
-        borderColor: '#08132A', // Color change
+        borderColor: colors.text, // Color change
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 16,
         marginTop: 2,
     },
     radioCircleSelected: {
-        borderColor: '#08132A', // Color change
+        borderColor: colors.text, // Color change
     },
     radioInner: {
         width: 12,
         height: 12,
         borderRadius: 6,
-        backgroundColor: '#08132A', // Color change
+        backgroundColor: colors.text, // Color change
     },
     optionText: {
         flex: 1,
-        fontFamily: 'Geometria-Light', // Font change
+        fontFamily: fonts.body.light, // Font change
         fontSize: 16,
         lineHeight: 24,
-        color: '#08132A', // Color change
+        color: colors.text, // Color change
     },
     spacer: {
         flex: 1,
@@ -214,7 +210,7 @@ const styles = StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
-        backgroundColor: '#F5F5F5',
+        backgroundColor: colors.quiz.backButtonBg,
         justifyContent: 'center',
         alignItems: 'center',
     },

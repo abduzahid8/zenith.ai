@@ -59,6 +59,7 @@ export const earningsDbService = {
         current_step?: number;
         progress_notes?: string;
         total_earned?: number;
+        first_earning_date?: string;
     }) => {
         const supabase = getSupabase();
 
@@ -71,7 +72,7 @@ export const earningsDbService = {
                 .single();
 
             if (!current?.first_earning_date) {
-                (updates as any).first_earning_date = new Date().toISOString().split('T')[0];
+                updates.first_earning_date = new Date().toISOString().split('T')[0];
             }
         }
 

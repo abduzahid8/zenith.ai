@@ -1,9 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions, Image } from 'react-native';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const FIGMA_WIDTH = 402;
-const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
+import { View, Text, StyleSheet, Image } from 'react-native';
+import { colors, fonts } from '../theme';
+import { scale } from '../constants';
 
 interface DayData {
     day: string;
@@ -154,9 +152,9 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     yAxisLabel: {
-        fontFamily: 'Geometria-Light',
+        fontFamily: fonts.body.light,
         fontSize: scale(14),
-        color: '#2E2E43',
+        color: colors.statistics.darkText,
         textAlign: 'right',
         lineHeight: scale(22),
         position: 'absolute',
@@ -166,9 +164,9 @@ const styles = StyleSheet.create({
         top: scale(-3),
     },
     yAxisLabelWide: {
-        fontFamily: 'Geometria-Light',
+        fontFamily: fonts.body.light,
         fontSize: scale(14),
-        color: '#2E2E43',
+        color: colors.statistics.darkText,
         textAlign: 'right',
         lineHeight: scale(22),
         position: 'absolute',
@@ -201,9 +199,9 @@ const styles = StyleSheet.create({
         minHeight: scale(8),
     },
     dayLabel: {
-        fontFamily: 'Gramatika-Regular',
+        fontFamily: fonts.heading.regular,
         fontSize: scale(10),
-        color: '#2E2E43',
+        color: colors.statistics.darkText,
         position: 'absolute',
         bottom: scale(5),
     },

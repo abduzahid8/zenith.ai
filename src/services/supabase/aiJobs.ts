@@ -47,7 +47,12 @@ export const aiJobsDbService = {
         resultJson?: Record<string, unknown>
     ): Promise<AiJob | null> => {
         const supabase = getSupabase();
-        const updates: any = { status };
+        const updates: {
+            status: AiJobStatus;
+            started_at?: string;
+            finished_at?: string;
+            result_json?: Record<string, unknown>;
+        } = { status };
 
         if (status === 'processing') {
             updates.started_at = new Date().toISOString();

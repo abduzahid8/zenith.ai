@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { scale } from '../../constants';
-import { colors } from '../../theme';
+import { colors, fonts } from '../../theme';
 import { WeeklyBarChart } from '../../components/WeeklyBarChart';
 import { HobbyTimeBarChart } from '../../components/HobbyTimeBarChart';
 import { useDeviceScreenTimeStore } from '../../store/deviceScreenTimeStore';
@@ -38,7 +38,7 @@ const StatisticsTab: React.FC = () => {
 
 
     // Handle stats page scroll for pagination animation
-    const handleStatsPageScroll = useCallback((e: any) => {
+    const handleStatsPageScroll = useCallback((e: { nativeEvent: { position: number; offset: number } }) => {
         const { position, offset } = e.nativeEvent;
         const progress = position + offset;
         const minWidth = scale(13);
@@ -208,10 +208,10 @@ const styles = StyleSheet.create({
         paddingTop: 0,
     },
     statsTitle: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(32),
         lineHeight: scale(34),
-        color: '#000',
+        color: colors.black,
         marginBottom: scale(20),
         marginTop: scale(0),
     },
@@ -272,12 +272,12 @@ const styles = StyleSheet.create({
         gap: scale(0),
     },
     statCardBigText: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(32),
-        color: '#000',
+        color: colors.black,
     },
     statCardSmallText: {
-        fontFamily: 'Gramatika-Light',
+        fontFamily: fonts.heading.light,
         fontSize: scale(16),
         color: colors.statistics.darkText,
         lineHeight: scale(20),

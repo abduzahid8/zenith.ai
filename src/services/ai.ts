@@ -18,6 +18,9 @@ async function invokeAI<T>(action: string, payload: Record<string, unknown>): Pr
 
     if (error) {
         console.error(`AI proxy error (${action}):`, error);
+        if ('context' in error) {
+            console.error('Error context:', (error as any).context);
+        }
         throw error;
     }
 
@@ -149,10 +152,21 @@ export const aiService = {
         reasons: string[];
     }>> => {
         try {
-            const parsed = await invokeAI<Array<Record<string, unknown>>>(
+            type EarningIdea = {
+                title: string;
+                category: string;
+                description: string;
+                difficulty: string;
+                income_min: number;
+                income_max: number;
+                time_to_start: string;
+                match_score: number;
+                reasons: string[];
+            };
+            const parsed = await invokeAI<EarningIdea[]>(
                 'getPersonalizedEarningIdeas', { userProfile, hobbies }
             );
-            return Array.isArray(parsed) ? parsed as any : [];
+            return Array.isArray(parsed) ? parsed : [];
         } catch {
             return [];
         }

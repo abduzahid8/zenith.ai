@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
 import { scale } from '../constants';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { MenuDrawer } from '../components/NavigationSidebar';
@@ -10,7 +9,7 @@ import { BottomNavigation } from '../components/BottomNavigation';
 import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
 import StatisticsTab from './tabs/StatisticsTab';
 
-const FireIcon = () => <Text style={{ fontSize: scale(24) }}>🔥</Text>;
+const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24) }} resizeMode="contain" />;
 
 export const StatisticsScreen: React.FC = () => {
     const { streakDays } = useUserProfileStore();
@@ -38,7 +37,7 @@ export const StatisticsScreen: React.FC = () => {
                         onPress={() => setMenuVisible(true)}
                         activeOpacity={0.7}
                     >
-                        <Feather name="menu" size={scale(24)} color={colors.text} />
+                        <Image source={require('../../icons/menu.png')} style={{ width: scale(24), height: scale(24), tintColor: colors.text }} resizeMode="contain" />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -77,7 +76,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     streakNumber: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(24),
         color: colors.text,
         lineHeight: scale(21),

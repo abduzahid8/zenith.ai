@@ -4,13 +4,11 @@ import {
     Text,
     StyleSheet,
     StatusBar,
-    TouchableOpacity,
-    ScrollView,
+    Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
 import { WeeklyBarChart } from '../components/WeeklyBarChart';
 import { MenuDrawer } from '../components/NavigationSidebar';
 import { useUserProfileStore } from '../store/userProfileStore';
@@ -18,7 +16,7 @@ import { BottomNavigation } from '../components/BottomNavigation';
 import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
 import { scale } from '../constants';
 
-const FireIcon = () => <Text style={{ fontSize: scale(24) }}>🔥</Text>;
+const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24) }} resizeMode="contain" />;
 
 const WEEK_DAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 
@@ -75,7 +73,7 @@ export const ScreenTimeScreen: React.FC = () => {
                         <FireIcon />
                     </View>
                     <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)} activeOpacity={0.7}>
-                        <Feather name="menu" size={scale(24)} color={colors.text} />
+                        <Image source={require('../../icons/menu.png')} style={{ width: scale(24), height: scale(24), tintColor: colors.text }} resizeMode="contain" />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -134,7 +132,7 @@ const styles = StyleSheet.create({
     },
     // Figma: font-size: 24px, font-weight: 700, line-height: 21px
     streakNumber: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(24),
         color: colors.text,
         lineHeight: scale(21),
@@ -146,7 +144,7 @@ const styles = StyleSheet.create({
         paddingBottom: scale(100),
     },
     screenTitle: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(32),
         lineHeight: scale(34),
         color: colors.text,
@@ -179,12 +177,12 @@ const styles = StyleSheet.create({
         minHeight: scale(100),
     },
     statCardBigText: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(32),
         color: colors.text,
     },
     statCardSmallText: {
-        fontFamily: 'Geometria-Light',
+        fontFamily: fonts.body.light,
         fontSize: scale(16),
         color: colors.statistics.darkText,
         lineHeight: scale(20),

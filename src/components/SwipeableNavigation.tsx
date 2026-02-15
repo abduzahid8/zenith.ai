@@ -4,8 +4,8 @@ import {
     StyleSheet,
     TouchableOpacity,
     ScrollView,
+    Image,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { scale, SCREEN_WIDTH } from '../constants';
 import { colors } from '../theme';
 import { APP_TAB_ROUTES } from '../config/navigation';
@@ -29,7 +29,7 @@ export const SwipeableNavigation: React.FC<SwipeableNavigationProps> = ({
         setActiveTab(index);
     };
 
-    const handleScroll = (event: any) => {
+    const handleScroll = (event: { nativeEvent: { contentOffset: { x: number } } }) => {
         const offsetX = event.nativeEvent.contentOffset.x;
         const newIndex = Math.round(offsetX / SCREEN_WIDTH);
         if (newIndex !== activeTab && newIndex >= 0 && newIndex < children.length) {
@@ -37,17 +37,7 @@ export const SwipeableNavigation: React.FC<SwipeableNavigationProps> = ({
         }
     };
 
-    const renderTabIcon = (tab: typeof TABS[number], index: number) => {
-        const isActive = activeTab === index;
-        const color = isActive ? colors.text : colors.textLight;
-        const iconName = isActive ? tab.icon : tab.iconOutline;
 
-        if (tab.type === 'ionicon') {
-            return <Ionicons name={iconName as any} size={scale(28)} color={color} />;
-        } else {
-            return <MaterialCommunityIcons name={iconName as any} size={scale(28)} color={color} />;
-        }
-    };
 
     return (
         <View style={styles.container}>
@@ -76,7 +66,15 @@ export const SwipeableNavigation: React.FC<SwipeableNavigationProps> = ({
                         style={styles.navItem}
                         onPress={() => handleTabPress(index)}
                     >
-                        {renderTabIcon(tab, index)}
+                        <Image
+                            source={tab.image}
+                            style={{
+                                width: scale(28),
+                                height: scale(28),
+                                opacity: activeTab === index ? 1 : 0.5
+                            }}
+                            resizeMode="contain"
+                        />
                     </TouchableOpacity>
                 ))}
             </View>

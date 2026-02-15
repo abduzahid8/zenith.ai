@@ -1,10 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions, Image } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const FIGMA_WIDTH = 402;
-const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
+import { colors, fonts } from '../theme';
+import { scale } from '../constants';
 
 interface DayData {
     day: string;
@@ -115,7 +113,7 @@ const styles = StyleSheet.create({
     },
     // Figma: width: 362px, height: 304px, border-radius: 30px, background: #D6DEF8
     chartContainer: {
-        backgroundColor: '#D6DEF8',
+        backgroundColor: colors.aiCoach.bubble,
         borderRadius: scale(30),
         height: scale(258),
         alignSelf: 'center',
@@ -166,9 +164,9 @@ const styles = StyleSheet.create({
     },
     // Text anchored to the right - width is large to fit any content
     yAxisLabel: {
-        fontFamily: 'Geometria-Light',
+        fontFamily: fonts.body.light,
         fontSize: scale(14),
-        color: '#2E2E43',
+        color: colors.statistics.darkText,
         textAlign: 'right',
         lineHeight: scale(22),
         position: 'absolute',
@@ -179,9 +177,9 @@ const styles = StyleSheet.create({
     },
     // 7+ label - same style
     yAxisLabelWide: {
-        fontFamily: 'Geometria-Light',
+        fontFamily: fonts.body.light,
         fontSize: scale(14),
-        color: '#2E2E43',
+        color: colors.statistics.darkText,
         textAlign: 'right',
         lineHeight: scale(22),
         position: 'absolute',
@@ -214,13 +212,13 @@ const styles = StyleSheet.create({
         borderTopRightRadius: scale(8),
         borderBottomLeftRadius: 0,
         borderBottomRightRadius: 0,
-        backgroundColor: '#37A0EF',
+        backgroundColor: colors.sessionTimer.primary,
         minHeight: scale(8),
     },
     dayLabel: {
-        fontFamily: 'Gramatika-Regular',
+        fontFamily: fonts.heading.regular,
         fontSize: scale(10),
-        color: '#2E2E43',
+        color: colors.statistics.darkText,
         position: 'absolute',
         bottom: scale(5),
     },

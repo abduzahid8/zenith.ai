@@ -10,6 +10,7 @@ import {
     UIManager,
     Animated,
     Easing,
+    Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -20,9 +21,9 @@ if (Platform.OS === 'android') {
 }
 
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+// import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons'; // Removing unused vector icons
 import PagerView from 'react-native-pager-view';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
 import { MenuDrawer } from '../components/NavigationSidebar';
 import { useAuthStore } from '../store/authStore';
 import { useUserProfileStore, getGreeting } from '../store/userProfileStore';
@@ -36,7 +37,7 @@ import WeeklyPlanTab from './tabs/WeeklyPlanTab';
 import AICoachTab from './tabs/AICoachTab';
 import StatisticsTab from './tabs/StatisticsTab';
 
-const FireIcon = () => <Text style={{ fontSize: scale(24) }}>🔥</Text>;
+const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24) }} resizeMode="contain" />;
 const ChessIcon = () => (
     <View style={styles.chessIcon}>
         <Text style={{ fontSize: scale(22) }}>♞</Text>
@@ -121,7 +122,7 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
         setActiveTab(index);
     };
 
-    const handlePageSelected = (event: any) => {
+    const handlePageSelected = (event: { nativeEvent: { position: number } }) => {
         const newIndex = event.nativeEvent.position;
         if (newIndex !== activeTab) {
             setActiveTab(newIndex);
@@ -130,14 +131,17 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
 
     const renderTabIcon = (tab: (typeof TABS)[number], index: number) => {
         const isActive = activeTab === index;
-        const color = isActive ? colors.text : colors.textLight;
-        const iconName = isActive ? tab.icon : tab.iconOutline;
-
-        if (tab.type === 'ionicon') {
-            return <Ionicons name={iconName as any} size={scale(28)} color={color} />;
-        } else {
-            return <MaterialCommunityIcons name={iconName as any} size={scale(28)} color={color} />;
-        }
+        return (
+            <Image
+                source={tab.image}
+                style={{
+                    width: scale(28),
+                    height: scale(28),
+                    opacity: isActive ? 1 : 0.5
+                }}
+                resizeMode="contain"
+            />
+        );
     };
 
     const getHeaderTitle = () => {
@@ -161,7 +165,7 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
                         <FireIcon />
                     </View>
                     <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)} activeOpacity={0.7}>
-                        <Feather name="menu" size={scale(24)} color={colors.text} />
+                        <Image source={require('../../icons/menu.png')} style={{ width: scale(24), height: scale(24), tintColor: colors.text }} resizeMode="contain" />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -228,7 +232,7 @@ const styles = StyleSheet.create({
         paddingBottom: scale(16),
     },
     greetingText: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(32),
         lineHeight: scale(38),
         color: colors.text,
@@ -249,7 +253,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     streakNumber: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(24),
         color: colors.text,
     },

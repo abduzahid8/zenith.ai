@@ -6,14 +6,10 @@ import {
     Modal,
     TouchableOpacity,
     TouchableWithoutFeedback,
-    Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-// Scale from Figma (402x874) to device
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const FIGMA_WIDTH = 402;
-const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
+import { colors, fonts } from '../theme';
+import { scale } from '../constants';
 
 interface WarningModalProps {
     visible: boolean;
@@ -39,11 +35,11 @@ export const WarningModal: React.FC<WarningModalProps> = ({
     const getIconColor = () => {
         switch (type) {
             case 'danger':
-                return '#FF3B30';
+                return colors.error;
             case 'info':
-                return '#007AFF';
+                return colors.link;
             default:
-                return '#FF9500';
+                return colors.warning;
         }
     };
 
@@ -130,11 +126,11 @@ const styles = StyleSheet.create({
     },
     modal: {
         width: '100%',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: colors.warningModal.surface,
         borderRadius: scale(20),
         padding: scale(24),
         alignItems: 'center',
-        shadowColor: '#000',
+        shadowColor: colors.warningModal.shadow,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.25,
         shadowRadius: 16,
@@ -149,16 +145,16 @@ const styles = StyleSheet.create({
         marginBottom: scale(16),
     },
     title: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(22),
-        color: '#000',
+        color: colors.black,
         textAlign: 'center',
         marginBottom: scale(12),
     },
     message: {
-        fontFamily: 'Gramatika-Regular',
+        fontFamily: fonts.heading.regular,
         fontSize: scale(16),
-        color: '#666',
+        color: colors.textSecondary,
         textAlign: 'center',
         lineHeight: scale(24),
         marginBottom: scale(24),
@@ -172,14 +168,14 @@ const styles = StyleSheet.create({
         flex: 1,
         height: scale(52),
         borderRadius: scale(26),
-        backgroundColor: '#F5F5F5',
+        backgroundColor: colors.surfaceLight,
         justifyContent: 'center',
         alignItems: 'center',
     },
     cancelButtonText: {
-        fontFamily: 'Gramatika-Medium',
+        fontFamily: fonts.heading.medium,
         fontSize: scale(16),
-        color: '#000',
+        color: colors.black,
     },
     confirmButton: {
         flex: 1,
@@ -189,15 +185,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     confirmButtonDefault: {
-        backgroundColor: '#E8E4DF',
+        backgroundColor: colors.warningModal.confirmDefault,
     },
     confirmButtonDanger: {
-        backgroundColor: '#FF3B30',
+        backgroundColor: colors.error,
     },
     confirmButtonText: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(16),
-        color: '#000',
+        color: colors.black,
     },
 });
 

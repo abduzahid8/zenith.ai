@@ -6,19 +6,15 @@ import {
     StatusBar,
     TouchableOpacity,
     ScrollView,
-    Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LogoNew } from '../components/Logo';
 import { Button } from '../components/Button';
-import { colors, spacing } from '../theme';
+import { colors, fonts, spacing } from '../theme';
+import { scale } from '../constants';
+import { ROUTES } from '../config/routes';
 import { useUserProfileStore } from '../store/userProfileStore';
-
-// Scale helper
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const FIGMA_WIDTH = 402;
-const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
 
 interface PlanFeature {
     text: string;
@@ -56,7 +52,7 @@ export const SubscriptionScreen: React.FC = () => {
             setPremium(false);
         }
         completeOnboarding();
-        router.replace('/(app)/' as any);
+        router.replace(ROUTES.APP as any);
     };
 
     return (
@@ -140,7 +136,7 @@ export const SubscriptionScreen: React.FC = () => {
                     onPress={() => {
                         setPremium(true);
                         completeOnboarding();
-                        router.replace('/(app)/' as any);
+                        router.replace(ROUTES.APP as any);
                     }}
                     variant="primary"
                     size="large"
@@ -151,7 +147,7 @@ export const SubscriptionScreen: React.FC = () => {
                     onPress={() => {
                         setPremium(false);
                         completeOnboarding();
-                        router.replace('/(app)/' as any);
+                        router.replace(ROUTES.APP as any);
                     }}
                     activeOpacity={0.7}
                 >
@@ -177,10 +173,10 @@ const styles = StyleSheet.create({
         marginBottom: scale(30),
     },
     titleText: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(24),
         lineHeight: scale(30),
-        color: '#08132A',
+        color: colors.text,
         textAlign: 'center',
         width: scale(271),
     },
@@ -200,10 +196,10 @@ const styles = StyleSheet.create({
         borderColor: 'transparent',
     },
     freeCard: {
-        backgroundColor: '#C4DCFB',
+        backgroundColor: colors.subscription.freeCardBg,
     },
     premiumCard: {
-        backgroundColor: '#102852',
+        backgroundColor: colors.buttonPrimary,
     },
     planHeader: {
         flexDirection: 'row',
@@ -212,27 +208,27 @@ const styles = StyleSheet.create({
         marginBottom: scale(6),
     },
     planTitle: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(22),
-        color: '#08132A',
+        color: colors.text,
     },
     premiumTitle: {
-        color: '#FFFFFF',
+        color: colors.white,
     },
     planPrice: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(22),
-        color: '#08132A',
+        color: colors.text,
     },
     premiumPrice: {
-        color: '#00FFC2',
+        color: colors.subscription.premiumAccent,
     },
     priceContainer: {
         flexDirection: 'row',
         alignItems: 'baseline',
     },
     planPeriod: {
-        fontFamily: 'Gramatika-Regular',
+        fontFamily: fonts.heading.regular,
         fontSize: scale(14),
         color: 'rgba(255,255,255,0.7)',
         marginLeft: scale(4),
@@ -245,24 +241,24 @@ const styles = StyleSheet.create({
         alignItems: 'flex-start',
     },
     featureBullet: {
-        fontFamily: 'Gramatika-Regular',
+        fontFamily: fonts.heading.regular,
         fontSize: scale(13),
-        color: '#08132A',
+        color: colors.text,
         marginRight: scale(8),
         lineHeight: scale(18),
     },
     premiumBullet: {
-        color: '#00FFC2',
+        color: colors.subscription.premiumAccent,
     },
     featureText: {
         flex: 1,
-        fontFamily: 'Gramatika-Regular',
+        fontFamily: fonts.heading.regular,
         fontSize: scale(13),
-        color: '#08132A',
+        color: colors.text,
         lineHeight: scale(17),
     },
     premiumFeatureText: {
-        color: '#FFFFFF',
+        color: colors.white,
     },
     buttonContainer: {
         paddingHorizontal: scale(24),
@@ -270,7 +266,7 @@ const styles = StyleSheet.create({
         paddingTop: scale(20),
     },
     continueButton: {
-        backgroundColor: '#102852',
+        backgroundColor: colors.buttonPrimary,
         borderRadius: scale(30),
     },
     freeLink: {
@@ -279,9 +275,9 @@ const styles = StyleSheet.create({
         paddingVertical: scale(5),
     },
     freeLinkText: {
-        fontFamily: 'Gramatika-Medium',
+        fontFamily: fonts.heading.medium,
         fontSize: scale(16),
-        color: '#08132A',
+        color: colors.text,
     },
 });
 

@@ -12,7 +12,11 @@ interface TaskState {
     lastFetchDate: string | null;
 
     fetchDailyPlan: (userId: string) => Promise<void>;
-    completeTask: (userId: string, taskId: string) => Promise<void>;
+    completeTask: (userId: string, taskId: string, feedback?: {
+        difficulty_rating?: number;
+        engagement_rating?: number;
+        user_notes?: string;
+    }) => Promise<void>;
     skipTask: (userId: string, taskId: string) => Promise<void>;
     resetTasks: () => void;
 }
@@ -38,21 +42,29 @@ export const useTaskStore = create<TaskState>()(
                 try {
                     const tasks = await taskService.getDailyPlan(userId, today);
                     set({ dailyTasks: tasks, lastFetchDate: today, loading: false });
-                } catch (e: any) {
-                    set({ error: e.message, loading: false });
+                } catch (e: unknown) {
+                    set({ error: e instanceof Error ? e.message : 'Unknown error', loading: false });
                 }
             },
 
-            completeTask: async (userId: string, taskId: string) => {
+            completeTask: async (userId: string, taskId: string, feedback?: {
+                difficulty_rating?: number;
+                engagement_rating?: number;
+                user_notes?: string;
+            }) => {
                 // Optimistic update
                 set((state) => ({
                     dailyTasks: state.dailyTasks.map(t =>
-                        t.id === taskId ? { ...t, status: 'completed' } : t
+                        t.id === taskId ? {
+                            ...t,
+                            status: 'completed',
+                            ...(feedback || {}) // Apply feedback to local state optimistically
+                        } : t
                     )
                 }));
 
                 try {
-                    const updated = await taskService.completeTask(userId, taskId);
+                    const updated = await taskService.completeTask(userId, taskId, feedback);
                     if (updated) {
                         set((state) => ({
                             dailyTasks: state.dailyTasks.map(t =>
@@ -60,7 +72,7 @@ export const useTaskStore = create<TaskState>()(
                             )
                         }));
                     }
-                } catch (e: any) {
+                } catch (e: unknown) {
                     console.error('Failed to complete task:', e);
                     set((state) => ({
                         dailyTasks: state.dailyTasks.map((t) =>
@@ -87,7 +99,7 @@ export const useTaskStore = create<TaskState>()(
                             )
                         }));
                     }
-                } catch (e: any) {
+                } catch (e: unknown) {
                     console.error('Failed to skip task:', e);
                     set((state) => ({
                         dailyTasks: state.dailyTasks.map((t) =>

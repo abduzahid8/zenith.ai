@@ -57,10 +57,10 @@ export const contentDbService = {
         const updates: Partial<UserContentHistory> = { status, ...extras };
 
         if (status === 'started' && !extras?.started_at) {
-            (updates as any).started_at = new Date().toISOString();
+            updates.started_at = new Date().toISOString();
         }
         if (status === 'completed' && !extras?.completed_at) {
-            (updates as any).completed_at = new Date().toISOString();
+            updates.completed_at = new Date().toISOString();
             updates.progress_percent = 100;
         }
 

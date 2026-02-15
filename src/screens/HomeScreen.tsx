@@ -7,11 +7,11 @@ import {
     TouchableOpacity,
     Platform,
     Animated,
+    Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
 import { scale } from '../constants';
 import { useUserProfileStore, getGreeting } from '../store/userProfileStore';
 import { MenuDrawer } from '../components/NavigationSidebar';
@@ -20,9 +20,8 @@ import { HomeScreenSkeleton } from '../components/UIStateComponents';
 import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
 import HomeTab from './tabs/HomeTab';
 
-// Fire emoji SVG component
 const FireIcon = () => (
-    <Text style={{ fontSize: scale(24) }}>🔥</Text>
+    <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24) }} resizeMode="contain" />
 );
 
 // Chess piece icon
@@ -84,7 +83,7 @@ export const HomeScreen: React.FC = () => {
                         <FireIcon />
                     </View>
                     <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)} activeOpacity={0.7}>
-                        <Feather name="menu" size={scale(24)} color={colors.text} />
+                        <Image source={require('../../icons/menu.png')} style={{ width: scale(24), height: scale(24), tintColor: colors.text }} resizeMode="contain" />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -115,7 +114,7 @@ const styles = StyleSheet.create({
     },
     // Figma: font-size 32px, weight 700, line-height 22px
     greetingText: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(32),
         lineHeight: scale(38),
         color: colors.text,
@@ -137,7 +136,7 @@ const styles = StyleSheet.create({
     },
     // Figma: font-size 24px, weight 700
     streakNumber: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(24),
         color: colors.text,
     },

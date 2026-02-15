@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet, ViewStyle, DimensionValue } from 'react-native';
 import { scale } from '../constants';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
 
 interface SkeletonProps {
     width: DimensionValue;
@@ -148,14 +148,14 @@ const skeletonStyles = StyleSheet.create({
         fontSize: scale(36),
     },
     emptyTitle: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(20),
         color: colors.text,
         textAlign: 'center',
         marginBottom: scale(8),
     },
     emptySubtitle: {
-        fontFamily: 'Gramatika-Light',
+        fontFamily: fonts.heading.light,
         fontSize: scale(15),
         color: '#8E8E93',
         textAlign: 'center',

@@ -42,6 +42,7 @@ export { notificationDbService } from './notifications';
 export { tasksDbService } from './tasks';
 export { userStateSnapshotService } from './userStateSnapshot';
 export { aiJobsDbService } from './aiJobs';
+export { metricService } from '../metricService';
 
 // Backward-compatible composite dbService
 // Composed from all individual services so existing consumers don't break

@@ -73,13 +73,14 @@ export const useAuthStore = create<AuthState>()(
                     isAuthenticated: true,
                     isLoading: false,
                 });
-            } catch (error: any) {
+            } catch (error: unknown) {
                 console.error('Login error:', error);
-                let errorMessage = error.message;
+                const msg = error instanceof Error ? error.message : 'Unknown error';
+                let errorMessage = msg;
 
-                if (errorMessage.includes('Email not confirmed')) {
+                if (msg.includes('Email not confirmed')) {
                     errorMessage = 'Email не подтвержден. Проверьте почту.';
-                } else if (errorMessage.includes('Invalid login credentials')) {
+                } else if (msg.includes('Invalid login credentials')) {
                     errorMessage = 'Неверный email или пароль.';
                 }
 
@@ -102,9 +103,10 @@ export const useAuthStore = create<AuthState>()(
                     isAuthenticated: !!session,
                     isLoading: false,
                 });
-            } catch (error: any) {
+            } catch (error: unknown) {
                 console.error('Signup error:', error);
-                set({ error: error.message, isLoading: false });
+                const msg = error instanceof Error ? error.message : 'Unknown error';
+                set({ error: msg, isLoading: false });
                 throw error;
             }
         },
@@ -123,8 +125,9 @@ export const useAuthStore = create<AuthState>()(
                     isAuthenticated: false,
                     isLoading: false,
                 });
-            } catch (error: any) {
-                set({ error: error.message, isLoading: false });
+            } catch (error: unknown) {
+                const msg = error instanceof Error ? error.message : 'Unknown error';
+                set({ error: msg, isLoading: false });
             }
         },
 

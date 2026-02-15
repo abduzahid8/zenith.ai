@@ -8,6 +8,7 @@ import { useAuthStore } from '../src/store/authStore';
 import { useUserProfileStore } from '../src/store/userProfileStore';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { colors } from '../src/theme';
+import { ROUTES } from '../src/config/routes';
 
 export default function RootLayout() {
     const [appIsReady, setAppIsReady] = useState(false);
@@ -48,7 +49,7 @@ export default function RootLayout() {
 
         if (!isAuthenticated) {
             if (!inAuthGroup) {
-                router.replace('/(auth)/' as any);
+                router.replace(ROUTES.AUTH as any);
             }
         } else {
             // User is authenticated
@@ -62,7 +63,7 @@ export default function RootLayout() {
                 // Check if user is in auth group or onboarding flow (optional: allow revisiting subscription?)
                 // For strict prototype, force to app if in auth
                 if (inAuthGroup) {
-                    router.replace('/(app)/' as any);
+                    router.replace(ROUTES.APP as any);
                 }
             }
         }

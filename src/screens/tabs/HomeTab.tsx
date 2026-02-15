@@ -10,7 +10,7 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { scale } from '../../constants';
-import { colors } from '../../theme';
+import { colors, fonts } from '../../theme';
 
 const booksImage = require('../../../assets/images/home-books.png');
 const targetImage = require('../../../assets/images/home-target.png');
@@ -190,10 +190,10 @@ const styles = StyleSheet.create({
         transform: [{ rotate: '-5.4deg' }],
     },
     cardTitle: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(24),
         lineHeight: scale(26),
-        color: '#1E1E2E',
+        color: colors.home.darkText,
         zIndex: 1,
     },
     dailyGoalButton: {
@@ -244,10 +244,10 @@ const styles = StyleSheet.create({
         bottom: scale(-40),
     },
     smallCardTitle: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(24),
         lineHeight: scale(28),
-        color: '#1E1E2E',
+        color: colors.home.darkText,
     },
 });
 

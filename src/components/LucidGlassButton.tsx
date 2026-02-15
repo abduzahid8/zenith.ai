@@ -5,15 +5,11 @@ import {
     TouchableWithoutFeedback,
     ViewStyle,
     TextStyle,
-    Dimensions,
     Animated,
     View,
 } from 'react-native';
-
-// Screen scaling
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const FIGMA_WIDTH = 402;
-const scale = (size: number) => (SCREEN_WIDTH / FIGMA_WIDTH) * size;
+import { colors, fonts } from '../theme';
+import { scale } from '../constants';
 
 interface LucidGlassButtonProps {
     /** Button text */
@@ -134,16 +130,16 @@ const styles = StyleSheet.create({
         paddingHorizontal: scale(24),
         borderRadius: scale(24),
         borderWidth: 2,
-        borderColor: '#000',
+        borderColor: colors.black,
         backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
         flexDirection: 'row',
     },
     text: {
-        fontFamily: 'Gramatika-Medium',
+        fontFamily: fonts.heading.medium,
         fontSize: scale(16),
-        color: '#000',
+        color: colors.black,
         textAlign: 'center',
     },
 });

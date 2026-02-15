@@ -1,5 +1,6 @@
 import { tasksDbService } from './supabase/tasks';
 import { userStateSnapshotService } from './supabase/userStateSnapshot';
+import { metricService } from './metricService';
 import { dbService } from './supabase'; // Access to all other services
 import { taskEngine } from './taskEngine';
 import { aiJobService } from './aiJobService';
@@ -56,9 +57,20 @@ export const taskService = {
     },
 
     // Complete a task
-    completeTask: async (userId: string, taskId: string): Promise<Task | null> => {
-        // Update status
-        const updatedTask = await tasksDbService.updateTaskStatus(userId, taskId, 'completed');
+    completeTask: async (userId: string, taskId: string, feedback?: {
+        difficulty_rating?: number;
+        engagement_rating?: number;
+        user_notes?: string;
+    }): Promise<Task | null> => {
+        // Update status and feedback
+        const updates: any = { status: 'completed' };
+        if (feedback) {
+            if (feedback.difficulty_rating) updates.difficulty_rating = feedback.difficulty_rating;
+            if (feedback.engagement_rating) updates.engagement_rating = feedback.engagement_rating;
+            if (feedback.user_notes) updates.user_notes = feedback.user_notes;
+        }
+
+        const updatedTask = await tasksDbService.updateTaskStatus(userId, taskId, 'completed', updates);
 
         if (updatedTask) {
             // Update stats
@@ -67,6 +79,14 @@ export const taskService = {
             const newCount = (currentStats?.tasks_completed || 0) + 1;
 
             await dbService.updateDailyStats(userId, today, { tasks_completed: newCount });
+
+            // Sync Data Quality Metrics (fire and forget)
+            if (updatedTask.scheduled_date) {
+                metricService.syncDailyMetrics(userId, updatedTask.scheduled_date).catch((err: unknown) =>
+                    console.error('Background metric sync failed', err)
+                );
+            }
+
             await dbService.incrementStreak(userId);
 
             // Check AI triggers

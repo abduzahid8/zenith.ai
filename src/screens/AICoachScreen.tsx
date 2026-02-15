@@ -10,6 +10,7 @@ import {
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
+    Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -134,7 +135,7 @@ export const AICoachScreen: React.FC = () => {
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text} />
+                    <Image source={require('../../icons/back.png')} style={{ width: scaleWidth(24), height: scaleWidth(24), tintColor: colors.text }} resizeMode="contain" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>ИИ-тренер</Text>
                 <View style={styles.placeholder} />

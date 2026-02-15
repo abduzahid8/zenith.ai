@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { scale } from '../../constants';
-import { colors } from '../../theme';
+import { colors, fonts } from '../../theme';
 import { aiService, ChatMessage } from '../../services/ai';
 import { useUserProfileStore } from '../../store/userProfileStore';
 
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
         paddingBottom: scale(100),
     },
     aiTitle: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(36),
         lineHeight: scale(36),
         color: colors.aiCoach.darkText,
@@ -228,10 +228,10 @@ const styles = StyleSheet.create({
         gap: scale(10),
     },
     suggestionText: {
-        fontFamily: 'Geometria-Light',
+        fontFamily: fonts.body.light,
         fontSize: scale(13),
         lineHeight: scale(22),
-        color: '#000',
+        color: colors.black,
         textAlign: 'right',
     },
     aiChatList: {
@@ -258,15 +258,15 @@ const styles = StyleSheet.create({
         borderBottomLeftRadius: scale(5),
     },
     aiMessageText: {
-        fontFamily: 'Geometria-Light',
+        fontFamily: fonts.body.light,
         fontSize: scale(15),
         lineHeight: scale(20),
     },
     aiUserMessageText: {
-        color: '#000',
+        color: colors.black,
     },
     aiAssistantMessageText: {
-        color: '#000',
+        color: colors.black,
     },
     aiLoadingContainer: {
         flexDirection: 'row',
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
     },
     aiLoadingText: {
         marginLeft: scale(8),
-        fontFamily: 'Geometria-Light',
+        fontFamily: fonts.body.light,
         fontSize: scale(14),
         color: colors.aiCoach.text,
     },
@@ -298,9 +298,9 @@ const styles = StyleSheet.create({
     },
     aiInput: {
         flex: 1,
-        fontFamily: 'Geometria-Light',
+        fontFamily: fonts.body.light,
         fontSize: scale(18),
-        color: '#000',
+        color: colors.black,
         paddingVertical: scale(8),
     },
     sendButton: {

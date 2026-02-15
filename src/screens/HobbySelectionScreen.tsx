@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, StatusBar, TouchableOpacity, ActivityIndicator,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LogoNew } from '../components/Logo';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { useQuizStore } from '../store/quizStore';
 import { useAuthStore } from '../store/authStore';
@@ -23,10 +23,10 @@ const circleStyles = StyleSheet.create({
         width: CIRCLE_SIZE,
         height: CIRCLE_SIZE,
         borderRadius: CIRCLE_SIZE / 2,
-        backgroundColor: '#C8D0DC',
+        backgroundColor: colors.hobbySelection.unselectedBg,
     },
     circleSelected: {
-        backgroundColor: '#08132A',
+        backgroundColor: colors.text,
     },
 });
 
@@ -58,11 +58,11 @@ export default function HobbySelectionScreen() {
             setSelectedHobby(selectedId);
             completeOnboarding();
             router.push('/subscription');
-        } catch (e: any) {
+        } catch (e: unknown) {
             setSaving(false);
             Alert.alert(
                 'Ошибка',
-                e?.message || 'Не удалось сохранить выбор. Проверьте интернет и попробуйте снова.',
+                e instanceof Error ? e.message : 'Не удалось сохранить выбор. Проверьте интернет и попробуйте снова.',
                 [{ text: 'OK' }]
             );
         }
@@ -158,17 +158,17 @@ const styles = StyleSheet.create({
         marginTop: scale(80),
     },
     titleText: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(24),
         lineHeight: scale(30),
-        color: '#08132A',
+        color: colors.text,
         width: scale(175),
         marginBottom: scale(16),
     },
     subtitleText: {
-        fontFamily: 'Gramatika-Light',
+        fontFamily: fonts.heading.light,
         fontSize: scale(20),
-        color: '#08132A',
+        color: colors.text,
         width: scale(342),
     },
     hobbiesContainer: {
@@ -184,18 +184,18 @@ const styles = StyleSheet.create({
         paddingVertical: scale(11),
         paddingHorizontal: scale(20),
         borderRadius: scale(40),
-        backgroundColor: '#DAE7F8',
+        backgroundColor: colors.hobbySelection.selectedBorderBg,
     },
     hobbyRowSelected: {
-        backgroundColor: '#37A0EF',
+        backgroundColor: colors.hobbySelection.selectedBg,
     },
     hobbyLabel: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(16),
-        color: '#08132A',
+        color: colors.text,
     },
     hobbyLabelSelected: {
-        color: '#08132A',
+        color: colors.text,
     },
     spacer: {
         flex: 1,
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
         width: scale(315),
         height: scale(60),
         borderRadius: scale(30),
-        backgroundColor: '#102852',
+        backgroundColor: colors.buttonPrimary,
         justifyContent: 'center',
         alignItems: 'center',
         padding: scale(10),
@@ -218,15 +218,15 @@ const styles = StyleSheet.create({
         opacity: 0.5,
     },
     continueButtonText: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: scale(20),
         color: '#FFF',
         textAlign: 'center',
     },
     noteText: {
-        fontFamily: 'Gramatika-Light',
+        fontFamily: fonts.heading.light,
         fontSize: scale(10),
-        color: '#08132A',
+        color: colors.text,
         textAlign: 'center',
         marginTop: scale(12),
     },

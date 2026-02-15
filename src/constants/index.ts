@@ -17,13 +17,9 @@ export const scale = (size: number): number =>
     (SCREEN_WIDTH / FIGMA_WIDTH) * size;
 
 /**
- * Tab configuration used by MainTabsScreen and SessionTimerScreen bottom nav.
+ * Tab configuration — re-exported from config/navigation.ts (single source of truth).
  */
-export const TABS = [
-    { key: 'home', icon: 'home', iconOutline: 'home-outline', type: 'ionicon' as const },
-    { key: 'weekly-plan', icon: 'clipboard-text', iconOutline: 'clipboard-text-outline', type: 'material' as const },
-    { key: 'ai-coach', icon: 'lightbulb', iconOutline: 'lightbulb-outline', type: 'material' as const },
-    { key: 'statistics', icon: 'bar-chart', iconOutline: 'bar-chart-outline', type: 'ionicon' as const },
-] as const;
-
-export type TabConfig = typeof TABS[number];
+import { APP_TAB_ROUTES } from '../config/navigation';
+export { APP_TAB_ROUTES as TABS };
+export type { AppTabKey } from '../config/navigation';
+export type TabConfig = (typeof APP_TAB_ROUTES)[number];

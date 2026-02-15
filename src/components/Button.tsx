@@ -7,7 +7,7 @@ import {
     TextStyle,
     ActivityIndicator,
 } from 'react-native';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
 
 interface ButtonProps {
     title: string;
@@ -113,13 +113,13 @@ const styles = StyleSheet.create({
         backgroundColor: '#6E5EFF', // Gradient approximation as solid color
     },
     buttonText: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: 18,
         color: colors.text,
         textAlign: 'center',
     },
     outlineText: {
-        fontFamily: 'Gramatika-Medium',
+        fontFamily: fonts.heading.medium,
         fontSize: 16,
         color: colors.text,
         textAlign: 'center',

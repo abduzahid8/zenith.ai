@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { FontAwesome } from '@expo/vector-icons';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
 import { Button } from '../components/Button';
 
 
@@ -122,19 +122,19 @@ const styles = StyleSheet.create({
         gap: 10,
     },
     headerTitle: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: 26,
-        color: '#102852',
+        color: colors.buttonPrimary,
     },
     subtitleContainer: {
         alignItems: 'flex-start',
         marginBottom: 0,
     },
     subtitleText: {
-        fontFamily: 'Gramatika-Light',
+        fontFamily: fonts.heading.light,
         fontSize: 16,
         lineHeight: 24,
-        color: '#444444',
+        color: colors.textMuted,
         textAlign: 'left',
         width: '90%',
     },
@@ -154,12 +154,12 @@ const styles = StyleSheet.create({
     dividerLine: {
         flex: 1,
         height: 1,
-        backgroundColor: '#C8C8C8',
+        backgroundColor: colors.auth.divider,
     },
     dividerText: {
-        fontFamily: 'Gramatika-Regular',
+        fontFamily: fonts.heading.regular,
         fontSize: 14,
-        color: '#999999',
+        color: colors.auth.dividerText,
         marginHorizontal: 16,
     },
     socialContainer: {
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
         height: 56,
         borderRadius: 28,
         borderWidth: 1,
-        borderColor: '#C8C8C8',
+        borderColor: colors.auth.socialBorder,
         backgroundColor: 'transparent',
         gap: 12,
     },
@@ -182,8 +182,8 @@ const styles = StyleSheet.create({
         height: 24,
     },
     socialButtonText: {
-        fontFamily: 'Gramatika-Medium',
+        fontFamily: fonts.heading.medium,
         fontSize: 18,
-        color: '#000000',
+        color: colors.black,
     },
 });

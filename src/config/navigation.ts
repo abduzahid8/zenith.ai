@@ -12,10 +12,10 @@ const TAB_INDEX: Record<AppTabKey, number> = {
 };
 
 export const APP_TAB_ROUTES = [
-  { key: 'home' as const, icon: 'home', iconOutline: 'home-outline', type: 'ionicon' as const },
-  { key: 'weekly-plan' as const, icon: 'clipboard-text', iconOutline: 'clipboard-text-outline', type: 'material' as const },
-  { key: 'ai-coach' as const, icon: 'lightbulb', iconOutline: 'lightbulb-outline', type: 'material' as const },
-  { key: 'statistics' as const, icon: 'bar-chart', iconOutline: 'bar-chart-outline', type: 'ionicon' as const },
+  { key: 'home' as const, icon: 'home', iconOutline: 'home-outline', type: 'ionicon' as const, image: require('../../icons/home.png') },
+  { key: 'weekly-plan' as const, icon: 'clipboard-text', iconOutline: 'clipboard-text-outline', type: 'material' as const, image: require('../../icons/tasks.png') },
+  { key: 'ai-coach' as const, icon: 'lightbulb', iconOutline: 'lightbulb-outline', type: 'material' as const, image: require('../../icons/assistant.png') },
+  { key: 'statistics' as const, icon: 'bar-chart', iconOutline: 'bar-chart-outline', type: 'ionicon' as const, image: require('../../icons/stats.png') },
 ] as const;
 
 /** Navigate to main screen (MainTabsScreen) on the given tab. Use with router.replace(). */
