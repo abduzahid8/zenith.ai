@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-import PagerView from 'react-native-pager-view';
+import PagerView from '../components/ui/PagerView';
 import { scale } from '../constants';
 import { colors, fonts } from '../theme';
 import { APP_TAB_ROUTES, getMainTabUrl } from '../config/navigation';

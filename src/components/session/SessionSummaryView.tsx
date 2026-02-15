@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import PagerView from 'react-native-pager-view';
+import PagerView from '../ui/PagerView';
 import { scale } from '../../constants';
 import { colors, fonts } from '../../theme';
 import { SessionTask } from './TaskDrawer';

@@ -22,7 +22,7 @@ if (Platform.OS === 'android') {
 
 import { useRouter, useFocusEffect } from 'expo-router';
 // import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons'; // Removing unused vector icons
-import PagerView from 'react-native-pager-view';
+import PagerView from '../components/ui/PagerView';
 import { colors, fonts } from '../theme';
 import { MenuDrawer } from '../components/NavigationSidebar';
 import { useAuthStore } from '../store/authStore';

@@ -6,7 +6,7 @@ import {
     ScrollView,
     Animated,
 } from 'react-native';
-import PagerView from 'react-native-pager-view';
+import PagerView from '../../components/ui/PagerView';
 import { scale } from '../../constants';
 import { colors, fonts } from '../../theme';
 import { WeeklyBarChart } from '../../components/WeeklyBarChart';
