@@ -3,8 +3,9 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet, View, Text, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ActivityIndicator, AppState } from 'react-native';
 import { useAuthStore } from '../src/store/authStore';
+import { useTaskStore } from '../src/store/taskStore';
 import { useUserProfileStore } from '../src/store/userProfileStore';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { colors } from '../src/theme';
@@ -40,6 +41,22 @@ export default function RootLayout() {
             setAppIsReady(true);
         }
     }, [fontsLoaded, fontError]);
+
+    // Handle app state changes for midnight reset
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', nextAppState => {
+            if (nextAppState === 'active') {
+                const { user } = useAuthStore.getState();
+                if (user?.id) {
+                    useTaskStore.getState().fetchDailyPlan(user.id);
+                }
+            }
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, []);
 
     useEffect(() => {
         if (isLoading || !appIsReady) return;
@@ -99,8 +116,22 @@ export default function RootLayout() {
                         <Stack.Screen
                             name="session-timer"
                             options={{
-                                presentation: 'fullScreenModal',
                                 animation: 'slide_from_bottom',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="your-tasks"
+                            options={{
+                                presentation: 'card',
+                                animation: 'slide_from_right',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="category/[id]"
+                            options={{
+                                presentation: 'card',
+                                animation: 'slide_from_right',
+                                title: ''
                             }}
                         />
                     </Stack>

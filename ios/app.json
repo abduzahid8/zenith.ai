@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Your App (Dev Client)",
+    "slug": "your-app-devclient",
+    "version": "1.0.0",
+    "scheme": "yourapp-dev",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.example.app.dev",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "infoPlist": {
+        "EXUpdatesEnabled": false
+      }
+    },
+    "android": {
+      "package": "com.example.app.dev",
+      "versionCode": 1
+    },
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}

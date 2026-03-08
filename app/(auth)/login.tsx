@@ -17,6 +17,7 @@ import { FontAwesome, MaterialCommunityIcons, Ionicons } from '@expo/vector-icon
 import { Button } from '../../src/components/Button';
 import { colors } from '../../src/theme';
 import { useAuthStore } from '../../src/store/authStore';
+import { authService } from '../../src/services/supabase/auth';
 
 const StarLogo = () => (
     <Svg width="36" height="36" viewBox="0 0 40 40" fill="none">
@@ -42,20 +43,34 @@ export default function LoginScreen() {
         }
 
         try {
-            const trimmedEmail = email.trim();
-            console.log('Submitting login for:', trimmedEmail);
-            await signIn(trimmedEmail, password);
-        } catch (error: any) {
-            Alert.alert('Ошибка входа', error.message || 'Произошла ошибка');
+            await signIn(email.trim(), password);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : 'Произошла ошибка';
+            Alert.alert('Ошибка входа', msg);
+        }
+    };
+
+    const handleForgotPassword = async () => {
+        const trimmed = email.trim();
+        if (!trimmed) {
+            Alert.alert('Восстановление пароля', 'Введите email в поле выше, затем нажмите «Забыли пароль?»');
+            return;
+        }
+        try {
+            await authService.forgotPassword(trimmed);
+            Alert.alert('Письмо отправлено', `Инструкции по сбросу пароля отправлены на ${trimmed}`);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : 'Не удалось отправить письмо';
+            Alert.alert('Ошибка', msg);
         }
     };
 
     const handleGoogleSignIn = () => {
-        router.push('/quiz-intro');
+        Alert.alert('Скоро', 'Вход через Google будет доступен в следующем обновлении.');
     };
 
     const handleAppleSignIn = () => {
-        router.push('/quiz-intro');
+        Alert.alert('Скоро', 'Вход через Apple будет доступен в следующем обновлении.');
     };
 
     return (
@@ -114,7 +129,7 @@ export default function LoginScreen() {
                         <Text style={styles.checkboxLabel}>Запомнить меня</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity>
+                    <TouchableOpacity onPress={handleForgotPassword}>
                         <Text style={styles.forgotPassword}>Забыли пароль?</Text>
                     </TouchableOpacity>
                 </View>

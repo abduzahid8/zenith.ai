@@ -91,7 +91,7 @@ export async function requestAuthorization(): Promise<boolean> {
         return false;
     }
     if (!module) {
-        console.error('JS: Native module is null');
+        console.warn('JS: Native module is null. Are you running in Expo Go?');
         return false;
     }
     console.log('JS: Calling native requestAuthorization...');

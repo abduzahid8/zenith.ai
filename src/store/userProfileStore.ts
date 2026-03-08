@@ -80,10 +80,7 @@ const initialProfileState = {
     isPremium: false,
     selectedHobby: null as string | null,
     hasCompletedOnboarding: false,
-    weeklyTasks: [
-        { text: 'Изучить 1 базовый дебют', completed: false },
-        { text: 'Сыграть 2 партии без отвлечений', completed: false },
-    ] as WeeklyTask[],
+    weeklyTasks: [] as WeeklyTask[],
 };
 
 export const useUserProfileStore = create<UserProfileState>()(
@@ -130,7 +127,7 @@ export const useUserProfileStore = create<UserProfileState>()(
                 subscriptionLevel: isPremium ? 'premium' : get().subscriptionLevel,
             }),
 
-            setSelectedHobby: (hobbyId) => set({ selectedHobby: hobbyId }),
+            setSelectedHobby: (hobbyId) => set({ selectedHobby: hobbyId, weeklyTasks: [] }),
 
             completeOnboarding: () => set({ hasCompletedOnboarding: true }),
 

@@ -80,6 +80,21 @@ export default function QuizScreen() {
                 <LogoNew width={scale(160)} height={scale(36)} variant="full" />
             </View>
 
+            {/* Progress indicator */}
+            <View style={styles.progressContainer}>
+                <View style={styles.progressTrack}>
+                    <View
+                        style={[
+                            styles.progressFill,
+                            { width: `${(currentQuestion / QUIZ_QUESTIONS.length) * 100}%` },
+                        ]}
+                    />
+                </View>
+                <Text style={styles.progressLabel}>
+                    {currentQuestion} / {QUIZ_QUESTIONS.length}
+                </Text>
+            </View>
+
             {/* Question area - fixed height */}
             <View style={styles.questionContainer}>
                 <Text style={styles.questionText}>{question.question}</Text>
@@ -145,6 +160,32 @@ const styles = StyleSheet.create({
     logoContainer: {
         alignItems: 'center',
         marginTop: 60,
+    },
+    progressContainer: {
+        paddingHorizontal: 24,
+        marginTop: 24,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    progressTrack: {
+        flex: 1,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: colors.surface,
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        borderRadius: 2,
+        backgroundColor: colors.text,
+    },
+    progressLabel: {
+        fontFamily: fonts.body.medium,
+        fontSize: 13,
+        color: colors.textSecondary,
+        minWidth: 36,
+        textAlign: 'right',
     },
     questionContainer: {
         height: 120,

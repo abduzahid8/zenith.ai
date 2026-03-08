@@ -140,13 +140,21 @@ export const SessionTimerScreen: React.FC = () => {
                             <View style={styles.controlsContainer}>
                                 {timerStatus === 'idle' ? (
                                     <TouchableOpacity style={styles.playButton} onPress={handlePlay} activeOpacity={0.8}>
-                                        <Image source={require('../../icons/play.png')} style={{ width: scale(40), height: scale(40), tintColor: colors.buttonTextPrimary, marginLeft: scale(5) }} resizeMode="contain" />
+                                        <Image source={require('../../icons/play.png')} style={{ width: scale(30), height: scale(40), tintColor: colors.buttonTextPrimary, marginLeft: scale(5) }} resizeMode="contain" />
                                     </TouchableOpacity>
                                 ) : (
                                     <View style={styles.activeControls}>
                                         <Animated.View style={{ transform: [{ translateX: translateXReset }] }}>
                                             <TouchableOpacity style={styles.secondaryControl} onPress={handleReset} activeOpacity={0.8}>
-                                                <Image source={require('../../icons/back.png')} style={{ width: scale(32), height: scale(32), tintColor: colors.buttonTextPrimary }} resizeMode="contain" />
+                                                <Image
+                                                    source={require('../../icons/back.png')}
+                                                    style={{
+                                                        width: scale(34.437),
+                                                        height: scale(32.746),
+                                                        tintColor: colors.buttonTextPrimary
+                                                    }}
+                                                    resizeMode="contain"
+                                                />
                                             </TouchableOpacity>
                                         </Animated.View>
 
@@ -161,19 +169,38 @@ export const SessionTimerScreen: React.FC = () => {
                                         >
                                             <Image
                                                 source={timerStatus === 'running' ? require('../../icons/pause.png') : require('../../icons/play.png')}
-                                                style={{
-                                                    width: scale(40),
-                                                    height: scale(40),
-                                                    tintColor: colors.buttonTextPrimary,
-                                                    marginLeft: timerStatus === 'running' ? 0 : scale(5)
-                                                }}
+                                                style={[
+                                                    {
+                                                        tintColor: colors.buttonTextPrimary,
+                                                        marginLeft: timerStatus === 'running' ? 0 : scale(5)
+                                                    },
+                                                    timerStatus === 'running'
+                                                        ? {
+                                                            width: scale(29),
+                                                            height: scale(35),
+                                                            flexShrink: 0
+                                                        }
+                                                        : {
+                                                            width: scale(40),
+                                                            height: scale(40)
+                                                        }
+                                                ]}
                                                 resizeMode="contain"
                                             />
                                         </TouchableOpacity>
 
                                         <Animated.View style={{ transform: [{ translateX: translateXStop }] }}>
                                             <TouchableOpacity style={styles.secondaryControl} onPress={handleStopPress} activeOpacity={0.8}>
-                                                <Image source={require('../../icons/stop.png')} style={{ width: scale(32), height: scale(32), tintColor: colors.buttonTextPrimary }} resizeMode="contain" />
+                                                <Image
+                                                    source={require('../../icons/stop.png')}
+                                                    style={{
+                                                        width: scale(24),
+                                                        height: scale(24),
+                                                        tintColor: colors.buttonTextPrimary,
+                                                        flexShrink: 0
+                                                    }}
+                                                    resizeMode="contain"
+                                                />
                                             </TouchableOpacity>
                                         </Animated.View>
                                     </View>
@@ -247,7 +274,7 @@ export const SessionTimerScreen: React.FC = () => {
                             router.dismissAll();
                         } else {
                             // If we want to switch tab, we can navigate to root with params
-                            router.replace({ pathname: '/(app)/', params: { initialTab: index } });
+                            router.replace({ pathname: '/(app)', params: { initialTab: index } });
                         }
                     }}
                 />
@@ -301,6 +328,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginTop: scale(20),
+        paddingBottom: scale(80),
     },
     timerText: {
         fontSize: scale(64),
@@ -332,13 +360,13 @@ const styles = StyleSheet.create({
     activeControls: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: scale(20),
+        gap: scale(36),
         position: 'absolute',
     },
     secondaryControl: {
-        width: scale(60),
-        height: scale(60),
-        borderRadius: scale(30),
+        width: scale(65),
+        height: scale(65),
+        borderRadius: scale(32.5),
         backgroundColor: colors.sessionTimer.text,
         justifyContent: 'center',
         alignItems: 'center',

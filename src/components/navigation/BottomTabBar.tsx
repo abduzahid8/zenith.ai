@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet, Image, Platform } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { scale, SCREEN_WIDTH } from '../../constants';
 import { colors } from '../../theme';
 
@@ -11,7 +12,7 @@ interface BottomTabBarProps {
 export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabPress }) => {
     return (
         <View style={styles.container}>
-            <View style={styles.glassBackground} />
+            <BlurView intensity={100} tint="light" style={styles.glassBackground} />
 
             {/* Tab 1: Home */}
             <TouchableOpacity
@@ -26,7 +27,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabPres
                             height: activeTab === 0 ? scale(31) : scale(31),
                             width: activeTab === 0 ? scale(24) : undefined,
                             aspectRatio: 1,
-                            tintColor: activeTab === 0 ? colors.black : colors.iconMuted,
+                            tintColor: activeTab === 0 ? '#262A44' : '#C7CCE1',
                             transform: activeTab === 0 ? [{ translateY: -scale(2) }] : [],
                         }
                     ]}
@@ -48,7 +49,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabPres
                             height: activeTab === 1 ? scale(31) : scale(31),
                             width: activeTab === 1 ? scale(24) : undefined,
                             aspectRatio: 1,
-                            tintColor: activeTab === 1 ? colors.black : colors.iconMuted,
+                            tintColor: activeTab === 1 ? '#262A44' : '#C7CCE1',
                             transform: activeTab === 1 ? [{ translateY: -scale(2) }] : [],
                         }
                     ]}
@@ -70,7 +71,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabPres
                             height: activeTab === 2 ? scale(31) : scale(31),
                             width: activeTab === 2 ? scale(24) : undefined,
                             aspectRatio: 1,
-                            tintColor: activeTab === 2 ? colors.black : colors.iconMuted,
+                            tintColor: activeTab === 2 ? '#262A44' : '#C7CCE1',
                             transform: activeTab === 2 ? [{ translateY: -scale(2) }] : [],
                         }
                     ]}
@@ -92,7 +93,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabPres
                             height: activeTab === 3 ? scale(31) : scale(31),
                             width: activeTab === 3 ? scale(24) : undefined,
                             aspectRatio: 1,
-                            tintColor: activeTab === 3 ? colors.black : colors.iconMuted,
+                            tintColor: activeTab === 3 ? '#262A44' : '#C7CCE1',
                             transform: activeTab === 3 ? [{ translateY: -scale(2) }] : [],
                         }
                     ]}
@@ -109,29 +110,27 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: scale(34),
         alignSelf: 'center',
-        width: scale(362),
-        height: scale(67),
-        borderRadius: scale(47),
+        width: 362, // From Figma
+        height: 67, // From Figma
+        borderRadius: 47, // From Figma
         flexDirection: 'row',
         justifyContent: 'space-around',
         alignItems: 'center',
         paddingHorizontal: scale(10),
-        // Shadow for depth
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        elevation: 5,
+        // Precise Figma Drop Shadow (0 2px 4px rgba(0,0,0,0.25))
+        shadowColor: 'rgba(0, 0, 0, 0.25)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 4,
+        elevation: 4,
     },
     glassBackground: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(255, 255, 255, 0.85)', // High opacity white for milk-glass look
-        borderRadius: scale(47),
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.9)', // Frosty border
+        backgroundColor: 'rgba(255, 255, 255, 0.1)', // CSS #FFFFFF at 10% opacity from Figma
+        borderRadius: 47, // From Figma
+        borderWidth: StyleSheet.hairlineWidth, // Tahoe crisp thin edge
+        borderColor: 'rgba(255, 255, 255, 0.4)', // Slightly pronounced edge for glass refractions
+        overflow: 'hidden',
     },
     tabItem: {
         width: 50,

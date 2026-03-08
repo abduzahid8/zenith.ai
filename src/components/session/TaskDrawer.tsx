@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Pressable, Animated, StyleSheet, Image } from 'react-native';
+import { Svg, Polyline } from 'react-native-svg';
 import { scale } from '../../constants';
 import { colors, fonts } from '../../theme';
 
@@ -52,15 +53,32 @@ const TaskDrawer: React.FC<TaskDrawerProps> = ({
                                 onPress={() => onCompleteTask(task.id)}
                                 disabled={task.completed}
                             >
-                                <Image
-                                    source={task.completed ? require('../../../icons/checkbox-checked.png') : require('../../../icons/plus.png')}
-                                    style={{
-                                        width: scale(24),
-                                        height: scale(24),
-                                        tintColor: task.completed ? colors.sessionTimer.buttonText : colors.home.darkText
-                                    }}
-                                    resizeMode="contain"
-                                />
+                                {task.completed ? (
+                                    <Svg
+                                        width={scale(18)}
+                                        height={scale(12)}
+                                        viewBox="0 0 18 12"
+                                        fill="none"
+                                    >
+                                        <Polyline
+                                            points="2 6 6 10 16 2"
+                                            stroke="#E4FAEB"
+                                            strokeWidth="5"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        />
+                                    </Svg>
+                                ) : (
+                                    <Image
+                                        source={require('../../../icons/plus.png')}
+                                        style={{
+                                            width: scale(21),
+                                            height: scale(20),
+                                            tintColor: colors.home.darkText
+                                        }}
+                                        resizeMode="contain"
+                                    />
+                                )}
                             </TouchableOpacity>
                         </View>
                     ))}

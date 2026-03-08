@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Session, User } from '@supabase/supabase-js';
 import { authService, dbService } from '../services/supabase';
 import { useUserProfileStore } from './userProfileStore';
+import { toAppError } from '../shared/errors';
 
 interface AuthState {
     user: User | null;
@@ -54,13 +55,13 @@ export const useAuthStore = create<AuthState>()(
                 const profileStore = useUserProfileStore.getState();
                 profileStore.setUserName(user?.email?.split('@')[0] || '');
 
-                // Fetch user hobbies to check if onboarding is complete
+                // Fetch user hobbies to determine if onboarding is complete
                 try {
                     const hobbies = await dbService.getUserHobbies(user.id);
                     const hasOnboarded = hobbies && hobbies.length > 0;
-                    profileStore.completeOnboarding();
-                    if (!hasOnboarded) {
-                        // Reset onboarding flag if no hobbies
+                    if (hasOnboarded) {
+                        profileStore.completeOnboarding();
+                    } else {
                         useUserProfileStore.setState({ hasCompletedOnboarding: false });
                     }
                 } catch (dbError) {
@@ -75,12 +76,12 @@ export const useAuthStore = create<AuthState>()(
                 });
             } catch (error: unknown) {
                 console.error('Login error:', error);
-                const msg = error instanceof Error ? error.message : 'Unknown error';
-                let errorMessage = msg;
+                const base = toAppError(error);
+                let errorMessage = base.message;
 
-                if (msg.includes('Email not confirmed')) {
+                if (errorMessage.includes('Email not confirmed')) {
                     errorMessage = 'Email не подтвержден. Проверьте почту.';
-                } else if (msg.includes('Invalid login credentials')) {
+                } else if (errorMessage.includes('Invalid login credentials')) {
                     errorMessage = 'Неверный email или пароль.';
                 }
 
@@ -105,8 +106,8 @@ export const useAuthStore = create<AuthState>()(
                 });
             } catch (error: unknown) {
                 console.error('Signup error:', error);
-                const msg = error instanceof Error ? error.message : 'Unknown error';
-                set({ error: msg, isLoading: false });
+                const appError = toAppError(error);
+                set({ error: appError.message, isLoading: false });
                 throw error;
             }
         },
@@ -126,8 +127,8 @@ export const useAuthStore = create<AuthState>()(
                     isLoading: false,
                 });
             } catch (error: unknown) {
-                const msg = error instanceof Error ? error.message : 'Unknown error';
-                set({ error: msg, isLoading: false });
+                const appError = toAppError(error);
+                set({ error: appError.message, isLoading: false });
             }
         },
 

@@ -135,7 +135,7 @@ export const colors = {
     // Subscription
     subscription: {
         freeCardBg: '#C4DCFB',
-        premiumAccent: '#00FFC2',
+        premiumAccent: '#43C2F8',
         confirmBg: '#E8E4DF',
     },
 

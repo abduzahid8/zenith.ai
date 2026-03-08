@@ -5,6 +5,8 @@ import {
     StyleSheet,
     StatusBar,
     Image,
+    ScrollView,
+    TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -90,12 +92,12 @@ export const ScreenTimeScreen: React.FC = () => {
                     <Text style={styles.statCardBigText}>
                         {changeFromLastWeek >= 0 ? '+' : ''}{changeFromLastWeek}%
                     </Text>
-                    <Text style={styles.statCardSmallText}>За последнюю неделю</Text>
+                    <Text style={styles.lastWeekText}>За последнюю неделю</Text>
                 </View>
 
                 <View style={styles.statCardDarkBlue}>
                     <Text style={styles.statCardBigText}>{totalDurationFormatted}</Text>
-                    <Text style={styles.statCardSmallText}>Экранное время{'\n'}за неделю</Text>
+                    <Text style={styles.screenTimeText}>Экранное время{'\n'}за неделю</Text>
                 </View>
             </ScrollView>
 
@@ -181,11 +183,21 @@ const styles = StyleSheet.create({
         fontSize: scale(32),
         color: colors.text,
     },
-    statCardSmallText: {
+    lastWeekText: {
         fontFamily: fonts.body.light,
-        fontSize: scale(16),
-        color: colors.statistics.darkText,
+        fontSize: scale(20),
+        color: colors.text,
         lineHeight: scale(20),
+        width: scale(232),
+        height: scale(24),
+    },
+    screenTimeText: {
+        fontFamily: fonts.body.light,
+        fontSize: scale(20),
+        color: colors.text,
+        lineHeight: scale(20),
+        width: scale(168),
+        height: scale(40),
     },
 });
 

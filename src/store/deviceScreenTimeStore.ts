@@ -19,6 +19,8 @@ import {
     DailyUsageSummary,
     AppUsageData,
 } from '../../modules/device-activity';
+import { useAuthStore } from './authStore';
+import { screenTimeService } from '../services/screenTimeService';
 
 interface DeviceScreenTimeState {
     // Permission state
@@ -158,23 +160,15 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
 
             syncToSupabase: async () => {
                 try {
-                    // Import here to avoid circular dependency issues at top level if possible
-                    const { useAuthStore } = require('./authStore');
                     const user = useAuthStore.getState().user;
-
                     if (!user) return;
 
                     const { topApps } = get();
                     if (topApps.length === 0) return;
 
-                    // Dynamically import service to avoid circular dependency
-                    const { screenTimeService } = require('../services/screenTimeService');
-
                     await screenTimeService.syncNativeData(user.id, topApps);
-                    // Screen time data synced to Supabase
                 } catch (error) {
                     console.error('Sync to Supabase error:', error);
-                    // Don't set global error state for background sync failures
                 }
             },
 
@@ -183,20 +177,29 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
                 try {
                     const weeklyData = await getWeeklyScreenTime();
 
-                    // Ensure weeklyData is valid array
                     const validData = Array.isArray(weeklyData)
                         ? weeklyData.filter(day => day && typeof day.seconds === 'number')
                         : [];
 
-                    // Calculate averages
-                    const totalSeconds = validData.reduce((sum, day) => sum + (day.seconds || 0), 0);
-                    const averageDailySeconds = validData.length > 0
-                        ? Math.round(totalSeconds / validData.length)
+                    // Split into this week (last 7 days) and previous week (days 8-14)
+                    const sorted = [...validData].sort((a, b) =>
+                        new Date(a.date).getTime() - new Date(b.date).getTime()
+                    );
+                    const thisWeek = sorted.slice(-7);
+                    const lastWeek = sorted.slice(-14, -7);
+
+                    const avgThis = thisWeek.length > 0
+                        ? thisWeek.reduce((s, d) => s + d.seconds, 0) / thisWeek.length
+                        : 0;
+                    const avgLast = lastWeek.length > 0
+                        ? lastWeek.reduce((s, d) => s + d.seconds, 0) / lastWeek.length
                         : 0;
 
-                    // Calculate change (compare this week's average to last week's simulated)
-                    // In real implementation, this would compare to actual last week data
-                    const changeFromLastWeek = 0; // Placeholder
+                    const changeFromLastWeek = avgLast > 0
+                        ? Math.round(((avgThis - avgLast) / avgLast) * 100)
+                        : 0;
+
+                    const averageDailySeconds = avgThis > 0 ? Math.round(avgThis) : 0;
 
                     set({
                         weeklyData: validData,

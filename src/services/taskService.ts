@@ -4,14 +4,16 @@ import { metricService } from './metricService';
 import { dbService } from './supabase'; // Access to all other services
 import { taskEngine } from './taskEngine';
 import { aiJobService } from './aiJobService';
-import { Task, TaskStatus } from './supabase/types';
+import { Task, TaskStatus, TaskType } from './supabase/types';
+import { getTodayDateString } from '../utils/date';
+import { shouldIncrementStreak } from '../domain/tasks/rules';
 
 export const taskService = {
     // Get or generate the daily plan
     getDailyPlan: async (userId: string, date: string): Promise<Task[]> => {
         // 1. Try to fetch existing tasks
         const existingTasks = await tasksDbService.getTasksByDate(userId, date);
-        if (existingTasks.length >= 4) {
+        if (existingTasks.length >= 2) {
             return existingTasks;
         }
 
@@ -37,14 +39,6 @@ export const taskService = {
 
         // Save to DB
         // Check if we need to filter out existing ones to avoid duplicates if partial plan existed
-        // But upsertTasks handles onConflict: 'id' (if id exists)
-        // Here we generated new tasks without IDs. 
-        // We should check 'type' or just append? 
-        // The Spec says "Generate exactly 4 tasks".
-        // If we have 0, we insert 4. If we have 2, we might duplicate types.
-        // For MVP simplicity: if < 4, we assume we need a full regeneration or filling gaps.
-        // Let's filter out types that already exist for today
-
         const existingTypes = new Set(existingTasks.map(t => t.type));
         const tasksToInsert = newTasks.filter(t => !existingTypes.has(t.type));
 
@@ -56,6 +50,19 @@ export const taskService = {
         return existingTasks;
     },
 
+    // Create a manual task
+    createManualTask: async (userId: string, type: TaskType, date: string, template?: { title: string; duration: number }): Promise<Task> => {
+        const [snapshot, hobbies] = await Promise.all([
+            userStateSnapshotService.getSnapshot(userId),
+            dbService.getUserHobbies(userId),
+        ]);
+
+        const newTask = taskEngine.generateTaskByType(userId, type, date, snapshot, hobbies, template);
+
+        const [savedTask] = await tasksDbService.upsertTasks(userId, [newTask]);
+        return savedTask;
+    },
+
     // Complete a task
     completeTask: async (userId: string, taskId: string, feedback?: {
         difficulty_rating?: number;
@@ -63,7 +70,7 @@ export const taskService = {
         user_notes?: string;
     }): Promise<Task | null> => {
         // Update status and feedback
-        const updates: any = { status: 'completed' };
+        const updates: Partial<Pick<Task, 'status' | 'difficulty_rating' | 'engagement_rating' | 'user_notes'>> = { status: 'completed' };
         if (feedback) {
             if (feedback.difficulty_rating) updates.difficulty_rating = feedback.difficulty_rating;
             if (feedback.engagement_rating) updates.engagement_rating = feedback.engagement_rating;
@@ -74,7 +81,7 @@ export const taskService = {
 
         if (updatedTask) {
             // Update stats
-            const today = new Date().toISOString().split('T')[0];
+            const today = getTodayDateString();
             const currentStats = await dbService.getDailyStats(userId, today);
             const newCount = (currentStats?.tasks_completed || 0) + 1;
 
@@ -87,7 +94,11 @@ export const taskService = {
                 );
             }
 
-            await dbService.incrementStreak(userId);
+            // check Streak: increments only when all non-manual tasks are completed
+            const dailyTasks = await tasksDbService.getTasksByDate(userId, today);
+            if (shouldIncrementStreak(dailyTasks)) {
+                await dbService.incrementStreak(userId);
+            }
 
             // Check AI triggers
             await aiJobService.checkTriggers(userId);

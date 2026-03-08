@@ -31,6 +31,7 @@ import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
 import { requestScreenTimePermission } from 'device-activity';
 import { scale, SCREEN_WIDTH } from '../constants';
 import { BottomTabBar } from '../components/navigation/BottomTabBar';
+import { HobbyIcon } from '../components/HobbyIcon';
 
 // Tab components
 import HomeTab from './tabs/HomeTab';
@@ -38,12 +39,7 @@ import WeeklyPlanTab from './tabs/WeeklyPlanTab';
 import AICoachTab from './tabs/AICoachTab';
 import StatisticsTab from './tabs/StatisticsTab';
 
-const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24) }} resizeMode="contain" />;
-const ChessIcon = () => (
-    <View style={styles.chessIcon}>
-        <Text style={{ fontSize: scale(22) }}>♞</Text>
-    </View>
-);
+const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24), marginTop: -scale(2) }} resizeMode="contain" />;
 
 export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab = 0 }) => {
     const router = useRouter();
@@ -147,7 +143,7 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
             <View style={styles.header}>
                 <Text style={styles.greetingText}>{getHeaderTitle()}</Text>
                 <View style={styles.headerRight}>
-                    {activeTab === 0 && <ChessIcon />}
+                    <HobbyIcon />
                     <View style={styles.streakContainer}>
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
@@ -218,14 +214,9 @@ const styles = StyleSheet.create({
     headerRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: scale(8),
+        gap: scale(16),
     },
-    chessIcon: {
-        width: scale(28),
-        height: scale(28),
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
+
     streakContainer: {
         flexDirection: 'row',
         alignItems: 'center',

@@ -11,6 +11,7 @@ import {
     Platform,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { BlurView } from 'expo-blur';
 import { scale } from '../../constants';
 import { colors, fonts } from '../../theme';
 import { aiService, ChatMessage } from '../../services/ai';
@@ -107,6 +108,7 @@ const AICoachTab: React.FC = () => {
                                 activeOpacity={0.8}
                                 onPress={() => handleSuggestionPress('Как быстрее прогрессировать?')}
                             >
+                                <BlurView intensity={80} tint="light" style={styles.glassBackground} />
                                 <Text style={styles.suggestionText}>Как быстрее прогрессировать?</Text>
                             </TouchableOpacity>
                         </View>
@@ -116,6 +118,7 @@ const AICoachTab: React.FC = () => {
                                 activeOpacity={0.8}
                                 onPress={() => handleSuggestionPress('Объясни мой прогресс')}
                             >
+                                <BlurView intensity={80} tint="light" style={styles.glassBackground} />
                                 <Text style={styles.suggestionText}>Объясни мой прогресс</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
@@ -123,6 +126,7 @@ const AICoachTab: React.FC = () => {
                                 activeOpacity={0.8}
                                 onPress={() => handleSuggestionPress('Что сделать сегодня?')}
                             >
+                                <BlurView intensity={80} tint="light" style={styles.glassBackground} />
                                 <Text style={styles.suggestionText}>Что сделать сегодня?</Text>
                             </TouchableOpacity>
                         </View>
@@ -165,6 +169,7 @@ const AICoachTab: React.FC = () => {
             {/* Input */}
             <View style={styles.aiInputContainer}>
                 <View style={styles.inputButton}>
+                    <BlurView intensity={80} tint="light" style={styles.glassBackground} />
                     <TextInput
                         style={styles.aiInput}
                         placeholder="Чем я могу помочь?"
@@ -219,13 +224,19 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-start',
     },
     suggestionButton: {
-        paddingVertical: scale(5),
-        paddingHorizontal: scale(12),
+        paddingVertical: scale(8),
+        paddingHorizontal: scale(14),
         borderRadius: scale(30),
-        backgroundColor: colors.aiCoach.bubbleFaded,
         justifyContent: 'center',
         alignItems: 'center',
         gap: scale(10),
+        overflow: 'hidden',
+    },
+    glassBackground: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(255, 255, 255, 0.4)',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: 'rgba(255, 255, 255, 0.6)',
     },
     suggestionText: {
         fontFamily: fonts.body.light,
@@ -291,10 +302,10 @@ const styles = StyleSheet.create({
         paddingLeft: scale(22),
         paddingRight: scale(5),
         borderRadius: scale(25),
-        backgroundColor: colors.aiCoach.bubbleFaded,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        overflow: 'hidden',
     },
     aiInput: {
         flex: 1,

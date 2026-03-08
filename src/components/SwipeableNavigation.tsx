@@ -6,6 +6,7 @@ import {
     ScrollView,
     Image,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { scale, SCREEN_WIDTH } from '../constants';
 import { colors } from '../theme';
 import { APP_TAB_ROUTES } from '../config/navigation';
@@ -59,7 +60,8 @@ export const SwipeableNavigation: React.FC<SwipeableNavigationProps> = ({
             </ScrollView>
 
             {/* Bottom Navigation */}
-            <View style={styles.bottomNav}>
+            <View style={styles.bottomNavContainer}>
+                <BlurView intensity={100} tint="light" style={styles.glassBackground} />
                 {TABS.slice(0, children.length).map((tab, index) => (
                     <TouchableOpacity
                         key={tab.key}
@@ -93,26 +95,30 @@ const styles = StyleSheet.create({
         width: SCREEN_WIDTH,
         flex: 1,
     },
-    bottomNav: {
+    bottomNavContainer: {
         position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
+        bottom: scale(34),
+        alignSelf: 'center',
+        width: 362,
         flexDirection: 'row',
         justifyContent: 'space-around',
         alignItems: 'center',
-        height: scale(60),
-        marginHorizontal: scale(16),
-        marginBottom: scale(16),
-        borderRadius: scale(47),
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        shadowColor: colors.text,
+        height: 67,
+        borderRadius: 47,
+        // Precise Figma Drop Shadow (0 2px 4px rgba(0,0,0,0.25))
+        shadowColor: 'rgba(0, 0, 0, 0.25)',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 1,
         shadowRadius: 4,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
+        elevation: 4,
+    },
+    glassBackground: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)', // CSS #FFFFFF at 10% opacity from Figma
+        borderRadius: 47,
+        borderWidth: StyleSheet.hairlineWidth, // Tahoe crisp thin edge
+        borderColor: 'rgba(255, 255, 255, 0.4)', // Slightly pronounced edge for glass refractions
+        overflow: 'hidden',
     },
     navItem: {
         padding: scale(12),

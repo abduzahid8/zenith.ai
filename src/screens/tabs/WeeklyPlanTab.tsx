@@ -1,22 +1,116 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import {
     View,
     ScrollView,
     Text,
     StyleSheet,
     TouchableOpacity,
-    Dimensions,
+    ActivityIndicator,
     Image,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { scale, SCREEN_WIDTH } from '../../constants';
 import { colors, fonts } from '../../theme';
+import { useTaskStore } from '../../store/taskStore';
+import { useAuthStore } from '../../store/authStore';
+import { useUserProfileStore } from '../../store/userProfileStore';
+import { Task, TaskType } from '../../services/supabase/types';
 
 interface WeeklyPlanTabProps {
     isPremium: boolean;
 }
 
 const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
-    const [visibleTaskCount, setVisibleTaskCount] = useState(2);
+    const router = useRouter();
+    const { user } = useAuthStore();
+    const userId = user?.id;
+    const { dailyTasks, loading, error, fetchDailyPlan } = useTaskStore();
+    const { isPremium: profilePremium, setWeeklyTasks } = useUserProfileStore();
+
+    const ENGINE_TYPES: TaskType[] = ['theory', 'practice', 'analysis', 'puzzles'];
+    const engineTasks = dailyTasks.filter(t => ENGINE_TYPES.includes(t.type as TaskType));
+
+    useEffect(() => {
+        if (userId) {
+            fetchDailyPlan(userId);
+        }
+    }, [userId]);
+
+    // Sync task titles into weeklyTasks whenever dailyTasks change
+    useEffect(() => {
+        if (engineTasks.length > 0) {
+            setWeeklyTasks(engineTasks.map(t => ({ text: t.title, completed: t.status === 'completed' })));
+        }
+    }, [dailyTasks]);
+
+    const handleAddPress = () => {
+        const maxTasks = (isPremium || profilePremium) ? 4 : 3;
+        const canAddMore = engineTasks.length < maxTasks;
+
+        if (!canAddMore && !(isPremium || profilePremium)) {
+            router.push('/Paywall' as any);
+        } else {
+            router.push('/your-tasks');
+        }
+    };
+
+    const getCardStyleForTask = (task: Task) => {
+        switch (task.type) {
+            case 'theory':
+                return styles.theoryCard;
+            case 'practice':
+                return styles.practiceCard;
+            case 'analysis':
+                return styles.analysisCard;
+            case 'puzzles':
+                return styles.tasksCard;
+            default:
+                return styles.theoryCard;
+        }
+    };
+
+    const getTitleForType = (type: TaskType) => {
+        switch (type) {
+            case 'theory':
+                return 'Теория';
+            case 'practice':
+                return 'Практика';
+            case 'analysis':
+                return 'Анализ';
+            case 'puzzles':
+                return 'Задачи';
+            default:
+                return 'Задача';
+        }
+    };
+
+    // Fixed visual order: 1) Теория, 2) Практика, 3) Анализ, 4) Задачи
+    const orderedTasks: Task[] = ENGINE_TYPES
+        .map(type => engineTasks.find(t => t.type === type))
+        .filter((t): t is Task => Boolean(t));
+
+    if (error && engineTasks.length === 0) {
+        return (
+            <View style={styles.emptyContainer}>
+                <Text style={styles.errorText}>Не удалось загрузить план</Text>
+                <TouchableOpacity
+                    style={styles.retryButton}
+                    onPress={() => userId && fetchDailyPlan(userId)}
+                >
+                    <Text style={styles.retryButtonText}>Повторить</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    if (loading && engineTasks.length === 0) {
+        return (
+            <View style={styles.emptyContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.emptyText}>Загружаем план...</Text>
+            </View>
+        );
+    }
 
     return (
         <ScrollView
@@ -26,71 +120,82 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
         >
             <Text style={styles.yourDayTitle}>Твой день</Text>
 
-            {/* Task Card 1: Theory */}
-            <TouchableOpacity style={styles.theoryCard} activeOpacity={0.8}>
-                <View style={styles.taskCardContent}>
-                    <View style={styles.taskCardTextContainer}>
-                        <Text style={styles.taskCardTitle}>Теория</Text>
-                        <Text style={styles.taskCardDescription}>Изучить{"\n"}Королевский Гамбит</Text>
-                    </View>
-                    <View style={styles.theoryIconContainer}>
-                        <Image source={require('../../../icons/book.png')} style={styles.iconTheory} resizeMode="contain" />
-                    </View>
-                </View>
-            </TouchableOpacity>
-
-            {/* Task Card 2: Practice */}
-            <TouchableOpacity style={styles.practiceCard} activeOpacity={0.8}>
-                <View style={styles.taskCardContent}>
-                    <View style={styles.taskCardTextContainer}>
-                        <Text style={styles.taskCardTitle}>Практика</Text>
-                        <Text style={styles.taskCardDescription}>Сыграть 2 партии</Text>
-                    </View>
-                    <View style={styles.practiceIconContainer}>
-                        <Image source={require('../../../icons/dumbbell.png')} style={styles.iconPractice} resizeMode="contain" />
-                    </View>
-                </View>
-            </TouchableOpacity>
-
-            {/* Task Card 3: Analysis */}
-            {visibleTaskCount >= 3 && (
-                <View style={styles.analysisCard}>
-                    <View style={styles.taskCardContent}>
-                        <View style={styles.taskCardTextContainer}>
-                            <Text style={styles.analysisTitle}>Анализ</Text>
-                            <Text style={styles.analysisDescription}>Рассмотреть партию</Text>
-                        </View>
-                        <View style={styles.analysisIconContainer}>
-                            <Image source={require('../../../icons/magnifier.png')} style={styles.iconAnalysis} resizeMode="contain" />
-                        </View>
-                    </View>
+            {engineTasks.length === 0 && (
+                <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateTitle}>Нет задач на сегодня</Text>
+                    <Text style={styles.emptyStateSubtitle}>
+                        Добавьте первую задачу, чтобы начать свой день продуктивно.
+                    </Text>
+                    <TouchableOpacity style={styles.emptyStateCta} onPress={handleAddPress}>
+                        <Text style={styles.emptyStateCtaText}>+ Добавить задачу</Text>
+                    </TouchableOpacity>
                 </View>
             )}
 
-            {/* Task Card 4: Tasks */}
-            {visibleTaskCount >= 4 && (
-                <View style={styles.tasksCard}>
-                    <View style={styles.taskCardContent}>
-                        <View style={styles.taskCardTextContainer}>
-                            <Text style={styles.tasksTitle}>Задачи</Text>
-                            <Text style={styles.tasksDescription}>Решить 15 тактических{"\n"}задач</Text>
+            {orderedTasks.map((task) => {
+                const cardStyle = getCardStyleForTask(task);
+                const title = getTitleForType(task.type);
+
+                let iconSource = require('../../../icons/book.png');
+                if (task.type === 'practice') iconSource = require('../../../icons/dumbbell.png');
+                if (task.type === 'analysis') iconSource = require('../../../icons/magnifier.png');
+                if (task.type === 'puzzles') iconSource = require('../../../icons/puzzle.png');
+
+                const iconContainerStyle =
+                    task.type === 'theory'
+                        ? styles.theoryIconContainer
+                        : task.type === 'practice'
+                            ? styles.practiceIconContainer
+                            : task.type === 'analysis'
+                                ? styles.analysisIconContainer
+                                : styles.tasksIconContainer;
+
+                const iconStyle =
+                    task.type === 'theory'
+                        ? styles.iconTheory
+                        : task.type === 'practice'
+                            ? styles.iconPractice
+                            : task.type === 'analysis'
+                                ? styles.iconAnalysis
+                                : styles.iconTasks;
+
+                const descriptionStyle =
+                    task.type === 'analysis'
+                        ? styles.analysisDescription
+                        : task.type === 'puzzles'
+                            ? styles.tasksDescription
+                            : styles.taskCardDescription;
+
+                const titleStyle =
+                    task.type === 'analysis'
+                        ? styles.analysisTitle
+                        : task.type === 'puzzles'
+                            ? styles.tasksTitle
+                            : styles.taskCardTitle;
+
+                return (
+                    <TouchableOpacity key={task.id || task.title} style={cardStyle} activeOpacity={0.8}>
+                        <View style={styles.taskCardContent}>
+                            <View style={styles.taskCardTextContainer}>
+                                <Text style={titleStyle}>{title}</Text>
+                                <Text style={descriptionStyle}>
+                                    {task.title}
+                                </Text>
+                            </View>
+                            <View style={iconContainerStyle}>
+                                <Image source={iconSource} style={iconStyle} resizeMode="contain" />
+                            </View>
                         </View>
-                        <View style={styles.tasksIconContainer}>
-                            <Image source={require('../../../icons/puzzle.png')} style={styles.iconTasks} resizeMode="contain" />
-                        </View>
-                    </View>
-                </View>
-            )}
+                    </TouchableOpacity>
+                );
+            })}
 
             {/* Add Task button */}
-            {visibleTaskCount < 4 && (
+            {orderedTasks.length < ((isPremium || profilePremium) ? 4 : 3) && (
                 <TouchableOpacity
-                    style={[
-                        styles.addTaskCard,
-                        visibleTaskCount === 2 && { height: scale(179) }
-                    ]}
+                    style={styles.addTaskCard}
                     activeOpacity={0.8}
-                    onPress={() => setVisibleTaskCount(prev => prev + 1)}
+                    onPress={handleAddPress}
                 >
                     <Image source={require('../../../icons/plus.png')} style={{ width: scale(32), height: scale(32), tintColor: colors.iconMuted }} resizeMode="contain" />
                 </TouchableOpacity>
@@ -119,7 +224,7 @@ const styles = StyleSheet.create({
         alignSelf: 'stretch',
         borderRadius: scale(25),
         backgroundColor: colors.weeklyPlan.theoryBg,
-        paddingLeft: scale(28),
+        paddingLeft: scale(20),
         paddingRight: scale(20),
         paddingVertical: scale(18),
         marginBottom: scale(10),
@@ -129,7 +234,7 @@ const styles = StyleSheet.create({
         alignSelf: 'stretch',
         borderRadius: scale(25),
         backgroundColor: colors.weeklyPlan.practiceBg,
-        paddingLeft: scale(28),
+        paddingLeft: scale(20),
         paddingRight: scale(20),
         paddingVertical: scale(18),
         marginBottom: scale(10),
@@ -139,22 +244,22 @@ const styles = StyleSheet.create({
         alignSelf: 'stretch',
         borderRadius: scale(25),
         backgroundColor: colors.weeklyPlan.analysisBg,
-        paddingLeft: scale(28),
+        paddingLeft: scale(20),
         paddingRight: scale(20),
         paddingVertical: scale(18),
         marginBottom: scale(10),
     },
     analysisTitle: {
         fontFamily: fonts.heading.bold,
-        fontSize: scale(24),
-        lineHeight: scale(26),
+        fontSize: scale(25),
+        lineHeight: scale(30),
         color: colors.black,
         marginBottom: scale(6),
     },
     analysisDescription: {
         fontFamily: fonts.body.light,
-        fontSize: scale(19),
-        lineHeight: scale(22),
+        fontSize: scale(20),
+        lineHeight: scale(24),
         color: colors.black,
         alignSelf: 'stretch',
     },
@@ -170,22 +275,22 @@ const styles = StyleSheet.create({
         alignSelf: 'stretch',
         borderRadius: scale(25),
         backgroundColor: colors.weeklyPlan.tasksBg,
-        paddingLeft: scale(28),
+        paddingLeft: scale(20),
         paddingRight: scale(20),
         paddingVertical: scale(18),
         marginBottom: scale(10),
     },
     tasksTitle: {
         fontFamily: fonts.heading.bold,
-        fontSize: scale(24),
-        lineHeight: scale(26),
+        fontSize: scale(25),
+        lineHeight: scale(30),
         color: colors.black,
         marginBottom: scale(6),
     },
     tasksDescription: {
         fontFamily: fonts.body.light,
         fontSize: scale(20),
-        lineHeight: scale(22),
+        lineHeight: scale(24),
         color: colors.sessionTimer.text,
         width: scale(322),
     },
@@ -207,16 +312,16 @@ const styles = StyleSheet.create({
     },
     taskCardTitle: {
         fontFamily: fonts.heading.bold,
-        fontSize: scale(24),
-        lineHeight: scale(26),
+        fontSize: scale(25),
+        lineHeight: scale(30),
         color: colors.text,
         marginBottom: scale(6),
         paddingHorizontal: scale(0),
     },
     taskCardDescription: {
         fontFamily: fonts.body.light,
-        fontSize: scale(19),
-        lineHeight: scale(23),
+        fontSize: scale(20),
+        lineHeight: scale(24),
         color: colors.text,
     },
     theoryIconContainer: {
@@ -260,6 +365,67 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingVertical: scale(25),
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: scale(12),
+        paddingBottom: scale(80),
+    },
+    emptyText: {
+        fontFamily: fonts.body.regular,
+        fontSize: scale(16),
+        color: colors.textSecondary,
+    },
+    emptyState: {
+        alignItems: 'center',
+        paddingVertical: scale(40),
+        gap: scale(12),
+    },
+    emptyStateTitle: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(22),
+        color: colors.text,
+        textAlign: 'center',
+    },
+    emptyStateSubtitle: {
+        fontFamily: fonts.body.regular,
+        fontSize: scale(15),
+        color: colors.textSecondary,
+        textAlign: 'center',
+        paddingHorizontal: scale(20),
+        lineHeight: scale(22),
+    },
+    emptyStateCta: {
+        marginTop: scale(8),
+        backgroundColor: colors.primary,
+        borderRadius: scale(50),
+        paddingVertical: scale(14),
+        paddingHorizontal: scale(32),
+    },
+    emptyStateCtaText: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(16),
+        color: colors.white,
+    },
+    errorText: {
+        fontFamily: fonts.body.regular,
+        fontSize: scale(16),
+        color: colors.textSecondary,
+        textAlign: 'center',
+        marginBottom: scale(8),
+    },
+    retryButton: {
+        backgroundColor: colors.primary,
+        borderRadius: scale(50),
+        paddingVertical: scale(12),
+        paddingHorizontal: scale(28),
+    },
+    retryButtonText: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(15),
+        color: colors.white,
     },
 });
 

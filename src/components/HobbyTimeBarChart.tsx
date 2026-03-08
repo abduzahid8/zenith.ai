@@ -120,8 +120,6 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
         borderRadius: scale(30),
-        tintColor: '#E8D5F0', // Pink/purple tint for grid
-        opacity: 0.5,
     },
     chartContent: {
         flex: 1,

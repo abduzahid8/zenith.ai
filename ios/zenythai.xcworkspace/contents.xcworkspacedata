@@ -7,4 +7,10 @@
    <FileRef
       location = "group:Pods/Pods.xcodeproj">
    </FileRef>
+   <FileRef
+      location = "group:eas.json">
+   </FileRef>
+   <FileRef
+      location = "group:app.json">
+   </FileRef>
 </Workspace>

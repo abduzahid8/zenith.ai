@@ -277,10 +277,10 @@ const styles = StyleSheet.create({
         color: colors.black,
     },
     statCardSmallText: {
-        fontFamily: fonts.heading.light,
-        fontSize: scale(16),
-        color: colors.statistics.darkText,
-        lineHeight: scale(20),
+        fontFamily: fonts.body.regular,
+        fontSize: scale(20),
+        color: '#08132A',
+        lineHeight: scale(22),
     },
     statsPaginationContainer: {
         flexDirection: 'row',

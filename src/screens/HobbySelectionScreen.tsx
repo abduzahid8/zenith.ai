@@ -7,7 +7,7 @@ import { colors, fonts } from '../theme';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { useQuizStore } from '../store/quizStore';
 import { useAuthStore } from '../store/authStore';
-import { matchHobbies, quizAnswersToProfile, HobbyMatch } from '../services/hobbyMatcher';
+import { matchHobbies, HobbyMatch } from '../services/hobbyMatcher';
 import { dbService } from '../services/supabase';
 import { scale } from '../constants';
 
@@ -33,7 +33,7 @@ const circleStyles = StyleSheet.create({
 export default function HobbySelectionScreen() {
     const router = useRouter();
     const user = useAuthStore((s) => s.user);
-    const { setSelectedHobby, completeOnboarding } = useUserProfileStore();
+    const { setSelectedHobby } = useUserProfileStore();
     const { answers } = useQuizStore();
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [matchedHobbies, setMatchedHobbies] = useState<HobbyMatch[]>([]);
@@ -41,8 +41,7 @@ export default function HobbySelectionScreen() {
 
     // Calculate matches when screen loads
     useEffect(() => {
-        const userProfile = quizAnswersToProfile(answers);
-        const topMatches = matchHobbies(userProfile, 3);
+        const topMatches = matchHobbies(answers, 3);
         setMatchedHobbies(topMatches);
     }, [answers]);
 
@@ -56,7 +55,6 @@ export default function HobbySelectionScreen() {
         try {
             await dbService.saveHobby(user.id, selectedId, true);
             setSelectedHobby(selectedId);
-            completeOnboarding();
             router.push('/subscription');
         } catch (e: unknown) {
             setSaving(false);
@@ -195,7 +193,7 @@ const styles = StyleSheet.create({
         color: colors.text,
     },
     hobbyLabelSelected: {
-        color: colors.text,
+        color: colors.white,
     },
     spacer: {
         flex: 1,

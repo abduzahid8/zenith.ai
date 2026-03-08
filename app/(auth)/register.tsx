@@ -47,21 +47,19 @@ export default function RegisterScreen() {
         }
 
         try {
-            const trimmedEmail = email.trim();
-            console.log('Submitting registration for:', trimmedEmail);
-            await signUp(trimmedEmail, password);
-        } catch (error: any) {
-            console.error('Registration UI error:', error);
-            Alert.alert('Ошибка регистрации', error.message || 'Произошла ошибка');
+            await signUp(email.trim(), password);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : 'Произошла ошибка';
+            Alert.alert('Ошибка регистрации', msg);
         }
     };
 
     const handleGoogleSignIn = () => {
-        router.push('/quiz-intro');
+        Alert.alert('Скоро', 'Регистрация через Google будет доступна в следующем обновлении.');
     };
 
     const handleAppleSignIn = () => {
-        router.push('/quiz-intro');
+        Alert.alert('Скоро', 'Регистрация через Apple будет доступна в следующем обновлении.');
     };
 
     return (

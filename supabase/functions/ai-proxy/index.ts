@@ -56,27 +56,46 @@ async function callGemini(
         contents.unshift({ role: 'user', parts: [{ text: systemPrompt }] });
     }
 
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents,
-            generationConfig: { temperature, maxOutputTokens: maxTokens },
-        }),
-    });
+    // Gemini can respond with transient 429/503. Retry a few times with backoff.
+    let lastErrorText = '';
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents,
+                generationConfig: { temperature, maxOutputTokens: maxTokens },
+            }),
+        });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Gemini API ${response.status}: ${errorText}`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+                return data.candidates[0].content.parts[0].text;
+            }
+            return 'Извините, получен пустой ответ от сервиса.';
+        }
+
+        lastErrorText = await response.text();
+        const status = response.status;
+        const retryAfterHeader = response.headers.get('retry-after');
+        const retryAfterMs = retryAfterHeader ? Number(retryAfterHeader) * 1000 : NaN;
+
+        const isRetryable = status === 429 || status === 503 || status === 500;
+        const hasMoreAttempts = attempt < 2;
+
+        if (isRetryable && hasMoreAttempts) {
+            const backoffMs = Number.isFinite(retryAfterMs)
+                ? Math.max(250, Math.min(10_000, retryAfterMs))
+                : 350 * Math.pow(2, attempt);
+            await new Promise((r) => setTimeout(r, backoffMs));
+            continue;
+        }
+
+        throw new Error(`Gemini API ${status}: ${lastErrorText}`);
     }
 
-    const data = await response.json();
-
-    if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-        return data.candidates[0].content.parts[0].text;
-    }
-
-    return 'Извините, получен пустой ответ от сервиса.';
+    throw new Error(`Gemini API 429: ${lastErrorText || 'Too many requests'}`);
 }
 
 // ── Action Handlers ──────────────────────────────────────

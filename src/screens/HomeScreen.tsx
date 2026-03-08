@@ -19,16 +19,10 @@ import { BottomNavigation } from '../components/BottomNavigation';
 import { HomeScreenSkeleton } from '../components/UIStateComponents';
 import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
 import HomeTab from './tabs/HomeTab';
+import { HobbyIcon } from '../components/HobbyIcon';
 
 const FireIcon = () => (
-    <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24) }} resizeMode="contain" />
-);
-
-// Chess piece icon
-const ChessIcon = () => (
-    <View style={styles.chessIcon}>
-        <Text style={{ fontSize: scale(22) }}>♞</Text>
-    </View>
+    <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24), marginTop: -scale(2) }} resizeMode="contain" />
 );
 
 export const HomeScreen: React.FC = () => {
@@ -77,7 +71,7 @@ export const HomeScreen: React.FC = () => {
             <View style={styles.header}>
                 <Text style={styles.greetingText}>{greeting}</Text>
                 <View style={styles.headerRight}>
-                    <ChessIcon />
+                    <HobbyIcon />
                     <View style={styles.streakContainer}>
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
@@ -122,14 +116,10 @@ const styles = StyleSheet.create({
     headerRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: scale(8),
+        gap: scale(16),
     },
-    chessIcon: {
-        width: scale(28),
-        height: scale(28),
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
+
+
     streakContainer: {
         flexDirection: 'row',
         alignItems: 'center',

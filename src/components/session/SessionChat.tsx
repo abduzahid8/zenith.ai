@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
         backgroundColor: colors.sessionTimer.chatInput,
         borderRadius: scale(30),
         marginHorizontal: scale(20),
-        marginBottom: scale(0),
+        marginBottom: scale(30),
         paddingHorizontal: scale(6),
         paddingVertical: scale(6),
         height: scale(60),
