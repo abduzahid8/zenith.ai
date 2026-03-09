@@ -93,10 +93,10 @@ export const colors = {
     home: {
         cardBorder: '#DCDCDC',
         darkText: '#1E1E2E',
-        lightBg: '#F5F5F5',
+        lightBg: '#EAF0F8',
     },
     errorBoundary: {
-        background: '#F2F6FC',
+        background: '#EAF0F8',
         primary: '#37A0EF',
         text: '#2E2E43',
         muted: '#666',
@@ -148,8 +148,8 @@ export const colors = {
 
     // Phone analysis
     phoneAnalysis: {
-        cardBg: '#f9f9f9',
-        secondaryBg: '#f5f5f5',
+        cardBg: '#EAF0F8',
+        secondaryBg: '#EAF0F8',
         highlightBg: '#EAF4FF',
         actionBg: '#007AFF',
     },

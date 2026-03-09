@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     Animated,
     Image,
+    Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -134,7 +135,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    onPress={() => (onScreenTime ? onScreenTime() : handleNavigate('/statistics'))}
+                    onPress={() => Alert.alert('В разработке', 'Эта функция скоро появится!')}
                     activeOpacity={0.8}
                     style={[styles.cardShadowProp, { flex: 1 }]}
                 >

@@ -101,7 +101,7 @@ export const ScreenTimeScreen: React.FC = () => {
                 </View>
             </ScrollView>
 
-            <BottomNavigation activeTab="statistics" />
+            <BottomNavigation />
             <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />
         </SafeAreaView>
     );

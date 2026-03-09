@@ -12,7 +12,7 @@ interface BottomTabBarProps {
 export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabPress }) => {
     return (
         <View style={styles.container}>
-            <BlurView intensity={100} tint="light" style={styles.glassBackground} />
+            <BlurView intensity={60} tint="light" style={styles.glassBackground} />
 
             {/* Tab 1: Home */}
             <TouchableOpacity
@@ -80,27 +80,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabPres
                 {activeTab === 2 && <View style={styles.activeDot} />}
             </TouchableOpacity>
 
-            {/* Tab 4: Statistics */}
-            <TouchableOpacity
-                style={styles.tabItem}
-                onPress={() => onTabPress(3)}
-                activeOpacity={0.7}
-            >
-                <Image
-                    source={require('../../../icons/stats.png')}
-                    style={[
-                        {
-                            height: activeTab === 3 ? scale(31) : scale(31),
-                            width: activeTab === 3 ? scale(24) : undefined,
-                            aspectRatio: 1,
-                            tintColor: activeTab === 3 ? '#262A44' : '#C7CCE1',
-                            transform: activeTab === 3 ? [{ translateY: -scale(2) }] : [],
-                        }
-                    ]}
-                    resizeMode="contain"
-                />
-                {activeTab === 3 && <View style={styles.activeDot} />}
-            </TouchableOpacity>
+
         </View>
     );
 };
@@ -110,7 +90,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: scale(34),
         alignSelf: 'center',
-        width: 362, // From Figma
+        width: 280, // Reduced from 362 since we removed a tab
         height: 67, // From Figma
         borderRadius: 47, // From Figma
         flexDirection: 'row',
@@ -118,18 +98,20 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: scale(10),
         // Precise Figma Drop Shadow (0 2px 4px rgba(0,0,0,0.25))
-        shadowColor: 'rgba(0, 0, 0, 0.25)',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 1,
-        shadowRadius: 4,
-        elevation: 4,
+        shadowOpacity: 0.08,
+        shadowRadius: 5,
+        elevation: 3,
     },
     glassBackground: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)', // CSS #FFFFFF at 10% opacity from Figma
-        borderRadius: 47, // From Figma
-        borderWidth: StyleSheet.hairlineWidth, // Tahoe crisp thin edge
-        borderColor: 'rgba(255, 255, 255, 0.4)', // Slightly pronounced edge for glass refractions
+        backgroundColor: 'rgba(255, 255, 255, 0.45)',
+        borderRadius: 47,
+        borderWidth: 1.5,
+        borderColor: 'rgba(255, 255, 255, 0.8)',
+        borderBottomColor: 'rgba(255, 255, 255, 0.3)',
+        borderRightColor: 'rgba(255, 255, 255, 0.3)',
         overflow: 'hidden',
     },
     tabItem: {

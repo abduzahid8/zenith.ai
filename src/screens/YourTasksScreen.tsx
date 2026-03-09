@@ -45,11 +45,7 @@ export const YourTasksScreen = () => {
     const { dailyTasks, loading, error } = useTaskStore();
     const { isPremium } = useUserProfileStore();
 
-    useEffect(() => {
-        if (error) {
-            Alert.alert('Error', error);
-        }
-    }, [error]);
+
 
     const handleAdd = (type: TaskType, label: string, bg: string) => {
         router.push({

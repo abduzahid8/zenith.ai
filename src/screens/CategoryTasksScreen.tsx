@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTaskStore } from '../store/taskStore';
 import { useAuthStore } from '../store/authStore';
@@ -36,9 +36,8 @@ export const CategoryTasksScreen = () => {
             await addTask(user.id, categoryType as TaskType, template);
             router.back();
             router.back(); // Go back to Your Day (pop YourTasks + CategoryTasks)
-        } catch (e) {
-            console.error(e);
-            // Show error (store handles it mostly)
+        } catch (e: any) {
+            Alert.alert('Ошибка', e.message || 'Не удалось добавить задачу');
         }
     };
 
@@ -169,7 +168,7 @@ const styles = StyleSheet.create({
         marginRight: scale(16),
     },
     taskTitle: {
-        fontFamily: fonts.body.bold,
+        fontFamily: fonts.body.medium,
         fontSize: scale(16),
         color: colors.text,
         marginBottom: scale(4),

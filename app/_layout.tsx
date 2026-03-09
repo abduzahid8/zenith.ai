@@ -63,23 +63,24 @@ export default function RootLayout() {
 
         const inAuthGroup = segments[0] === '(auth)';
         const inAppGroup = segments[0] === '(app)';
+        const isPrivacy = segments[0] === ('privacy' as any);
 
         if (!isAuthenticated) {
-            if (!inAuthGroup) {
+            if (!inAuthGroup && !isPrivacy) {
                 router.replace(ROUTES.AUTH as any);
             }
         } else {
             // User is authenticated
             if (!hasCompletedOnboarding) {
                 // Should be in onboarding flow (not in auth or app groups)
-                if (inAuthGroup || inAppGroup) {
+                if ((inAuthGroup || inAppGroup) && !isPrivacy) {
                     router.replace('/quiz-intro');
                 }
             } else {
                 // Completed onboarding
                 // Check if user is in auth group or onboarding flow (optional: allow revisiting subscription?)
                 // For strict prototype, force to app if in auth
-                if (inAuthGroup) {
+                if (inAuthGroup && !isPrivacy) {
                     router.replace(ROUTES.APP as any);
                 }
             }
@@ -108,6 +109,7 @@ export default function RootLayout() {
                     <Stack screenOptions={{ headerShown: false }}>
                         <Stack.Screen name="(auth)" />
                         <Stack.Screen name="(app)" />
+                        <Stack.Screen name="privacy" options={{ presentation: 'modal' }} />
                         <Stack.Screen name="quiz-intro" />
                         <Stack.Screen name="quiz" />
 

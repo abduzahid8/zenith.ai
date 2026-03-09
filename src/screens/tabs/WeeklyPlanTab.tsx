@@ -55,18 +55,37 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
     };
 
     const getCardStyleForTask = (task: Task) => {
+        let baseStyle;
+        let baseHeight;
+
         switch (task.type) {
             case 'theory':
-                return styles.theoryCard;
+                baseStyle = styles.theoryCard;
+                baseHeight = 119;
+                break;
             case 'practice':
-                return styles.practiceCard;
+                baseStyle = styles.practiceCard;
+                baseHeight = 100;
+                break;
             case 'analysis':
-                return styles.analysisCard;
+                baseStyle = styles.analysisCard;
+                baseHeight = 101;
+                break;
             case 'puzzles':
-                return styles.tasksCard;
+                baseStyle = styles.tasksCard;
+                baseHeight = 100;
+                break;
             default:
-                return styles.theoryCard;
+                baseStyle = styles.theoryCard;
+                baseHeight = 119;
         }
+
+        const wordCount = task.title ? task.title.trim().split(/\s+/).length : 0;
+        if (wordCount >= 3) {
+            return [baseStyle, { height: scale(baseHeight + 20) }];
+        }
+
+        return baseStyle;
     };
 
     const getTitleForType = (type: TaskType) => {
@@ -86,8 +105,7 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
 
     // Fixed visual order: 1) Теория, 2) Практика, 3) Анализ, 4) Задачи
     const orderedTasks: Task[] = ENGINE_TYPES
-        .map(type => engineTasks.find(t => t.type === type))
-        .filter((t): t is Task => Boolean(t));
+        .flatMap(type => engineTasks.filter(t => t.type === type));
 
     if (error && engineTasks.length === 0) {
         return (
@@ -193,7 +211,11 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
             {/* Add Task button */}
             {orderedTasks.length < ((isPremium || profilePremium) ? 4 : 3) && (
                 <TouchableOpacity
-                    style={styles.addTaskCard}
+                    style={[
+                        styles.addTaskCard,
+                        orderedTasks.length === 2 && { height: scale(179) },
+                        orderedTasks.length >= 3 && { height: scale(100) },
+                    ]}
                     activeOpacity={0.8}
                     onPress={handleAddPress}
                 >
@@ -271,7 +293,7 @@ const styles = StyleSheet.create({
         marginTop: scale(-25),
     },
     tasksCard: {
-        height: scale(123),
+        height: scale(101),
         alignSelf: 'stretch',
         borderRadius: scale(25),
         backgroundColor: colors.weeklyPlan.tasksBg,
@@ -296,10 +318,10 @@ const styles = StyleSheet.create({
     },
     tasksIconContainer: {
         width: scale(40),
-        height: scale(100),
+        height: scale(40),
         justifyContent: 'center',
         alignItems: 'center',
-        marginTop: scale(-50),
+        marginTop: scale(-25),
     },
     taskCardContent: {
         flex: 1,
@@ -355,7 +377,7 @@ const styles = StyleSheet.create({
     },
     iconTasks: {
         width: scale(40),
-        height: scale(100),
+        height: scale(40),
         tintColor: '#08132A',
     },
     addTaskCard: {

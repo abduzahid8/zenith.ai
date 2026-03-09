@@ -14,23 +14,17 @@ export const HobbyIcon: React.FC<HobbyIconProps> = ({ style, color = '#000000' }
     let iconSource;
 
     switch (selectedHobby) {
-        case 'logic_puzzles':
-            iconSource = require('../../icons/puzzle.png');
-            break;
-        case 'home_workout':
-        case 'running':
-        case 'yoga':
-        case 'dancing':
-        case 'martial_arts':
-            iconSource = require('../../icons/dumbbell.png');
+        case 'programming':
+            iconSource = require('../../assets/images/icons-hobby/code.png');
             break;
         case 'english':
-        case 'languages':
+            iconSource = require('../../assets/images/icons-hobby/united-kingdom.png');
+            break;
         case 'speed_reading':
-        case 'writing':
-        case 'journaling':
-        case 'planning':
-            iconSource = require('../../icons/book.png');
+            iconSource = require('../../assets/images/icons-hobby/book-icon.png');
+            break;
+        case 'languages':
+            iconSource = require('../../assets/images/icons-hobby/china.png');
             break;
         case 'chess':
         default:

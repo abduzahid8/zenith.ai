@@ -39,8 +39,8 @@ export function canAddTask(params: CanAddTaskParams): CanAddTaskResult {
     const maxTasks = getMaxTasksPerDay(isPremium);
     if (engineTasks.length >= maxTasks) {
         const msg = isPremium
-            ? 'Maximum daily tasks reached'
-            : 'Upgrade to Premium to add more tasks';
+            ? 'Достигнут лимит задач на сегодня'
+            : 'Обновите до Premium, чтобы добавить больше задач';
         return { allowed: false, errorMessage: msg };
     }
 
@@ -48,7 +48,7 @@ export function canAddTask(params: CanAddTaskParams): CanAddTaskResult {
         if (engineTasks.some((t) => t.type === type)) {
             return {
                 allowed: false,
-                errorMessage: 'Task of this type already exists today',
+                errorMessage: 'Задача этого типа уже добавлена сегодня',
             };
         }
         return { allowed: true };
@@ -57,7 +57,7 @@ export function canAddTask(params: CanAddTaskParams): CanAddTaskResult {
     if (isDuplicateTemplate({ existingTasks: engineTasks, type, template })) {
         return {
             allowed: false,
-            errorMessage: 'This task is already in your plan',
+            errorMessage: 'Эта задача уже есть в вашем плане',
         };
     }
 

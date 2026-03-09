@@ -9,7 +9,7 @@ import { APP_TAB_ROUTES, getMainTabUrl, type AppTabKey } from '../config/navigat
 export type TabKey = AppTabKey;
 
 interface BottomNavigationProps {
-    activeTab: TabKey;
+    activeTab?: TabKey;
 }
 
 export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab }) => {
@@ -21,7 +21,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab })
 
     return (
         <View style={styles.container}>
-            <BlurView intensity={100} tint="light" style={styles.glassBackground} />
+            <BlurView intensity={60} tint="light" style={styles.glassBackground} />
             {APP_TAB_ROUTES.map((tab) => {
                 const isActive = tab.key === activeTab;
                 const iconColor = isActive ? colors.text : colors.textLight;
@@ -54,25 +54,27 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: scale(34),
         alignSelf: 'center',
-        width: 362,
+        width: 280,
         flexDirection: 'row',
         justifyContent: 'space-around',
         alignItems: 'center',
         height: 67,
         borderRadius: 47,
         // Precise Figma Drop Shadow (0 2px 4px rgba(0,0,0,0.25))
-        shadowColor: 'rgba(0, 0, 0, 0.25)',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 1,
-        shadowRadius: 4,
-        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
+        elevation: 10,
     },
     glassBackground: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)', // CSS #FFFFFF at 10% opacity from Figma
+        backgroundColor: 'rgba(255, 255, 255, 0.45)',
         borderRadius: 47,
-        borderWidth: StyleSheet.hairlineWidth, // Tahoe crisp thin edge
-        borderColor: 'rgba(255, 255, 255, 0.4)', // Slightly pronounced edge for glass refractions
+        borderWidth: 1.5,
+        borderColor: 'rgba(255, 255, 255, 0.8)',
+        borderBottomColor: 'rgba(255, 255, 255, 0.3)',
+        borderRightColor: 'rgba(255, 255, 255, 0.3)',
         overflow: 'hidden',
     },
     navItem: {

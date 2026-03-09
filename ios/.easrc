@@ -1,5 +1,0 @@
-build:
-  defaultProfile: devclient
-  autoselect: true
-submit:
-  defaultProfile: submit-devclient

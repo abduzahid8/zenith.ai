@@ -37,7 +37,6 @@ import { HobbyIcon } from '../components/HobbyIcon';
 import HomeTab from './tabs/HomeTab';
 import WeeklyPlanTab from './tabs/WeeklyPlanTab';
 import AICoachTab from './tabs/AICoachTab';
-import StatisticsTab from './tabs/StatisticsTab';
 
 const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24), marginTop: -scale(2) }} resizeMode="contain" />;
 
@@ -167,7 +166,6 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
                         iconTranslateY={iconTranslateY}
                         onDailyGoal={() => handleTabPress(1)}
                         onAICoach={() => handleTabPress(2)}
-                        onScreenTime={() => handleTabPress(3)}
                     />
                 </View>
 
@@ -177,10 +175,6 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
 
                 <View key="3" style={styles.page}>
                     <AICoachTab />
-                </View>
-
-                <View key="4" style={styles.page}>
-                    <StatisticsTab />
                 </View>
             </PagerView>
 

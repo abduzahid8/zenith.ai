@@ -27,6 +27,7 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="zenyth"/>
+        <data android:scheme="exp+zenyth-ai"/>
       </intent-filter>
     </activity>
   </application>
