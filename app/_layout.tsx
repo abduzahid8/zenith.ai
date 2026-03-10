@@ -12,7 +12,7 @@ import { useAppTheme } from '../src/theme/useAppTheme';
 import { ROUTES } from '../src/config/routes';
 
 export default function RootLayout() {
-    const [appIsReady, setAppIsReady] = useState(false);
+    const [appIsReady, setAppIsReady] = useState(Platform.OS === 'web');
     const { isAuthenticated, initialize, isLoading } = useAuthStore();
     const { hasCompletedOnboarding } = useUserProfileStore();
     const segments = useSegments();
@@ -41,13 +41,6 @@ export default function RootLayout() {
             setAppIsReady(true);
         }
     }, [fontsLoaded, fontError]);
-
-    // Safety timeout: on web, fonts may silently fail; unblock after 2s
-    useEffect(() => {
-        if (Platform.OS !== 'web') return;
-        const timer = setTimeout(() => setAppIsReady(true), 2000);
-        return () => clearTimeout(timer);
-    }, []);
 
     // Handle app state changes for midnight reset
     useEffect(() => {
