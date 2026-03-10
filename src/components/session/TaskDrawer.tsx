@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, Pressable, Animated, StyleSheet, Image } from 'react-native';
 import { Svg, Polyline } from 'react-native-svg';
 import { scale } from '../../constants';
-import { colors, fonts } from '../../theme';
+import { fonts } from '../../theme';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 export interface SessionTask {
     id: string;
+    storeTaskId?: string | null;
     title: string;
     subtitle: string;
     completed: boolean;
@@ -32,6 +34,9 @@ const TaskDrawer: React.FC<TaskDrawerProps> = ({
     onCompleteTask,
     onClose,
 }) => {
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     return (
         <>
             {/* Backdrop */}
@@ -74,7 +79,7 @@ const TaskDrawer: React.FC<TaskDrawerProps> = ({
                                         style={{
                                             width: scale(21),
                                             height: scale(20),
-                                            tintColor: colors.home.darkText
+                                            tintColor: colors.home?.darkText || colors.text
                                         }}
                                         resizeMode="contain"
                                     />
@@ -82,13 +87,13 @@ const TaskDrawer: React.FC<TaskDrawerProps> = ({
                             </TouchableOpacity>
                         </View>
                     ))}
-                </View>
-            </Animated.View>
+                </View >
+            </Animated.View >
         </>
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     drawerBackdrop: {
         ...StyleSheet.absoluteFillObject,
         backgroundColor: 'rgba(0,0,0,0.5)',
@@ -100,21 +105,21 @@ const styles = StyleSheet.create({
         top: 0,
         bottom: 0,
         width: scale(286),
-        backgroundColor: colors.sessionTimer.drawerBg,
+        backgroundColor: colors.sessionTimer?.drawerBg || colors.background,
         zIndex: 101,
         paddingHorizontal: scale(25),
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: colors.text,
+        shadowColor: '#000',
         shadowOffset: { width: 5, height: 0 },
         shadowOpacity: 0.3,
         shadowRadius: 10,
         elevation: 20,
     },
     drawerTitle: {
-        color: colors.sessionTimer.drawerText,
+        color: colors.sessionTimer?.drawerText || colors.text,
         fontFamily: fonts.heading.bold,
         fontSize: scale(32),
         fontWeight: '700',
@@ -130,7 +135,7 @@ const styles = StyleSheet.create({
         alignSelf: 'stretch',
     },
     taskCard: {
-        backgroundColor: colors.sessionTimer.taskBg,
+        backgroundColor: colors.sessionTimer?.taskBg || colors.surface,
         borderRadius: scale(16),
         padding: scale(16),
         width: '100%',
@@ -142,21 +147,23 @@ const styles = StyleSheet.create({
         marginBottom: scale(4),
     },
     taskSubtitle: {
-        color: colors.sessionTimer.taskMuted,
+        color: colors.sessionTimer?.taskMuted || colors.textSecondary,
         fontSize: scale(14),
         fontFamily: fonts.heading.regular,
         marginBottom: scale(12),
     },
     addButton: {
-        backgroundColor: colors.sessionTimer.taskCheckbox,
+        backgroundColor: colors.sessionTimer?.taskCheckbox || colors.surfaceLight,
         borderRadius: scale(20),
         height: scale(36),
         justifyContent: 'center',
         alignItems: 'center',
         marginTop: scale(8),
+        width: '100%',
     },
     completedButton: {
-        backgroundColor: colors.sessionTimer.taskDone,
+        backgroundColor: colors.sessionTimer?.taskDone || colors.success,
+        borderRadius: scale(20),
     },
 });
 

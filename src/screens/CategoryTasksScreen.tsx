@@ -1,29 +1,22 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTaskStore } from '../store/taskStore';
 import { useAuthStore } from '../store/authStore';
 import { taskEngine, TaskTemplate } from '../services/taskEngine';
 import { TaskType } from '../services/supabase/types';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 import { scale } from '../constants';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useAppTheme } from '../theme/useAppTheme';
 
 export const CategoryTasksScreen = () => {
     const router = useRouter();
     const params = useLocalSearchParams();
     const { id, categoryLabel, categoryBg } = params;
     const categoryType = id as TaskType;
-
-    // We need to fetch the templates. 
-    // Ideally we need user hobbies to get the right ones.
-    // For now, taskEngine.getAvailableTaskTemplates checks hobbies internally if passed, or uses 'chess' default logic we hardcoded.
-    // Let's grab hobbies from auth/profile store or just pass 'chess' for now if we don't have easy access to full hobby object here without fetching.
-    // Actually we can just call it with undefined id, it defaults to 'default' or 'chess' inside if we updated it correctly? 
-    // In my update, I kept the `default` key.
-
-    // Better: Get user's primary hobby from userProfileStore or db. 
-    // To be safe and quick: use 'default' or try to get it.
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     const { addTask, loading, dailyTasks } = useTaskStore();
     const { user } = useAuthStore();
@@ -35,14 +28,15 @@ export const CategoryTasksScreen = () => {
         try {
             await addTask(user.id, categoryType as TaskType, template);
             router.back();
-            router.back(); // Go back to Your Day (pop YourTasks + CategoryTasks)
+            router.back();
         } catch (e: any) {
             Alert.alert('Ошибка', e.message || 'Не удалось добавить задачу');
         }
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <SafeAreaView style={styles.container} edges={['top']}>
+            <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Image
@@ -97,9 +91,10 @@ export const CategoryTasksScreen = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: colors.background,
     },
     header: {
         flexDirection: 'row',
@@ -153,15 +148,14 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: colors.surfaceLight || '#FFFFFF',
         borderRadius: scale(16),
         padding: scale(16),
         borderWidth: 1,
-        borderColor: '#F0F0F0',
+        borderColor: colors.border || '#F0F0F0',
     },
     taskCardDisabled: {
-        backgroundColor: '#F9F9F9',
-        opacity: 0.7,
+        opacity: 0.5,
     },
     textContainer: {
         flex: 1,
@@ -188,7 +182,7 @@ const styles = StyleSheet.create({
     plusIcon: {
         width: scale(16),
         height: scale(16),
-        tintColor: colors.dark,
+        tintColor: '#1E1E2E',
     },
     checkIcon: {
         width: scale(24),
@@ -197,8 +191,10 @@ const styles = StyleSheet.create({
     },
     loadingOverlay: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(255,255,255,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.3)',
         justifyContent: 'center',
         alignItems: 'center',
     }
 });
+
+export default CategoryTasksScreen;

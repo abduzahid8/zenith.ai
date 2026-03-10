@@ -11,6 +11,8 @@ export const getSubscriptionDisplayText = (level: SubscriptionLevel): string => 
         case 'premium':
             return 'Premium';
         case 'trial':
+            return 'Trial';
+        case 'free':
         default:
             return 'Free';
     }

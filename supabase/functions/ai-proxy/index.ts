@@ -2,8 +2,12 @@
 // Handles all AI calls server-side to keep API keys secure
 // Deploy: npx supabase functions deploy ai-proxy
 
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
 const GEMINI_MODEL = 'gemini-2.0-flash';
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -30,6 +34,25 @@ interface RequestBody {
     quizAnswers?: Record<number, number>;
     behaviorData?: Record<string, unknown>;
     answers?: Record<number, number>;
+}
+
+async function requireAuthenticatedUser(req: Request): Promise<string> {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+        throw new Error('Unauthorized: missing bearer token');
+    }
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        throw new Error('Unauthorized: auth provider config missing');
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        global: { headers: { Authorization: authHeader } },
+    });
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) {
+        throw new Error('Unauthorized: invalid token');
+    }
+    return data.user.id;
 }
 
 // Call Gemini API
@@ -224,8 +247,12 @@ Deno.serve(async (req) => {
             throw new Error('GEMINI_API_KEY not configured. Run: npx supabase secrets set GEMINI_API_KEY=...');
         }
 
+        await requireAuthenticatedUser(req);
         const body: RequestBody = await req.json();
         const { action } = body;
+        if (!action) {
+            throw new Error('Bad request: missing action');
+        }
 
         let result: string;
 
@@ -269,6 +296,11 @@ Deno.serve(async (req) => {
         console.error('ai-proxy error:', message);
 
         let status = 500;
+        if (message.startsWith('Unauthorized')) {
+            status = 401;
+        } else if (message.startsWith('Bad request')) {
+            status = 400;
+        }
         if (message.includes('429') || message.includes('Quota')) {
             status = 429;
         }

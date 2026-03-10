@@ -265,7 +265,7 @@ public class DeviceActivityModule: Module {
     private func fetchWeeklyStats() async throws -> [DailyUsageSummary] {
         let calendar = Calendar.current
         let today = Date()
-        let weekAgo = calendar.date(byAdding: .day, value: -7, to: today) ?? today
+        let weekAgo = calendar.date(byAdding: .day, value: -6, to: today) ?? today
         
         return try await fetchUsageForRange(start: weekAgo, end: today)
     }

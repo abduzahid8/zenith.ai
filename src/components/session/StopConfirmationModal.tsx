@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { scale } from '../../constants';
-import { colors, fonts } from '../../theme';
+import { fonts } from '../../theme';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 export interface StopConfirmationModalProps {
     visible: boolean;
@@ -19,6 +20,9 @@ const StopConfirmationModal: React.FC<StopConfirmationModalProps> = ({
     onCancel,
     onConfirm,
 }) => {
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     if (!visible) return null;
 
     return (
@@ -42,7 +46,7 @@ const StopConfirmationModal: React.FC<StopConfirmationModalProps> = ({
                 >
                     <Image
                         source={dontShowAgainChecked ? require('../../../icons/checkbox-checked.png') : require('../../../icons/checkbox-empty.png')}
-                        style={{ width: scale(20), height: scale(20), marginRight: scale(10) }}
+                        style={{ width: scale(20), height: scale(20), marginRight: scale(10), tintColor: undefined }}
                         resizeMode="contain"
                     />
                     <Text style={styles.checkboxLabel}>Больше не показывать</Text>
@@ -62,7 +66,7 @@ const StopConfirmationModal: React.FC<StopConfirmationModalProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     modalOverlay: {
         ...StyleSheet.absoluteFillObject,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -72,11 +76,11 @@ const styles = StyleSheet.create({
     },
     modalContainer: {
         width: '85%',
-        backgroundColor: 'white',
+        backgroundColor: colors.surfaceLight || 'white',
         borderRadius: scale(24),
         padding: scale(24),
         alignItems: 'center',
-        shadowColor: colors.text,
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.25,
         shadowRadius: 10,
@@ -92,7 +96,7 @@ const styles = StyleSheet.create({
     modalTitle: {
         fontFamily: fonts.heading.bold,
         fontSize: scale(20),
-        color: colors.home.darkText,
+        color: colors.text,
         textAlign: 'center',
         marginBottom: scale(24),
         lineHeight: scale(26),
@@ -102,25 +106,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: scale(32),
     },
-    checkboxData: {
-        width: scale(20),
-        height: scale(20),
-        borderRadius: scale(10),
-        borderWidth: 1,
-        borderColor: colors.sessionTimer.modalBorder,
-        marginRight: scale(10),
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: colors.sessionTimer.modalSurface,
-    },
-    checkboxChecked: {
-        backgroundColor: colors.sessionTimer.primary,
-        borderColor: colors.sessionTimer.primary,
-    },
     checkboxLabel: {
         fontFamily: fonts.heading.regular,
         fontSize: scale(14),
-        color: colors.sessionTimer.labelMuted,
+        color: colors.textSecondary,
     },
     modalButtonsRow: {
         flexDirection: 'row',
@@ -129,7 +118,7 @@ const styles = StyleSheet.create({
     },
     modalButtonGray: {
         flex: 1,
-        backgroundColor: colors.sessionTimer.checkboxOff,
+        backgroundColor: colors.buttonSecondary || colors.sessionTimer.checkboxOff,
         borderRadius: scale(14),
         paddingVertical: scale(16),
         alignItems: 'center',

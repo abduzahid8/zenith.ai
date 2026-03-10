@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     View,
     Text,
@@ -12,15 +12,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LogoNew } from '../components/Logo';
 import { Button } from '../components/Button';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 import { scale } from '../constants';
 import { useQuizStore, QUIZ_QUESTIONS } from '../store/quizStore';
 import { useAuthStore } from '../store/authStore';
 import { dbService } from '../services/supabase';
+import { useAppTheme } from '../theme/useAppTheme';
 
 export default function QuizScreen() {
     const router = useRouter();
     const user = useAuthStore((s) => s.user);
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     const {
         currentQuestion,
         answers,
@@ -77,7 +81,7 @@ export default function QuizScreen() {
 
             {/* Logo at top */}
             <View style={styles.logoContainer}>
-                <LogoNew width={scale(160)} height={scale(36)} variant="full" />
+                <LogoNew width={scale(160)} height={scale(36)} variant="full" color={colors.text} />
             </View>
 
             {/* Progress indicator */}
@@ -133,7 +137,7 @@ export default function QuizScreen() {
                     >
                         <Image
                             source={require('../../assets/icons/back-arrow.png')}
-                            style={styles.backIcon}
+                            style={[styles.backIcon, { tintColor: colors.text }]}
                             resizeMode="contain"
                         />
                     </TouchableOpacity>
@@ -152,7 +156,7 @@ export default function QuizScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -172,7 +176,7 @@ const styles = StyleSheet.create({
         flex: 1,
         height: 4,
         borderRadius: 2,
-        backgroundColor: colors.surface,
+        backgroundColor: colors.surface || colors.surfaceLight,
         overflow: 'hidden',
     },
     progressFill: {
@@ -197,7 +201,7 @@ const styles = StyleSheet.create({
         fontFamily: fonts.heading.bold,
         fontSize: 24,
         lineHeight: 32,
-        color: colors.text, // Color change
+        color: colors.text,
     },
     optionsContainer: {
         paddingHorizontal: 24,
@@ -213,27 +217,27 @@ const styles = StyleSheet.create({
         height: 24,
         borderRadius: 12,
         borderWidth: 1.5,
-        borderColor: colors.text, // Color change
+        borderColor: colors.text,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 16,
         marginTop: 2,
     },
     radioCircleSelected: {
-        borderColor: colors.text, // Color change
+        borderColor: colors.text,
     },
     radioInner: {
         width: 12,
         height: 12,
         borderRadius: 6,
-        backgroundColor: colors.text, // Color change
+        backgroundColor: colors.text,
     },
     optionText: {
         flex: 1,
-        fontFamily: fonts.body.light, // Font change
+        fontFamily: fonts.body.light,
         fontSize: 16,
         lineHeight: 24,
-        color: colors.text, // Color change
+        color: colors.text,
     },
     spacer: {
         flex: 1,
@@ -251,7 +255,7 @@ const styles = StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
-        backgroundColor: colors.quiz.backButtonBg,
+        backgroundColor: colors.quiz?.backButtonBg || colors.surfaceLight,
         justifyContent: 'center',
         alignItems: 'center',
     },

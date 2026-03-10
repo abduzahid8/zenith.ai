@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -8,7 +8,7 @@ import { useAuthStore } from '../src/store/authStore';
 import { useTaskStore } from '../src/store/taskStore';
 import { useUserProfileStore } from '../src/store/userProfileStore';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
-import { colors } from '../src/theme';
+import { useAppTheme } from '../src/theme/useAppTheme';
 import { ROUTES } from '../src/config/routes';
 
 export default function RootLayout() {
@@ -17,15 +17,15 @@ export default function RootLayout() {
     const { hasCompletedOnboarding } = useUserProfileStore();
     const segments = useSegments();
     const router = useRouter();
+    const { colors } = useAppTheme();
+
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     const [fontsLoaded, fontError] = useFonts({
-        // Keep trial fonts for weights not provided in new set if necessary, 
-        // or map to closest available if strictly replacing. 
-        // User provided Bold and Regular non-trial versions.
         'Gramatika-Black': require('../assets/fonts/GramatikaTrial-Black-BF65dea4c4a007c.otf'),
-        'Gramatika-Bold': require('../assets/fonts/Gramatika-Bold.ttf'), // Updated to non-trial
+        'Gramatika-Bold': require('../assets/fonts/Gramatika-Bold.ttf'),
         'Gramatika-Medium': require('../assets/fonts/GramatikaTrial-Medium-BF65dea4c5c6afd.otf'),
-        'Gramatika-Regular': require('../assets/fonts/Gramatika-Regular.ttf'), // Updated to non-trial
+        'Gramatika-Regular': require('../assets/fonts/Gramatika-Regular.ttf'),
         'Gramatika-Light': require('../assets/fonts/GramatikaTrial-Light-BF65dea4c59cf23.otf'),
         'Gramatika-ExtraLight': require('../assets/fonts/GramatikaTrial-ExtraLight-BF65dea4c5b0dc5.otf'),
         'Geometria-Light': require('../assets/fonts/Geometria-Light.ttf'),
@@ -78,8 +78,6 @@ export default function RootLayout() {
                 }
             } else {
                 // Completed onboarding
-                // Check if user is in auth group or onboarding flow (optional: allow revisiting subscription?)
-                // For strict prototype, force to app if in auth
                 if (inAuthGroup && !isPrivacy) {
                     router.replace(ROUTES.APP as any);
                 }
@@ -90,9 +88,9 @@ export default function RootLayout() {
     // Show loading screen while fonts or auth load
     if (!appIsReady || isLoading) {
         return (
-            <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+            <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={[styles.loadingText, { color: colors.text }]}>Загрузка...</Text>
+                <Text style={styles.loadingText}>Загрузка...</Text>
             </View>
         );
     }
@@ -104,7 +102,7 @@ export default function RootLayout() {
 
     return (
         <GestureHandlerRootView style={styles.container}>
-            <ErrorBoundary>
+            <ErrorBoundary colors={colors}>
                 <SafeAreaProvider>
                     <Stack screenOptions={{ headerShown: false }}>
                         <Stack.Screen name="(auth)" />
@@ -143,7 +141,7 @@ export default function RootLayout() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
     },
@@ -151,9 +149,11 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: colors.background,
     },
     loadingText: {
         marginTop: 16,
         fontSize: 16,
+        color: colors.text,
     },
 });

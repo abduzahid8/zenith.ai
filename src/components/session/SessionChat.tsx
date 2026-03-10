@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
     View,
     Text,
@@ -10,10 +10,12 @@ import {
     StyleSheet,
     Image,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { scale } from '../../constants';
-import { colors, fonts } from '../../theme';
+import { fonts } from '../../theme';
 import { ChatMessage } from '../../services/ai';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 export interface SessionChatProps {
     messages: ChatMessage[];
@@ -32,6 +34,9 @@ const SessionChat: React.FC<SessionChatProps> = ({
     onSendMessage,
     onOpenTaskList,
 }) => {
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -46,7 +51,8 @@ const SessionChat: React.FC<SessionChatProps> = ({
                         activeOpacity={0.7}
                         onPress={onOpenTaskList}
                     >
-                        <Image source={require('../../../icons/tasks.png')} style={{ width: scale(24), height: scale(24), tintColor: colors.home.darkText }} resizeMode="contain" />
+                        <BlurView intensity={80} tint="light" style={styles.chatMenuGlass} />
+                        <Image source={require('../../../icons/tasks.png')} style={{ width: scale(24), height: scale(24), tintColor: colors.home.darkText, zIndex: 1 }} resizeMode="contain" />
                     </TouchableOpacity>
                 </View>
 
@@ -106,7 +112,7 @@ const SessionChat: React.FC<SessionChatProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     chatPage: {
         flex: 1,
         backgroundColor: colors.sessionTimer.background,
@@ -122,9 +128,19 @@ const styles = StyleSheet.create({
         width: scale(48),
         height: scale(48),
         borderRadius: scale(24),
-        backgroundColor: colors.sessionTimer.chatInput,
         justifyContent: 'center',
         alignItems: 'center',
+        overflow: 'hidden',
+    },
+    chatMenuGlass: {
+        ...StyleSheet.absoluteFillObject,
+        borderRadius: scale(24),
+        overflow: 'hidden',
+        backgroundColor: 'rgba(255, 255, 255, 0.25)',
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.4)',
+        borderTopColor: 'rgba(255, 255, 255, 1)',
+        borderLeftColor: 'rgba(255, 255, 255, 0.9)',
     },
     chatArea: {
         flex: 1,

@@ -76,8 +76,15 @@ export const useAuthStore = create<AuthState>()(
                 });
             } catch (error: unknown) {
                 console.error('Login error:', error);
-                const base = toAppError(error);
-                let errorMessage = base.message;
+                const hasStructuredMessage =
+                    error instanceof Error ||
+                    (typeof error === 'object' &&
+                        error !== null &&
+                        'message' in error &&
+                        typeof (error as { message?: unknown }).message === 'string');
+                let errorMessage = hasStructuredMessage
+                    ? toAppError(error).message
+                    : 'Unknown error';
 
                 if (errorMessage.includes('Email not confirmed')) {
                     errorMessage = 'Email не подтвержден. Проверьте почту.';

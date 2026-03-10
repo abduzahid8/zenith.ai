@@ -1,4 +1,5 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
+import { BlurView } from 'expo-blur';
 import {
     View,
     Text,
@@ -14,8 +15,8 @@ import { useRouter } from 'expo-router';
 
 import PagerView from '../components/ui/PagerView';
 import { scale } from '../constants';
-import { colors, fonts } from '../theme';
-import { APP_TAB_ROUTES, getMainTabUrl } from '../config/navigation';
+import { fonts } from '../theme';
+import { APP_TAB_ROUTES } from '../config/navigation';
 import { useTimer } from '../hooks/useTimer';
 
 // Extracted components
@@ -27,12 +28,13 @@ import {
     SessionSummaryView,
 } from '../components/session';
 import { BottomTabBar } from '../components/navigation/BottomTabBar';
-
-const TABS = APP_TAB_ROUTES;
+import { useAppTheme } from '../theme/useAppTheme';
 
 export const SessionTimerScreen: React.FC = () => {
     const router = useRouter();
     const pagerViewRef = useRef<PagerView>(null);
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     const {
         // Timer
@@ -51,15 +53,11 @@ export const SessionTimerScreen: React.FC = () => {
         chatInput, setChatInput, messages, isAiLoading, handleSendMessage,
         // Animations
         controlsAnim, drawerAnim, backdropAnim, bottomNavVisible,
-        // Constants
-        totalTime,
     } = useTimer();
 
     const handleStop = () => {
         router.back();
     };
-
-    // --- All hooks must be called before any conditional return (React rules of hooks) ---
 
     // Main pager scroll animation
     const mainPagerPosition = useRef(new Animated.Value(0)).current;
@@ -82,9 +80,7 @@ export const SessionTimerScreen: React.FC = () => {
         return <SessionSummaryView tasks={tasks} startTime={startTime} onExit={handleStop} />;
     }
 
-
-
-    // --- Control button slide animations ---
+    // Control button slide animations
     const translateXReset = controlsAnim.interpolate({
         inputRange: [0, 1],
         outputRange: [scale(120), 0],
@@ -96,7 +92,7 @@ export const SessionTimerScreen: React.FC = () => {
 
     return (
         <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-            <StatusBar barStyle="dark-content" />
+            <StatusBar barStyle="dark-content" backgroundColor={colors.sessionTimer.background} />
 
             <PagerView
                 style={{ flex: 1 }}
@@ -120,7 +116,8 @@ export const SessionTimerScreen: React.FC = () => {
                                     activeOpacity={0.7}
                                     onPress={() => setIsTaskListVisible(true)}
                                 >
-                                    <Image source={require('../../icons/tasks.png')} style={{ width: scale(24), height: scale(24), tintColor: '#1E1E2E' }} resizeMode="contain" />
+                                    <BlurView intensity={80} tint="light" style={styles.floatingMenuGlass} />
+                                    <Image source={require('../../icons/tasks.png')} style={{ width: scale(24), height: scale(24), tintColor: '#1E1E2E', zIndex: 1 }} resizeMode="contain" />
                                 </TouchableOpacity>
                             </Animated.View>
                         )}
@@ -140,7 +137,7 @@ export const SessionTimerScreen: React.FC = () => {
                             <View style={styles.controlsContainer}>
                                 {timerStatus === 'idle' ? (
                                     <TouchableOpacity style={styles.playButton} onPress={handlePlay} activeOpacity={0.8}>
-                                        <Image source={require('../../icons/play.png')} style={{ width: scale(30), height: scale(40), tintColor: colors.buttonTextPrimary, marginLeft: scale(5) }} resizeMode="contain" />
+                                        <Image source={require('../../icons/play.png')} style={{ width: scale(30), height: scale(40), tintColor: colors.buttonTextPrimary || 'white', marginLeft: scale(5) }} resizeMode="contain" />
                                     </TouchableOpacity>
                                 ) : (
                                     <View style={styles.activeControls}>
@@ -151,7 +148,7 @@ export const SessionTimerScreen: React.FC = () => {
                                                     style={{
                                                         width: scale(34.437),
                                                         height: scale(32.746),
-                                                        tintColor: colors.buttonTextPrimary
+                                                        tintColor: colors.buttonTextPrimary || 'white'
                                                     }}
                                                     resizeMode="contain"
                                                 />
@@ -171,14 +168,13 @@ export const SessionTimerScreen: React.FC = () => {
                                                 source={timerStatus === 'running' ? require('../../icons/pause.png') : require('../../icons/play.png')}
                                                 style={[
                                                     {
-                                                        tintColor: colors.buttonTextPrimary,
+                                                        tintColor: colors.buttonTextPrimary || 'white',
                                                         marginLeft: timerStatus === 'running' ? 0 : scale(5)
                                                     },
                                                     timerStatus === 'running'
                                                         ? {
                                                             width: scale(29),
                                                             height: scale(35),
-                                                            flexShrink: 0
                                                         }
                                                         : {
                                                             width: scale(40),
@@ -196,8 +192,7 @@ export const SessionTimerScreen: React.FC = () => {
                                                     style={{
                                                         width: scale(24),
                                                         height: scale(24),
-                                                        tintColor: colors.buttonTextPrimary,
-                                                        flexShrink: 0
+                                                        tintColor: colors.buttonTextPrimary || 'white',
                                                     }}
                                                     resizeMode="contain"
                                                 />
@@ -237,13 +232,7 @@ export const SessionTimerScreen: React.FC = () => {
             {/* Bottom Navigation — animates out when timer is running/paused */}
             <Animated.View
                 style={[
-                    {
-                        position: 'absolute',
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        alignItems: 'center',
-                    },
+                    styles.bottomNavWrapper,
                     {
                         opacity: bottomNavVisible,
                         transform: [{
@@ -257,23 +246,11 @@ export const SessionTimerScreen: React.FC = () => {
                 pointerEvents={timerStatus === 'idle' ? 'auto' : 'none'}
             >
                 <BottomTabBar
-                    activeTab={0} // Highlighting Home as per screenshot
+                    activeTab={0}
                     onTabPress={(index) => {
-                        // Map index to tab logic
-                        // If index is 0 (Home), we just want to go back to the main screen.
-                        // Since SessionTimer is likely pushed on top, router.back() or dismissAll() works.
-                        // For other tabs, we might need to reset navigation state or replace with params.
-
-                        // Simplest approach: Navigate to the main screen with parameter
-                        // We need to import BottomTabBar first!
-
-                        // NOTE: MainTabsScreen accepts { initialTab }.
-                        // We can use navigate (push/pop) to go back.
-
                         if (index === 0) {
                             router.dismissAll();
                         } else {
-                            // If we want to switch tab, we can navigate to root with params
                             router.replace({ pathname: '/(app)', params: { initialTab: index } });
                         }
                     }}
@@ -301,7 +278,7 @@ export const SessionTimerScreen: React.FC = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.sessionTimer.background,
@@ -311,17 +288,22 @@ const styles = StyleSheet.create({
         height: scale(50),
     },
     floatingMenu: {
-        width: scale(48),
-        height: scale(48),
-        borderRadius: scale(24),
-        backgroundColor: colors.buttonTextPrimary,
+        width: scale(55),
+        height: scale(55),
+        borderRadius: scale(27.5),
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: colors.shadow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 5,
+        overflow: 'hidden',
+    },
+    floatingMenuGlass: {
+        ...StyleSheet.absoluteFillObject,
+        borderRadius: scale(27.5),
+        overflow: 'hidden',
+        backgroundColor: 'rgba(255, 255, 255, 0.25)',
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.4)',
+        borderTopColor: 'rgba(255, 255, 255, 1)',
+        borderLeftColor: 'rgba(255, 255, 255, 0.9)',
     },
     content: {
         flex: 1,
@@ -370,31 +352,11 @@ const styles = StyleSheet.create({
         backgroundColor: colors.sessionTimer.text,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: colors.shadow,
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
         shadowRadius: 8,
         elevation: 5,
-    },
-    bottomNav: {
-        height: scale(60),
-        marginHorizontal: scale(16),
-        marginBottom: scale(16),
-        borderRadius: scale(47),
-        backgroundColor: colors.nav.floatingBg,
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        shadowColor: colors.shadow,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: colors.nav.floatingBorder,
-    },
-    navItem: {
-        padding: scale(12),
     },
     mainPaginationContainer: {
         position: 'absolute',
@@ -411,6 +373,13 @@ const styles = StyleSheet.create({
         height: scale(13),
         borderRadius: scale(31),
         backgroundColor: colors.sessionTimer.dotActive,
+    },
+    bottomNavWrapper: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
     },
 });
 

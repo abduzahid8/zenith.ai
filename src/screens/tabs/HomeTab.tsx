@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
     View,
     ScrollView,
@@ -7,12 +7,12 @@ import {
     TouchableOpacity,
     Animated,
     Image,
-    Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { scale } from '../../constants';
-import { colors, fonts } from '../../theme';
+import { fonts } from '../../theme';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 const booksImage = require('../../../assets/images/home-books.png');
 const targetImage = require('../../../assets/images/home-target.png');
@@ -36,6 +36,8 @@ const HomeTab: React.FC<HomeTabProps> = ({
     onScreenTime,
 }) => {
     const router = useRouter();
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     const handleNavigate = (route: string) => {
         router.push(route as any);
@@ -53,8 +55,8 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 style={styles.cardShadowProp}
             >
                 <LinearGradient
-                    start={{ x: 1, y: 1 }}
-                    end={{ x: 0, y: 0 }}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                     colors={['#BFD8F9', '#CDE3FC', '#DAEEFF']}
                     locations={[0.0258, 0.6253, 1.0]}
                     style={styles.startSessionCard}
@@ -135,7 +137,9 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    onPress={() => Alert.alert('В разработке', 'Эта функция скоро появится!')}
+                    onPress={() =>
+                        onScreenTime ? onScreenTime() : handleNavigate('/(app)/screen-time')
+                    }
                     activeOpacity={0.8}
                     style={[styles.cardShadowProp, { flex: 1 }]}
                 >
@@ -166,7 +170,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     homeContent: {
         flex: 1,
         paddingHorizontal: scale(16),
@@ -194,7 +198,7 @@ const styles = StyleSheet.create({
         fontFamily: fonts.heading.bold,
         fontSize: scale(24),
         lineHeight: scale(26),
-        color: colors.home.darkText,
+        color: '#1E1E2E',
         zIndex: 1,
     },
     dailyGoalButton: {
@@ -248,7 +252,7 @@ const styles = StyleSheet.create({
         fontFamily: fonts.heading.bold,
         fontSize: scale(24),
         lineHeight: scale(28),
-        color: colors.home.darkText,
+        color: '#1E1E2E',
     },
 });
 

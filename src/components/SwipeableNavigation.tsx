@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
     View,
     StyleSheet,
@@ -8,8 +8,8 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { scale, SCREEN_WIDTH } from '../constants';
-import { colors } from '../theme';
 import { APP_TAB_ROUTES } from '../config/navigation';
+import { useAppTheme } from '../theme/useAppTheme';
 
 const TABS = APP_TAB_ROUTES;
 
@@ -24,6 +24,7 @@ export const SwipeableNavigation: React.FC<SwipeableNavigationProps> = ({
 }) => {
     const scrollViewRef = useRef<ScrollView>(null);
     const [activeTab, setActiveTab] = useState(initialIndex);
+    const styles = useMemo(() => createStyles(), []);
 
     const handleTabPress = (index: number) => {
         scrollViewRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: true });
@@ -61,7 +62,7 @@ export const SwipeableNavigation: React.FC<SwipeableNavigationProps> = ({
 
             {/* Bottom Navigation */}
             <View style={styles.bottomNavContainer}>
-                <BlurView intensity={100} tint="light" style={styles.glassBackground} />
+                <BlurView intensity={100} tint={'light'} style={styles.glassBackground} />
                 {TABS.slice(0, children.length).map((tab, index) => (
                     <TouchableOpacity
                         key={tab.key}
@@ -73,7 +74,8 @@ export const SwipeableNavigation: React.FC<SwipeableNavigationProps> = ({
                             style={{
                                 width: scale(28),
                                 height: scale(28),
-                                opacity: activeTab === index ? 1 : 0.5
+                                opacity: activeTab === index ? 1 : 0.5,
+                                tintColor: undefined,
                             }}
                             resizeMode="contain"
                         />
@@ -84,7 +86,7 @@ export const SwipeableNavigation: React.FC<SwipeableNavigationProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
     container: {
         flex: 1,
     },
@@ -105,7 +107,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         height: 67,
         borderRadius: 47,
-        // Precise Figma Drop Shadow (0 2px 4px rgba(0,0,0,0.25))
         shadowColor: 'rgba(0, 0, 0, 0.25)',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 1,
@@ -114,13 +115,15 @@ const styles = StyleSheet.create({
     },
     glassBackground: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)', // CSS #FFFFFF at 10% opacity from Figma
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
         borderRadius: 47,
-        borderWidth: StyleSheet.hairlineWidth, // Tahoe crisp thin edge
-        borderColor: 'rgba(255, 255, 255, 0.4)', // Slightly pronounced edge for glass refractions
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: 'rgba(255, 255, 255, 0.4)',
         overflow: 'hidden',
     },
     navItem: {
         padding: scale(12),
     },
 });
+
+export default SwipeableNavigation;

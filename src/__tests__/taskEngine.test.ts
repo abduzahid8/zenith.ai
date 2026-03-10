@@ -1,113 +1,80 @@
 import { taskEngine } from '../services/taskEngine';
-import { UserStateSnapshot, UserHobby, UserEarning, EarningMethod, Task } from '../services/supabase/types';
+import { TaskType, UserHobby } from '../services/supabase/types';
 
 describe('taskEngine', () => {
     const userId = 'user-123';
     const date = '2023-10-27';
 
-    const mockHobby: UserHobby = {
-        id: '1',
+    const primaryHobby: UserHobby = {
+        id: 'hobby-1',
         user_id: userId,
         hobby_id: 'chess',
-        is_primary: true
+        is_primary: true,
     };
 
-    const mockSnapshot: UserStateSnapshot = {
-        user_id: userId,
-        skill_level: 5,
-        avg_session_time: 30, // should result in ~35min tasks
-        loss_streak: 0
-    };
+    it('generates a valid daily plan with 2 tasks', () => {
+        const tasks = taskEngine.generateDailyPlan(userId, date, null, [primaryHobby]);
 
-    const mockEarningMethods: EarningMethod[] = [
-        {
-            id: 'em-1',
-            title: 'Freelance Chess Coach',
-            category: 'freelance'
-        }
-    ];
-
-    const mockUserEarning: UserEarning = {
-        id: 'ue-1',
-        user_id: userId,
-        earning_method_id: 'em-1',
-        status: 'learning'
-    };
-
-    it('generates exactly 4 tasks', () => {
-        const tasks = taskEngine.generateDailyPlan(
-            userId,
-            date,
-            mockSnapshot,
-            [mockHobby],
-            [],
-            []
-        );
-
-        expect(tasks).toHaveLength(4);
-        const types = tasks.map(t => t.type);
-        expect(types).toContain('learning');
-        expect(types).toContain('practice');
-        expect(types).toContain('action');
-        expect(types).toContain('wellbeing');
+        expect(tasks).toHaveLength(2);
+        tasks.forEach((task) => {
+            expect(task.user_id).toBe(userId);
+            expect(task.scheduled_date).toBe(date);
+            expect(task.status).toBe('pending');
+            expect(task.type).toMatch(/^(theory|practice|analysis|puzzles)$/);
+            expect(typeof task.title).toBe('string');
+            expect((task.title || '').length).toBeGreaterThan(0);
+        });
     });
 
-    it('adjusts duration based on snapshot', () => {
-        const tasks = taskEngine.generateDailyPlan(
-            userId,
-            date,
-            mockSnapshot, // avg_session_time 30
-            [mockHobby]
-        );
-
-        const practiceTask = tasks.find(t => t.type === 'practice');
-        // Logic: min(60, max(5, 30 + 5)) = 35
-        expect(practiceTask?.duration_minutes).toBe(35);
+    it('includes primary hobby in generated tasks', () => {
+        const tasks = taskEngine.generateDailyPlan(userId, date, null, [primaryHobby]);
+        tasks.forEach((task) => {
+            expect(task.hobby_id).toBe('chess');
+        });
     });
 
-    it('activates recovery mode on loss streak', () => {
-        const recoverySnapshot = { ...mockSnapshot, loss_streak: 5 };
-        const tasks = taskEngine.generateDailyPlan(
-            userId,
-            date,
-            recoverySnapshot,
-            [mockHobby]
-        );
-
-        const practiceTask = tasks.find(t => t.type === 'practice');
-        // Logic: duration - 5
-        // Base was 35, now 30. Diff checks
-        // Also title should be different/easier potentially
-        expect(practiceTask?.duration_minutes).toBeLessThan(35);
+    it('falls back safely when hobby list is empty', () => {
+        const tasks = taskEngine.generateDailyPlan(userId, date, null, []);
+        expect(tasks).toHaveLength(2);
+        tasks.forEach((task) => {
+            expect(task.hobby_id).toBeUndefined();
+        });
     });
 
-    it('includes earning task if active path exists', () => {
-        const tasks = taskEngine.generateDailyPlan(
+    it('creates manual task from template with exact title/duration', () => {
+        const template = { title: 'Custom template task', duration: 42 };
+        const task = taskEngine.generateTaskByType(
             userId,
+            'practice',
             date,
-            mockSnapshot,
-            [mockHobby],
-            [mockUserEarning],
-            mockEarningMethods
+            null,
+            [primaryHobby],
+            template,
         );
 
-        const actionTask = tasks.find(t => t.type === 'action');
-        expect(actionTask?.title).toContain('Freelance Chess Coach');
-        expect(actionTask?.earning_step_id).toBe('ue-1');
+        expect(task.type).toBe('practice');
+        expect(task.title).toBe(template.title);
+        expect(task.duration_minutes).toBe(template.duration);
+        expect(task.is_manual).toBe(true);
     });
 
-    it('falls back if no earning path', () => {
-        const tasks = taskEngine.generateDailyPlan(
-            userId,
-            date,
-            mockSnapshot,
-            [mockHobby],
-            [],
-            []
-        );
+    it('returns templates for known hobby and default fallback for unknown hobby', () => {
+        const known = taskEngine.getAvailableTaskTemplates('chess', 'theory');
+        const unknown = taskEngine.getAvailableTaskTemplates('unknown-hobby', 'theory');
 
-        const actionTask = tasks.find(t => t.type === 'action');
-        expect(actionTask?.title).toBe('Применить навык на практике');
-        expect(actionTask?.earning_step_id).toBeUndefined();
+        expect(Array.isArray(known)).toBe(true);
+        expect(Array.isArray(unknown)).toBe(true);
+        expect(known.length).toBeGreaterThan(0);
+        expect(unknown.length).toBeGreaterThan(0);
+    });
+
+    it('supports all task types in getAvailableTaskTemplates', () => {
+        const types: TaskType[] = ['theory', 'practice', 'analysis', 'puzzles'];
+
+        types.forEach((type) => {
+            const templates = taskEngine.getAvailableTaskTemplates('chess', type);
+            expect(Array.isArray(templates)).toBe(true);
+            expect(templates.length).toBeGreaterThan(0);
+        });
     });
 });

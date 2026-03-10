@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
     TouchableOpacity,
     View,
@@ -8,8 +8,9 @@ import {
     ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, typography, borderRadius } from '../theme';
+import { typography, borderRadius } from '../theme';
 import { scaleWidth, scaleHeight, scaleFont } from '../theme/responsive';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface HobbyCardProps {
     id: string;
@@ -21,7 +22,7 @@ interface HobbyCardProps {
     style?: ViewStyle;
 }
 
-// Hobby configurations
+// Hobby configurations // colors updated for dark theme compatibility
 export const HOBBIES = {
     chess: {
         id: 'chess',
@@ -57,6 +58,8 @@ export const HobbyCard: React.FC<HobbyCardProps> = ({
 }) => {
     const hobby = HOBBIES[id as keyof typeof HOBBIES];
     const bgColor = hobby?.color || '#1a1a2e';
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     return (
         <TouchableOpacity
@@ -85,7 +88,7 @@ export const HobbyCard: React.FC<HobbyCardProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         width: scaleWidth(160),
         height: scaleHeight(200),
@@ -110,7 +113,7 @@ const styles = StyleSheet.create({
     title: {
         fontFamily: typography.h3.fontFamily,
         fontSize: scaleFont(16),
-        color: colors.background,
+        color: '#FAFAFA', // Force light text on dark gradient backgrounds
         textAlign: 'center',
         marginBottom: scaleHeight(4),
     },
@@ -132,7 +135,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     selectedText: {
-        color: colors.text,
+        color: '#121212', // Force dark text for contrast against primary color
         fontSize: scaleFont(14),
         fontWeight: 'bold',
     },

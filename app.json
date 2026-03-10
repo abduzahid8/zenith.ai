@@ -15,9 +15,12 @@
     },
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "1",
+      "buildNumber": "3",
       "bundleIdentifier": "com.zenyth.ai",
       "usesAppleSignIn": true,
+      "entitlements": {
+        "com.apple.developer.family-controls": true
+      },
       "infoPlist": {
         "NSHealthShareUsageDescription": "We need access to track your screen time",
         "NSHealthUpdateUsageDescription": "We use this to help you manage your screen time",

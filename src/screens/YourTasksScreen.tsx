@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Alert, ActivityIndicator } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTaskStore } from '../store/taskStore';
-import { useAuthStore } from '../store/authStore';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { TaskType } from '../services/supabase/types';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 import { scale } from '../constants';
+import { useAppTheme } from '../theme/useAppTheme';
 
 const categories: { type: TaskType; label: string; icon: any; bg: string; subtitle: string }[] = [
     {
@@ -42,10 +42,10 @@ const categories: { type: TaskType; label: string; icon: any; bg: string; subtit
 
 export const YourTasksScreen = () => {
     const router = useRouter();
-    const { dailyTasks, loading, error } = useTaskStore();
+    const { dailyTasks } = useTaskStore();
     const { isPremium } = useUserProfileStore();
-
-
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     const handleAdd = (type: TaskType, label: string, bg: string) => {
         router.push({
@@ -54,11 +54,9 @@ export const YourTasksScreen = () => {
         });
     };
 
-    const maxTasks = isPremium ? 4 : 3;
-    const canAddMore = dailyTasks.length < maxTasks;
-
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
+            <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Image
@@ -77,21 +75,14 @@ export const YourTasksScreen = () => {
                 </Text>
 
                 <View style={styles.cardsContainer}>
-                    {categories.map((cat, index) => {
-                        const isAdded = false; // We don't disable categories anymore, we just let them enter to browse. Or we can check if they have active tasks?
-                        // Actually if they have 4 tasks, they can't add more. 
-                        // But maybe they want to check what tasks exist? 
-                        // Let's allow entry but disable ADDING inside the next screen (which I implemented).
-                        const isDisabled = false;
-
+                    {categories.map((cat) => {
                         return (
                             <View key={cat.type} style={{ marginBottom: scale(16) }}>
                                 <CategoryCard
                                     category={cat}
-                                    isAdded={isAdded}
-                                    isLoading={false}
-                                    isDisabled={isDisabled}
                                     onAdd={() => handleAdd(cat.type, cat.label, cat.bg)}
+                                    colors={colors}
+                                    styles={styles}
                                 />
                             </View>
                         );
@@ -101,7 +92,7 @@ export const YourTasksScreen = () => {
                 {!isPremium && dailyTasks.length >= 3 && (
                     <TouchableOpacity
                         style={styles.upgradeCard}
-                        onPress={() => router.push('/Paywall' as any)}
+                        onPress={() => router.push('/subscription')}
                     >
                         <Text style={styles.upgradeText}>
                             Достигнут лимит задач. Перейдите на Premium, чтобы добавить больше.
@@ -113,7 +104,7 @@ export const YourTasksScreen = () => {
     );
 };
 
-const CategoryCard = ({ category, isAdded, isLoading, isDisabled, onAdd }: any) => {
+const CategoryCard = ({ category, onAdd, styles }: any) => {
     return (
         <View style={[styles.card, { backgroundColor: category.bg }]}>
             <View style={styles.cardInfo}>
@@ -129,10 +120,9 @@ const CategoryCard = ({ category, isAdded, isLoading, isDisabled, onAdd }: any) 
             <TouchableOpacity
                 style={[
                     styles.addButton,
-                    styles.addedButton // Always light bg
+                    styles.addedButton
                 ]}
                 onPress={onAdd}
-                disabled={isDisabled}
             >
                 <Image source={require('../../icons/back.png')} style={[styles.plusIcon, { transform: [{ rotate: '180deg' }] }]} />
             </TouchableOpacity>
@@ -140,10 +130,10 @@ const CategoryCard = ({ category, isAdded, isLoading, isDisabled, onAdd }: any) 
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background, // Match app background
+        backgroundColor: colors.background,
     },
     header: {
         flexDirection: 'row',
@@ -192,7 +182,6 @@ const styles = StyleSheet.create({
         lineHeight: scale(22),
     },
     cardsContainer: {
-        // gap: scale(16), // Using explicit marginBottom wrapper instead
         paddingBottom: scale(20)
     },
     card: {
@@ -201,7 +190,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         borderRadius: scale(24),
         padding: scale(16),
-        height: scale(88), // Consistent height
+        height: scale(88),
     },
     cardInfo: {
         flexDirection: 'row',
@@ -220,7 +209,7 @@ const styles = StyleSheet.create({
     cardIcon: {
         width: scale(24),
         height: scale(24),
-        tintColor: colors.dark,
+        tintColor: '#1E1E2E',
     },
     textContainer: {
         flex: 1,
@@ -228,25 +217,22 @@ const styles = StyleSheet.create({
     cardTitle: {
         fontFamily: fonts.heading.bold,
         fontSize: scale(18),
-        color: colors.dark,
+        color: '#1E1E2E',
         marginBottom: scale(2),
     },
     cardSubtitle: {
         fontFamily: fonts.body.regular,
         fontSize: scale(14),
-        color: colors.dark,
+        color: '#1E1E2E',
         opacity: 0.7,
     },
     addButton: {
         width: scale(48),
         height: scale(48),
-        borderRadius: scale(24), // Circular
+        borderRadius: scale(24),
         backgroundColor: 'rgba(255,255,255,0.3)',
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    disabledButton: {
-        opacity: 0.5,
     },
     addedButton: {
         backgroundColor: 'rgba(255,255,255,0.6)',
@@ -254,17 +240,12 @@ const styles = StyleSheet.create({
     plusIcon: {
         width: scale(20),
         height: scale(20),
-        tintColor: colors.dark,
-    },
-    checkIcon: {
-        width: scale(24),
-        height: scale(24),
-        tintColor: colors.dark,
+        tintColor: '#1E1E2E',
     },
     upgradeCard: {
         marginTop: scale(24),
         padding: scale(16),
-        backgroundColor: '#F0F0F0',
+        backgroundColor: colors.surfaceLight || '#F0F0F0',
         borderRadius: scale(16),
         alignItems: 'center',
         justifyContent: 'center',
@@ -276,3 +257,5 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
 });
+
+export default YourTasksScreen;

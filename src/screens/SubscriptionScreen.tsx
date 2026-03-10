@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     View,
     Text,
@@ -11,10 +11,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LogoNew } from '../components/Logo';
 import { Button } from '../components/Button';
-import { colors, fonts, spacing } from '../theme';
+import { fonts } from '../theme';
 import { scale } from '../constants';
 import { ROUTES } from '../config/routes';
 import { useUserProfileStore } from '../store/userProfileStore';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface PlanFeature {
     text: string;
@@ -43,6 +44,8 @@ export const SubscriptionScreen: React.FC = () => {
     const router = useRouter();
     const { setPremium, completeOnboarding } = useUserProfileStore();
     const [selectedPlan, setSelectedPlan] = useState<'free' | 'premium'>('premium');
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     const handleSelectPremium = () => {
         setPremium(true);
@@ -62,7 +65,7 @@ export const SubscriptionScreen: React.FC = () => {
 
             {/* Logo at top */}
             <View style={styles.logoContainer}>
-                <LogoNew width={scale(177)} height={scale(40)} variant="full" />
+                <LogoNew width={scale(177)} height={scale(40)} variant="full" color={colors.text} />
             </View>
 
             {/* Title */}
@@ -153,7 +156,7 @@ export const SubscriptionScreen: React.FC = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -194,7 +197,7 @@ const styles = StyleSheet.create({
         borderColor: colors.primary,
     },
     freeCard: {
-        backgroundColor: colors.subscription.freeCardBg,
+        backgroundColor: colors.subscription?.freeCardBg || colors.surfaceLight,
     },
     premiumCard: {
         backgroundColor: colors.buttonPrimary,
@@ -211,7 +214,7 @@ const styles = StyleSheet.create({
         color: colors.text,
     },
     premiumTitle: {
-        color: colors.white,
+        color: '#FFFFFF',
     },
     planPrice: {
         fontFamily: fonts.heading.bold,
@@ -219,7 +222,7 @@ const styles = StyleSheet.create({
         color: colors.text,
     },
     premiumPrice: {
-        color: colors.subscription.premiumAccent,
+        color: colors.subscription?.premiumAccent || '#FFD700',
     },
     priceContainer: {
         flexDirection: 'row',
@@ -246,7 +249,7 @@ const styles = StyleSheet.create({
         lineHeight: scale(18),
     },
     premiumBullet: {
-        color: colors.subscription.premiumAccent,
+        color: colors.subscription?.premiumAccent || '#FFD700',
     },
     featureText: {
         flex: 1,
@@ -256,7 +259,7 @@ const styles = StyleSheet.create({
         lineHeight: scale(17),
     },
     premiumFeatureText: {
-        color: colors.white,
+        color: '#FFFFFF',
     },
     buttonContainer: {
         paddingHorizontal: scale(24),

@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, TouchableOpacity, StyleSheet, Image, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { scale, SCREEN_WIDTH } from '../../constants';
-import { colors } from '../../theme';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 interface BottomTabBarProps {
     activeTab: number;
@@ -10,9 +10,16 @@ interface BottomTabBarProps {
 }
 
 export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabPress }) => {
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(), []);
+
+    const activeIconTint = '#262A44';
+    const inactiveIconTint = '#C7CCE1';
+    const activeDotColor = '#262A44';
+
     return (
         <View style={styles.container}>
-            <BlurView intensity={60} tint="light" style={styles.glassBackground} />
+            <BlurView intensity={60} tint={'light'} style={styles.glassBackground} />
 
             {/* Tab 1: Home */}
             <TouchableOpacity
@@ -27,13 +34,13 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabPres
                             height: activeTab === 0 ? scale(31) : scale(31),
                             width: activeTab === 0 ? scale(24) : undefined,
                             aspectRatio: 1,
-                            tintColor: activeTab === 0 ? '#262A44' : '#C7CCE1',
+                            tintColor: activeTab === 0 ? activeIconTint : inactiveIconTint,
                             transform: activeTab === 0 ? [{ translateY: -scale(2) }] : [],
                         }
                     ]}
                     resizeMode="contain"
                 />
-                {activeTab === 0 && <View style={styles.activeDot} />}
+                {activeTab === 0 && <View style={[styles.activeDot, { backgroundColor: activeDotColor }]} />}
             </TouchableOpacity>
 
             {/* Tab 2: Weekly Plan */}
@@ -49,13 +56,13 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabPres
                             height: activeTab === 1 ? scale(31) : scale(31),
                             width: activeTab === 1 ? scale(24) : undefined,
                             aspectRatio: 1,
-                            tintColor: activeTab === 1 ? '#262A44' : '#C7CCE1',
+                            tintColor: activeTab === 1 ? activeIconTint : inactiveIconTint,
                             transform: activeTab === 1 ? [{ translateY: -scale(2) }] : [],
                         }
                     ]}
                     resizeMode="contain"
                 />
-                {activeTab === 1 && <View style={styles.activeDot} />}
+                {activeTab === 1 && <View style={[styles.activeDot, { backgroundColor: activeDotColor }]} />}
             </TouchableOpacity>
 
             {/* Tab 3: AI Coach */}
@@ -71,13 +78,13 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabPres
                             height: activeTab === 2 ? scale(31) : scale(31),
                             width: activeTab === 2 ? scale(24) : undefined,
                             aspectRatio: 1,
-                            tintColor: activeTab === 2 ? '#262A44' : '#C7CCE1',
+                            tintColor: activeTab === 2 ? activeIconTint : inactiveIconTint,
                             transform: activeTab === 2 ? [{ translateY: -scale(2) }] : [],
                         }
                     ]}
                     resizeMode="contain"
                 />
-                {activeTab === 2 && <View style={styles.activeDot} />}
+                {activeTab === 2 && <View style={[styles.activeDot, { backgroundColor: activeDotColor }]} />}
             </TouchableOpacity>
 
 
@@ -85,19 +92,18 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabPres
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
     container: {
         position: 'absolute',
         bottom: scale(34),
         alignSelf: 'center',
-        width: 280, // Reduced from 362 since we removed a tab
-        height: 67, // From Figma
-        borderRadius: 47, // From Figma
+        width: 280,
+        height: 67,
+        borderRadius: 47,
         flexDirection: 'row',
         justifyContent: 'space-around',
         alignItems: 'center',
         paddingHorizontal: scale(10),
-        // Precise Figma Drop Shadow (0 2px 4px rgba(0,0,0,0.25))
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
@@ -120,17 +126,13 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    icon: {
-        width: 24, // Fallback, will be overridden
-        height: 24, // Fallback, will be overridden
-        resizeMode: 'contain',
-    },
     activeDot: {
         position: 'absolute',
         bottom: scale(12),
         width: scale(30),
         height: scale(5),
         borderRadius: scale(20),
-        backgroundColor: '#262A44',
     }
 });
+
+export default BottomTabBar;

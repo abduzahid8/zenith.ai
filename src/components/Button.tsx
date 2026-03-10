@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
     TouchableOpacity,
     Text,
@@ -7,7 +7,8 @@ import {
     TextStyle,
     ActivityIndicator,
 } from 'react-native';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface ButtonProps {
     title: string;
@@ -30,6 +31,9 @@ export const Button: React.FC<ButtonProps> = ({
     style,
     textStyle,
 }) => {
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     const getButtonStyle = (): ViewStyle => {
         switch (variant) {
             case 'primary':
@@ -89,7 +93,7 @@ export const Button: React.FC<ButtonProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     button: {
         height: 56,
         borderRadius: 28,
@@ -99,10 +103,10 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     primaryButton: {
-        backgroundColor: colors.buttonPrimary, // Dark blue from theme
+        backgroundColor: colors.buttonPrimary,
     },
     secondaryButton: {
-        backgroundColor: '#F5F5F5',
+        backgroundColor: colors.surfaceLight, // Updated to use theme
     },
     outlineButton: {
         backgroundColor: 'transparent',

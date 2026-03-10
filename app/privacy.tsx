@@ -1,10 +1,14 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, View, Text, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
-import { colors, typography, spacing } from '../src/theme';
+import { fonts, spacing } from '../src/theme';
+import { useAppTheme } from '../src/theme/useAppTheme';
 
 export default function PrivacyPolicyScreen() {
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     return (
         <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <Stack.Screen
@@ -75,7 +79,7 @@ export default function PrivacyPolicyScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -85,11 +89,16 @@ const styles = StyleSheet.create({
         paddingBottom: spacing.xxl * 2,
     },
     title: {
-        ...typography.h1,
+        fontFamily: fonts.heading.bold,
+        fontSize: 28,
+        lineHeight: 38,
+        color: colors.text,
         marginBottom: spacing.xs,
     },
     lastUpdated: {
-        ...typography.bodySmall,
+        fontFamily: fonts.body.regular,
+        fontSize: 14,
+        lineHeight: 20,
         color: colors.textSecondary,
         marginBottom: spacing.xl,
     },
@@ -97,22 +106,29 @@ const styles = StyleSheet.create({
         marginBottom: spacing.xl,
     },
     sectionTitle: {
-        ...typography.h3,
+        fontFamily: fonts.heading.medium,
+        fontSize: 18,
+        lineHeight: 26,
+        color: colors.text,
         marginBottom: spacing.sm,
     },
     paragraph: {
-        ...typography.body,
+        fontFamily: fonts.body.regular,
+        fontSize: 16,
+        lineHeight: 24,
         color: colors.text,
         marginBottom: spacing.sm,
     },
     listItem: {
-        ...typography.body,
+        fontFamily: fonts.body.regular,
+        fontSize: 16,
+        lineHeight: 24,
         color: colors.text,
         marginLeft: spacing.md,
         marginBottom: spacing.xs,
     },
     bold: {
-        fontFamily: typography.h3.fontFamily,
+        fontFamily: fonts.heading.medium,
     },
     footer: {
         marginTop: spacing.xl,
@@ -122,6 +138,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     footerText: {
-        ...typography.bodySmall,
+        fontFamily: fonts.body.regular,
+        fontSize: 14,
+        lineHeight: 20,
+        color: colors.textSecondary,
     },
 });

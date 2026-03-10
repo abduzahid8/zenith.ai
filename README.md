@@ -15,7 +15,7 @@ A productivity/hobby discovery app built with React Native and Expo.
 - **Framework:** React Native with Expo
 - **Navigation:** Expo Router
 - **Backend:** Supabase (Auth + Database)
-- **AI:** OpenAI GPT-4
+- **AI:** Google Gemini (via Supabase Edge Function proxy)
 - **State Management:** Zustand
 - **Styling:** StyleSheet with custom theme system
 
@@ -34,12 +34,22 @@ cp .env.example .env
 3. Configure `.env` with your API keys:
 - `EXPO_PUBLIC_SUPABASE_URL` - Your Supabase project URL
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anon key
-- `EXPO_PUBLIC_OPENAI_API_KEY` - Used only by the Supabase Edge Function (ai-proxy); the app never sends this key to the client.
 
-4. Start the development server:
+4. Configure Supabase secret for AI (server-side only):
+```bash
+supabase secrets set GEMINI_API_KEY=your_gemini_api_key
+```
+
+The app never stores or sends the Gemini API key from the client.
+
+5. Start the development server:
 ```bash
 npx expo start
 ```
+
+6. For weekly screen-time analytics:
+- Use a native dev/prod build (`npx expo run:ios` / EAS build), not Expo Go.
+- On first launch, grant Screen Time / Usage Access permission in the OS dialog.
 
 ## Project Structure
 

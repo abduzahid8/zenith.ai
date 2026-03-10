@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import {
     View,
     Text,
@@ -16,7 +16,8 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { useUserProfileStore, getSubscriptionDisplayText } from '../store/userProfileStore';
 import { scale } from '../constants';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
+import { useAppTheme } from '../theme/useAppTheme';
 
 const SIDEBAR_WIDTH = scale(180);
 
@@ -34,20 +35,14 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
     const router = useRouter();
     const { signOut } = useAuthStore();
     const { userName, subscriptionLevel } = useUserProfileStore();
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     // Get display values
     const displayName = userName || 'Пользователь';
     const displaySubscription = getSubscriptionDisplayText(subscriptionLevel);
     const slideAnim = useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
-
-    // Animation values for spring animation on click
-    const scaleAnims = useRef({
-        основное: new Animated.Value(1),
-        развитие: new Animated.Value(1),
-        управление: new Animated.Value(1),
-        'о продукте': new Animated.Value(1),
-    }).current;
 
     useEffect(() => {
         if (visible) {
@@ -78,14 +73,12 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                 }),
             ]).start();
         }
-        // Cleanup: stop animations when component unmounts or visibility changes
         return () => {
             slideAnim.stopAnimation();
             fadeAnim.stopAnimation();
         };
     }, [visible, slideAnim, fadeAnim]);
 
-    // State for expanded section
     const [expandedSection, setExpandedSection] = React.useState<string | null>('основное');
 
     const handleLogout = () => {
@@ -97,7 +90,6 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
     };
 
     const handleNavItemPress = (item: string) => {
-        // Toggle expansion
         if (expandedSection === item) {
             setExpandedSection(null);
         } else {
@@ -120,9 +112,9 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             label: 'Основное',
             subItems: [
                 { label: 'Главная', route: '/(app)/' },
-                { label: 'Прогресс', route: '/(app)/?tab=3' },
-                { label: 'Хобби и план', route: '/(app)/?tab=1' },
-                { label: 'AI-наставник', route: '/(app)/?tab=2' },
+                { label: 'Прогресс', route: '/(app)/screen-time' },
+                { label: 'Хобби и план', route: '/(app)/weekly-plan' },
+                { label: 'AI-наставник', route: '/(app)/ai-coach' },
             ],
         },
         {
@@ -130,7 +122,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             label: 'Развитие',
             subItems: [
                 { label: 'Подборка контента' },
-                { label: 'Недельный отчёт', route: '/(app)/?tab=3' },
+                { label: 'Недельный отчёт', route: '/(app)/screen-time' },
                 { label: 'Достижения и бейджи' },
             ],
         },
@@ -140,7 +132,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             subItems: [
                 { label: 'Настройки' },
                 { label: 'Уведомления' },
-                { label: 'Экранное время', route: '/(app)/?tab=3' },
+                { label: 'Экранное время', route: '/(app)/screen-time' },
             ],
         },
         {
@@ -154,6 +146,8 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
         },
     ];
 
+    const renderThemeSwitcher = () => null;
+
     if (!visible) return null;
 
     return (
@@ -165,7 +159,6 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             statusBarTranslucent
         >
             <View style={styles.container}>
-                {/* Overlay */}
                 <TouchableWithoutFeedback onPress={onClose}>
                     <Animated.View
                         style={[
@@ -175,7 +168,6 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                     />
                 </TouchableWithoutFeedback>
 
-                {/* Sidebar */}
                 <Animated.View
                     style={[
                         styles.sidebar,
@@ -184,7 +176,6 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                         },
                     ]}
                 >
-                    {/* User Profile Section */}
                     <View style={styles.profileSection}>
                         <View style={styles.profileHeader}>
                             <View style={styles.userIconContainer}>
@@ -205,7 +196,6 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                         </View>
                     </View>
 
-                    {/* Navigation Items */}
                     <View style={styles.navigationSection}>
                         {navigationItems.map((item) => (
                             <View key={item.key} style={styles.navItemContainer}>
@@ -217,7 +207,6 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                     <Text style={styles.navItemText}>{item.label}</Text>
                                 </TouchableOpacity>
 
-                                {/* Sub-items Accordion */}
                                 {expandedSection === item.key && (
                                     <View style={styles.subItemsContainer}>
                                         {item.subItems.map((subItem, index) => (
@@ -236,7 +225,8 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                         ))}
                     </View>
 
-                    {/* Footer Section */}
+                    {renderThemeSwitcher()}
+
                     <View style={styles.footerSection}>
                         <View style={styles.footerContent}>
                             <TouchableOpacity activeOpacity={0.7}>
@@ -256,7 +246,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
     },
@@ -277,14 +267,12 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         borderTopLeftRadius: scale(20),
         borderBottomLeftRadius: scale(20),
-        shadowColor: colors.text,
+        shadowColor: colors.shadow,
         shadowOffset: { width: -2, height: 0 },
         shadowOpacity: 0.15,
         shadowRadius: 10,
         elevation: 10,
     },
-
-    // Profile Section
     profileSection: {
         alignItems: 'flex-start',
     },
@@ -315,8 +303,8 @@ const styles = StyleSheet.create({
     },
     subscriptionLevel: {
         alignSelf: 'stretch',
-        color: '#08132A',
-        fontFamily: fonts.body.light, // Geometria
+        color: colors.textSecondary,
+        fontFamily: fonts.body.light,
         fontSize: scale(8),
         fontStyle: 'normal',
         fontWeight: '300',
@@ -337,14 +325,12 @@ const styles = StyleSheet.create({
         lineHeight: 22,
         marginLeft: scale(4),
     },
-
-    // Navigation Section
     navigationSection: {
         flex: 1,
         marginTop: scale(40),
     },
     navItemContainer: {
-        marginBottom: scale(16), // Increased spacing between sections
+        marginBottom: scale(16),
     },
     navItem: {
         paddingVertical: scale(4),
@@ -369,8 +355,36 @@ const styles = StyleSheet.create({
         fontSize: 16,
         lineHeight: 20,
     },
-
-    // Footer Section
+    themeSwitcherContainer: {
+        marginTop: scale(20),
+        paddingTop: scale(20),
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+    },
+    themeSwitcherLabel: {
+        color: colors.text,
+        fontFamily: fonts.heading.bold,
+        fontSize: 14,
+        marginBottom: scale(12),
+    },
+    themeButtonsRow: {
+        flexDirection: 'row',
+        gap: scale(12),
+    },
+    themeButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: colors.background,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    themeButtonActive: {
+        backgroundColor: colors.buttonPrimary,
+        borderColor: colors.buttonPrimary,
+    },
     footerSection: {
         marginTop: 'auto',
     },
@@ -398,7 +412,6 @@ const styles = StyleSheet.create({
     },
 });
 
-// Keep backward compatibility with MenuDrawer name
 export const MenuDrawer = NavigationSidebar;
 
 export default NavigationSidebar;

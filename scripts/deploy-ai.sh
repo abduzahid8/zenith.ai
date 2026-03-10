@@ -25,6 +25,6 @@ echo "Setting Supabase secrets..."
 npx supabase secrets set --project-ref "$PROJECT_ID" GEMINI_API_KEY="$GEMINI_API_KEY"
 
 echo "Deploying ai-proxy function..."
-npx supabase functions deploy ai-proxy --project-ref "$PROJECT_ID" --no-verify-jwt
+npx supabase functions deploy ai-proxy --project-ref "$PROJECT_ID"
 
 echo "Done! AI service should now be operational."

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
     View,
     Text,
@@ -9,11 +9,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LogoNew } from '../components/Logo';
 import { Button } from '../components/Button';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 import { scale } from '../constants';
+import { useAppTheme } from '../theme/useAppTheme';
 
 export default function WelcomeScreen() {
     const router = useRouter();
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     const handleStart = () => {
         router.push('/auth');
@@ -25,7 +28,7 @@ export default function WelcomeScreen() {
 
             {/* Logo at top */}
             <View style={styles.logoContainer}>
-                <LogoNew width={scale(177)} height={scale(40)} variant="full" />
+                <LogoNew width={scale(177)} height={scale(40)} variant="full" color={colors.text} />
             </View>
 
             {/* Center content */}
@@ -47,7 +50,7 @@ export default function WelcomeScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -71,9 +74,9 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     subtitleText: {
-        fontFamily: fonts.body.light, // Font change only
+        fontFamily: fonts.body.light,
         fontSize: 20,
-        lineHeight: 28, // Kept original line height
+        lineHeight: 28,
         color: colors.text,
         textAlign: 'center',
     },

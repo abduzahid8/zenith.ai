@@ -22,10 +22,72 @@ import {
 import { useAuthStore } from './authStore';
 import { screenTimeService } from '../services/screenTimeService';
 
+type WeeklyPoint = { date: string; seconds: number };
+
+const toIsoDate = (date: Date): string => date.toISOString().split('T')[0];
+
+const coerceWeeklyPoints = (weeklyData: WeeklyPoint[]): WeeklyPoint[] => (
+    Array.isArray(weeklyData)
+        ? weeklyData.filter(day => day && typeof day.seconds === 'number' && typeof day.date === 'string')
+        : []
+);
+
+const fillLastDays = (weeklyData: WeeklyPoint[], days: number): WeeklyPoint[] => {
+    const totalsByDate = new Map<string, number>();
+    coerceWeeklyPoints(weeklyData).forEach((day) => {
+        const current = totalsByDate.get(day.date) ?? 0;
+        totalsByDate.set(day.date, current + Math.max(0, Math.round(day.seconds)));
+    });
+
+    const now = new Date();
+    const filled: WeeklyPoint[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(now.getDate() - i);
+        const key = toIsoDate(date);
+        filled.push({ date: key, seconds: totalsByDate.get(key) ?? 0 });
+    }
+    return filled;
+};
+
+const computeWeeklyMetrics = (allData: WeeklyPoint[]): {
+    averageDailySeconds: number;
+    changeFromLastWeek: number;
+} => {
+    const sorted = [...coerceWeeklyPoints(allData)].sort((a, b) =>
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    const thisWeek = sorted.slice(-7);
+    const lastWeek = sorted.slice(-14, -7);
+
+    const avgThis = thisWeek.length > 0
+        ? thisWeek.reduce((s, d) => s + d.seconds, 0) / thisWeek.length
+        : 0;
+    const avgLast = lastWeek.length > 0
+        ? lastWeek.reduce((s, d) => s + d.seconds, 0) / lastWeek.length
+        : 0;
+
+    return {
+        averageDailySeconds: Math.round(avgThis),
+        changeFromLastWeek: avgLast > 0
+            ? Math.round(((avgThis - avgLast) / avgLast) * 100)
+            : 0,
+    };
+};
+
+const mapDailyTotalsToWeeklyPoints = (dailyTotals: Record<string, number> | undefined): WeeklyPoint[] => {
+    if (!dailyTotals) return [];
+    return Object.entries(dailyTotals).map(([date, seconds]) => ({
+        date,
+        seconds: typeof seconds === 'number' ? Math.max(0, Math.round(seconds)) : 0,
+    }));
+};
+
 interface DeviceScreenTimeState {
     // Permission state
     isAuthorized: boolean;
     isChecking: boolean;
+    dataSource: 'native' | 'supabase' | null;
 
     // Today's data
     todayTotalSeconds: number;
@@ -59,6 +121,7 @@ interface DeviceScreenTimeState {
 const initialState = {
     isAuthorized: false,
     isChecking: false,
+    dataSource: null as 'native' | 'supabase' | null,
     todayTotalSeconds: 0,
     todayUsageSummary: null,
     topApps: [],
@@ -77,14 +140,25 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
 
             checkPermission: async () => {
                 if (!isScreenTimeAvailable()) {
-                    set({ isAuthorized: false, error: 'Screen Time not available on this device' });
+                    set({
+                        isAuthorized: false,
+                        isChecking: false,
+                        error: 'Нативный модуль Screen Time недоступен. Используйте dev/prod build вместо Expo Go.',
+                    });
                     return false;
                 }
 
-                set({ isChecking: true });
+                set({ isChecking: true, error: null });
                 try {
                     const authorized = await hasScreenTimePermission();
-                    set({ isAuthorized: authorized, isChecking: false });
+                    const status = Platform.OS === 'ios' ? getAuthorizationStatus() : null;
+                    const deniedError = !authorized
+                        ? (Platform.OS === 'ios' && status === 'denied'
+                            ? 'Доступ к Screen Time отключен. Включите его в Настройки > Экранное время.'
+                            : 'Нет доступа к данным устройства. Разрешите доступ, чтобы видеть полную аналитику.')
+                        : null;
+
+                    set({ isAuthorized: authorized, isChecking: false, error: deniedError });
                     return authorized;
                 } catch (error) {
                     console.error('Check permission error:', error);
@@ -94,10 +168,26 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
             },
 
             requestPermission: async () => {
+                if (!isScreenTimeAvailable()) {
+                    set({
+                        isAuthorized: false,
+                        isChecking: false,
+                        error: 'Нативный модуль Screen Time недоступен. Соберите приложение через EAS/dev build.',
+                    });
+                    return false;
+                }
+
                 set({ isChecking: true, error: null });
                 try {
-                    const granted = await requestScreenTimePermission();
-                    set({ isAuthorized: granted, isChecking: false });
+                    await requestScreenTimePermission();
+                    const granted = await hasScreenTimePermission();
+                    set({
+                        isAuthorized: granted,
+                        isChecking: false,
+                        error: granted
+                            ? null
+                            : 'Доступ не предоставлен. Используем серверную аналитику, если данные доступны.',
+                    });
 
                     if (granted) {
                         // Auto-fetch data after permission granted
@@ -115,6 +205,26 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
             fetchTodayData: async () => {
                 set({ isLoading: true, error: null });
                 try {
+                    const user = useAuthStore.getState().user;
+                    if (!get().isAuthorized && user) {
+                        const summary = await screenTimeService.getTodaySummary(user.id);
+                        set({
+                            todayTotalSeconds: summary.total_seconds,
+                            todayUsageSummary: null,
+                            topApps: summary.top_apps.map((item) => ({
+                                bundleId: '',
+                                appName: item.app,
+                                totalTimeSeconds: item.seconds,
+                                category: 'other',
+                                lastUsedTimestamp: 0,
+                            })),
+                            isLoading: false,
+                            dataSource: 'supabase',
+                            lastUpdated: Date.now(),
+                        });
+                        return;
+                    }
+
                     const totalSeconds = await getTodayScreenTime();
 
                     let summary: DailyUsageSummary | null = null;
@@ -124,6 +234,27 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
                     if (Platform.OS === 'ios') {
                         summary = await getTodayUsageSummary();
                         apps = await getTopApps(10);
+                    }
+
+                    if (user && totalSeconds === 0) {
+                        const fallbackSummary = await screenTimeService.getTodaySummary(user.id);
+                        if (fallbackSummary.total_seconds > 0) {
+                            set({
+                                todayTotalSeconds: fallbackSummary.total_seconds,
+                                todayUsageSummary: null,
+                                topApps: fallbackSummary.top_apps.map((item) => ({
+                                    bundleId: '',
+                                    appName: item.app,
+                                    totalTimeSeconds: item.seconds,
+                                    category: 'other',
+                                    lastUsedTimestamp: 0,
+                                })),
+                                isLoading: false,
+                                dataSource: 'supabase',
+                                lastUpdated: Date.now(),
+                            });
+                            return;
+                        }
                     }
 
                     // Sync to Supabase if we have a user
@@ -144,6 +275,7 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
                         todayUsageSummary: summary,
                         topApps: apps,
                         isLoading: false,
+                        dataSource: 'native',
                         lastUpdated: Date.now(),
                     });
 
@@ -175,37 +307,52 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
             fetchWeeklyData: async () => {
                 set({ isLoading: true, error: null });
                 try {
-                    const weeklyData = await getWeeklyScreenTime();
+                    const user = useAuthStore.getState().user;
+                    if (!get().isAuthorized && user) {
+                        const trends = await screenTimeService.getWeeklyTrends(user.id);
+                        const filledWeeklyData = fillLastDays(mapDailyTotalsToWeeklyPoints(trends.daily_totals), 7);
+                        const { averageDailySeconds, changeFromLastWeek } = computeWeeklyMetrics(filledWeeklyData);
+                        set({
+                            weeklyData: filledWeeklyData,
+                            averageDailySeconds,
+                            changeFromLastWeek,
+                            isLoading: false,
+                            dataSource: 'supabase',
+                            lastUpdated: Date.now(),
+                        });
+                        return;
+                    }
 
-                    const validData = Array.isArray(weeklyData)
-                        ? weeklyData.filter(day => day && typeof day.seconds === 'number')
-                        : [];
+                    const nativeData = await getWeeklyScreenTime();
+                    const userHasNativeData = nativeData.some((day) => (day?.seconds ?? 0) > 0);
 
-                    // Split into this week (last 7 days) and previous week (days 8-14)
-                    const sorted = [...validData].sort((a, b) =>
-                        new Date(a.date).getTime() - new Date(b.date).getTime()
-                    );
-                    const thisWeek = sorted.slice(-7);
-                    const lastWeek = sorted.slice(-14, -7);
+                    if (user && !userHasNativeData) {
+                        const trends = await screenTimeService.getWeeklyTrends(user.id);
+                        const fallbackPoints = fillLastDays(mapDailyTotalsToWeeklyPoints(trends.daily_totals), 7);
+                        const hasFallbackData = fallbackPoints.some((day) => day.seconds > 0);
+                        if (hasFallbackData) {
+                            const { averageDailySeconds, changeFromLastWeek } = computeWeeklyMetrics(fallbackPoints);
+                            set({
+                                weeklyData: fallbackPoints,
+                                averageDailySeconds,
+                                changeFromLastWeek,
+                                isLoading: false,
+                                dataSource: 'supabase',
+                                lastUpdated: Date.now(),
+                            });
+                            return;
+                        }
+                    }
 
-                    const avgThis = thisWeek.length > 0
-                        ? thisWeek.reduce((s, d) => s + d.seconds, 0) / thisWeek.length
-                        : 0;
-                    const avgLast = lastWeek.length > 0
-                        ? lastWeek.reduce((s, d) => s + d.seconds, 0) / lastWeek.length
-                        : 0;
-
-                    const changeFromLastWeek = avgLast > 0
-                        ? Math.round(((avgThis - avgLast) / avgLast) * 100)
-                        : 0;
-
-                    const averageDailySeconds = avgThis > 0 ? Math.round(avgThis) : 0;
+                    const filledWeeklyData = fillLastDays(nativeData, 7);
+                    const { averageDailySeconds, changeFromLastWeek } = computeWeeklyMetrics(nativeData);
 
                     set({
-                        weeklyData: validData,
+                        weeklyData: filledWeeklyData,
                         averageDailySeconds,
                         changeFromLastWeek,
                         isLoading: false,
+                        dataSource: 'native',
                         lastUpdated: Date.now(),
                     });
                 } catch (error) {
@@ -244,8 +391,7 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
                 const { isAuthorized, fetchTodayData, fetchWeeklyData } = get();
 
                 if (!isAuthorized) {
-                    const authorized = await get().checkPermission();
-                    if (!authorized) return;
+                    await get().checkPermission();
                 }
 
                 await Promise.all([

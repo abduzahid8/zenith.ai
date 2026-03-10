@@ -1,6 +1,6 @@
 /**
- * Single source of truth for app tabs. Main app is one screen (MainTabsScreen).
- * Navigate to main with tab index: use getMainTabUrl() and router.replace().
+ * Single source of truth for app tabs.
+ * Navigate via dedicated tab routes from getMainTabUrl().
  */
 export type AppTabKey = 'home' | 'weekly-plan' | 'ai-coach';
 
@@ -16,10 +16,18 @@ export const APP_TAB_ROUTES = [
   { key: 'ai-coach' as const, icon: 'lightbulb', iconOutline: 'lightbulb-outline', type: 'material' as const, image: require('../../icons/assistant.png') },
 ] as const;
 
-/** Navigate to main screen (MainTabsScreen) on the given tab. Use with router.replace(). */
+/** Navigate to tab routes. Use with router.replace()/push(). */
 export function getMainTabUrl(key: AppTabKey): string {
-  const index = TAB_INDEX[key];
-  return index === 0 ? '/(app)/' : `/(app)/?tab=${index}`;
+  switch (key) {
+    case 'home':
+      return '/(app)/';
+    case 'weekly-plan':
+      return '/(app)/weekly-plan';
+    case 'ai-coach':
+      return '/(app)/ai-coach';
+    default:
+      return '/(app)/';
+  }
 }
 
 /** Tab index for MainTabsScreen (0 = home, 1 = weekly-plan, 2 = ai-coach). */

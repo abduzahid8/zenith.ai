@@ -10,6 +10,17 @@
         "preview": {
             "distribution": "internal"
         },
-        "production": {}
+        "production": {
+            "autoIncrement": true
+        }
+    },
+    "submit": {
+        "production": {
+            "ios": {
+                "appleId": "abduzahid8@gmail.com",
+                "ascAppId": "6741757870",
+                "appleTeamId": "7A5H8C8Z7A"
+            }
+        }
     }
 }

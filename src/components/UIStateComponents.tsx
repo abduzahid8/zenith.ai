@@ -1,18 +1,19 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { View, Animated, StyleSheet, ViewStyle, DimensionValue } from 'react-native';
 import { scale } from '../constants';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface SkeletonProps {
     width: DimensionValue;
     height: number;
     borderRadius?: number;
     style?: ViewStyle;
+    colors?: any;
 }
 
 /**
  * A single shimmering skeleton block.
- * Use inside a container to build composite loading layouts.
  */
 export const SkeletonBlock: React.FC<SkeletonProps> = ({
     width,
@@ -57,39 +58,33 @@ export const SkeletonBlock: React.FC<SkeletonProps> = ({
     );
 };
 
-/**
- * HomeScreen loading skeleton — mimics the card layout.
- */
-export const HomeScreenSkeleton: React.FC = () => (
-    <View style={skeletonStyles.homeContainer}>
-        {/* Greeting line */}
-        <SkeletonBlock width={200} height={32} borderRadius={scale(8)} />
+export const HomeScreenSkeleton: React.FC = () => {
+    const { colors } = useAppTheme();
+    const skeletonStyles = useMemo(() => createStyles(colors), [colors]);
 
-        {/* Main cards area */}
-        <View style={skeletonStyles.homeCards}>
-            {/* Start Session card */}
-            <SkeletonBlock width="100%" height={150} borderRadius={scale(25)} />
+    return (
+        <View style={skeletonStyles.homeContainer}>
+            <SkeletonBlock width={200} height={32} borderRadius={scale(8)} />
 
-            {/* Daily Goal button */}
-            <SkeletonBlock
-                width="100%"
-                height={70}
-                borderRadius={scale(50)}
-                style={{ marginTop: scale(24) }}
-            />
+            <View style={skeletonStyles.homeCards}>
+                <SkeletonBlock width="100%" height={150} borderRadius={scale(25)} />
 
-            {/* Bottom row */}
-            <View style={skeletonStyles.homeBottomRow}>
-                <SkeletonBlock width={180} height={155} borderRadius={scale(25)} />
-                <SkeletonBlock width={140} height={155} borderRadius={scale(25)} />
+                <SkeletonBlock
+                    width="100%"
+                    height={70}
+                    borderRadius={scale(50)}
+                    style={{ marginTop: scale(24) }}
+                />
+
+                <View style={skeletonStyles.homeBottomRow}>
+                    <SkeletonBlock width={180} height={155} borderRadius={scale(25)} />
+                    <SkeletonBlock width={140} height={155} borderRadius={scale(25)} />
+                </View>
             </View>
         </View>
-    </View>
-);
+    );
+};
 
-/**
- * Statistics empty state — shown when no data has been recorded yet.
- */
 export const StatisticsEmptyState: React.FC<{ type: 'screenTime' | 'hobby' }> = ({ type }) => {
     const emoji = type === 'screenTime' ? '📊' : '🎯';
     const title = type === 'screenTime'
@@ -98,6 +93,9 @@ export const StatisticsEmptyState: React.FC<{ type: 'screenTime' | 'hobby' }> = 
     const subtitle = type === 'screenTime'
         ? 'Данные появятся после первого дня использования'
         : 'Начните сессию, чтобы отслеживать прогресс';
+
+    const { colors } = useAppTheme();
+    const skeletonStyles = useMemo(() => createStyles(colors), [colors]);
 
     return (
         <View style={skeletonStyles.emptyContainer}>
@@ -110,8 +108,7 @@ export const StatisticsEmptyState: React.FC<{ type: 'screenTime' | 'hobby' }> = 
     );
 };
 
-const skeletonStyles = StyleSheet.create({
-    // ── Home Skeleton ──
+const createStyles = (colors: any) => StyleSheet.create({
     homeContainer: {
         flex: 1,
         paddingHorizontal: scale(24),
@@ -127,8 +124,6 @@ const skeletonStyles = StyleSheet.create({
         gap: scale(16),
         marginTop: scale(24),
     },
-
-    // ── Statistics Empty State ──
     emptyContainer: {
         alignItems: 'center',
         justifyContent: 'center',
@@ -139,7 +134,7 @@ const skeletonStyles = StyleSheet.create({
         width: scale(80),
         height: scale(80),
         borderRadius: scale(40),
-        backgroundColor: '#F0F0F5',
+        backgroundColor: colors.surfaceLight,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: scale(20),
@@ -157,7 +152,7 @@ const skeletonStyles = StyleSheet.create({
     emptySubtitle: {
         fontFamily: fonts.heading.light,
         fontSize: scale(15),
-        color: '#8E8E93',
+        color: colors.textSecondary,
         textAlign: 'center',
         lineHeight: scale(22),
     },

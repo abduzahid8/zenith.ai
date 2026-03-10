@@ -40,8 +40,9 @@ export function useTimer() {
     useEffect(() => {
         const sessionTasks: SessionTask[] = dailyTasks
             .filter(t => t.status !== 'skipped')
-            .map(t => ({
-                id: t.id ?? String(Math.random()),
+            .map((t, index) => ({
+                id: t.id ?? `local-${t.type}-${index}`,
+                storeTaskId: t.id ?? null,
                 title: TYPE_LABEL[t.type] ?? t.type,
                 subtitle: t.title,
                 completed: t.status === 'completed',
@@ -186,7 +187,8 @@ export function useTimer() {
         if (!user?.id || !selectedHobby) return;
         const completedTaskIds = tasks
             .filter(t => t.completed)
-            .map(t => t.id);
+            .map(t => t.storeTaskId)
+            .filter((id): id is string => !!id);
         sessionService.saveSession(user.id, selectedHobby, durationSeconds, {
             tasksCompleted: completedTaskIds,
         }).catch(err => console.error('Failed to save session:', err));
@@ -225,12 +227,13 @@ export function useTimer() {
             )
         );
         // Persist completion to real task store and Supabase
-        if (user?.id) {
-            completeTask(user.id, id).catch(err =>
+        const selectedTask = tasks.find(task => task.id === id);
+        if (user?.id && selectedTask?.storeTaskId) {
+            completeTask(user.id, selectedTask.storeTaskId).catch(err =>
                 console.error('Failed to persist task completion:', err)
             );
         }
-    }, [user, completeTask]);
+    }, [user, completeTask, tasks]);
 
     const handleStopPress = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);

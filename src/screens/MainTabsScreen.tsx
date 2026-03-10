@@ -1,11 +1,10 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     StatusBar,
     TouchableOpacity,
-    Dimensions,
     Platform,
     UIManager,
     Animated,
@@ -21,17 +20,15 @@ if (Platform.OS === 'android') {
 }
 
 import { useRouter, useFocusEffect } from 'expo-router';
-// import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons'; // Removing unused vector icons
 import PagerView from '../components/ui/PagerView';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 import { MenuDrawer } from '../components/NavigationSidebar';
-import { useAuthStore } from '../store/authStore';
 import { useUserProfileStore, getGreeting } from '../store/userProfileStore';
 import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
-import { requestScreenTimePermission } from 'device-activity';
 import { scale, SCREEN_WIDTH } from '../constants';
 import { BottomTabBar } from '../components/navigation/BottomTabBar';
 import { HobbyIcon } from '../components/HobbyIcon';
+import { useAppTheme } from '../theme/useAppTheme';
 
 // Tab components
 import HomeTab from './tabs/HomeTab';
@@ -45,12 +42,14 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
     const pagerRef = useRef<PagerView>(null);
     const [activeTab, setActiveTab] = useState(initialTab);
 
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     useEffect(() => {
         setActiveTab(initialTab);
         pagerRef.current?.setPage(initialTab);
     }, [initialTab]);
 
-    const { user } = useAuthStore();
     const { streakDays, subscriptionLevel } = useUserProfileStore();
     const isPremium = subscriptionLevel === 'premium' || subscriptionLevel === 'trial';
 
@@ -166,6 +165,7 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
                         iconTranslateY={iconTranslateY}
                         onDailyGoal={() => handleTabPress(1)}
                         onAICoach={() => handleTabPress(2)}
+                        onScreenTime={() => router.push('/(app)/screen-time')}
                     />
                 </View>
 
@@ -186,7 +186,7 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
