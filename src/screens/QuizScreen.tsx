@@ -99,33 +99,33 @@ export default function QuizScreen() {
                 </Text>
             </View>
 
-            {/* Question area - fixed height */}
-            <View style={styles.questionContainer}>
-                <Text style={styles.questionText}>{question.question}</Text>
-            </View>
+            {/* Content Wrapper to center vertically */}
+            <View style={styles.contentWrapper}>
+                {/* Question area */}
+                <View style={styles.questionContainer}>
+                    <Text style={styles.questionText}>{question.question}</Text>
+                </View>
 
-            {/* Options area */}
-            <View style={styles.optionsContainer}>
-                {question.options.map((option, index) => (
-                    <TouchableOpacity
-                        key={index}
-                        style={styles.optionRow}
-                        onPress={() => handleSelectOption(index)}
-                        activeOpacity={0.7}
-                    >
-                        <View style={[
-                            styles.radioCircle,
-                            selectedOption === index && styles.radioCircleSelected
-                        ]}>
-                            {selectedOption === index && <View style={styles.radioInner} />}
-                        </View>
-                        <Text style={styles.optionText}>{option}</Text>
-                    </TouchableOpacity>
-                ))}
+                {/* Options area */}
+                <View style={styles.optionsContainer}>
+                    {question.options.map((option, index) => (
+                        <TouchableOpacity
+                            key={index}
+                            style={styles.optionRow}
+                            onPress={() => handleSelectOption(index)}
+                            activeOpacity={0.7}
+                        >
+                            <View style={[
+                                styles.radioCircle,
+                                selectedOption === index && styles.radioCircleSelected
+                            ]}>
+                                {selectedOption === index && <View style={styles.radioInner} />}
+                            </View>
+                            <Text style={styles.optionText}>{option}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
             </View>
-
-            {/* Spacer */}
-            <View style={styles.spacer} />
 
             {/* Bottom controls */}
             <View style={styles.bottomContainer}>
@@ -166,11 +166,15 @@ const createStyles = (colors: any) => StyleSheet.create({
         marginTop: 60,
     },
     progressContainer: {
+        position: 'absolute',
+        top: 250, // Adjust this value to position it correctly beneath the logo
+        left: 0,
+        right: 0,
         paddingHorizontal: 24,
-        marginTop: 24,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
+        zIndex: 1,
     },
     progressTrack: {
         flex: 1,
@@ -182,7 +186,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     progressFill: {
         height: '100%',
         borderRadius: 2,
-        backgroundColor: colors.text,
+        backgroundColor: '#102852',
     },
     progressLabel: {
         fontFamily: fonts.body.medium,
@@ -191,11 +195,13 @@ const createStyles = (colors: any) => StyleSheet.create({
         minWidth: 36,
         textAlign: 'right',
     },
+    contentWrapper: {
+        flex: 1,
+        justifyContent: 'center',
+    },
     questionContainer: {
-        height: 120,
         paddingHorizontal: 24,
-        marginTop: 40,
-        justifyContent: 'flex-start',
+        marginBottom: 32,
     },
     questionText: {
         fontFamily: fonts.heading.bold,
@@ -208,7 +214,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     },
     optionRow: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         paddingVertical: 12,
         minHeight: 48,
     },
@@ -221,7 +227,6 @@ const createStyles = (colors: any) => StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 16,
-        marginTop: 2,
     },
     radioCircleSelected: {
         borderColor: colors.text,
@@ -238,9 +243,6 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontSize: 16,
         lineHeight: 24,
         color: colors.text,
-    },
-    spacer: {
-        flex: 1,
     },
     bottomContainer: {
         paddingHorizontal: 24,

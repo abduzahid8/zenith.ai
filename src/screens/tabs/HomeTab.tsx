@@ -46,7 +46,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
     return (
         <ScrollView
             style={styles.homeContent}
-            contentContainerStyle={{ paddingBottom: scale(100) }}
+            contentContainerStyle={{ paddingBottom: scale(100), flexGrow: 1, justifyContent: 'flex-end' }}
             showsVerticalScrollIndicator={false}
         >
             <TouchableOpacity
@@ -174,7 +174,6 @@ const createStyles = (colors: any) => StyleSheet.create({
     homeContent: {
         flex: 1,
         paddingHorizontal: scale(16),
-        marginTop: scale(140),
     },
     cardShadowProp: {
         marginBottom: scale(24),
@@ -191,7 +190,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         width: 213,
         height: 188,
         right: scale(-20),
-        bottom: scale(-30),
+        bottom: scale(-40),
         transform: [{ rotate: '-5.4deg' }],
     },
     cardTitle: {

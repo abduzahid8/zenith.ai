@@ -9,14 +9,13 @@ import {
     Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Svg, Polyline } from 'react-native-svg';
 import { scale, SCREEN_WIDTH } from '../../constants';
 import { fonts } from '../../theme';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { useTaskStore } from '../../store/taskStore';
 import { useAuthStore } from '../../store/authStore';
 import { useUserProfileStore } from '../../store/userProfileStore';
 import { Task, TaskType } from '../../services/supabase/types';
-import { useAppTheme } from '../../theme/useAppTheme';
 
 interface WeeklyPlanTabProps {
     isPremium: boolean;
@@ -26,8 +25,8 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
     const router = useRouter();
     const { user } = useAuthStore();
     const userId = user?.id;
-    const { dailyTasks, loading, error, fetchDailyPlan, completeTask } = useTaskStore();
-    const { isPremium: profilePremium } = useUserProfileStore();
+    const { dailyTasks, loading, error, fetchDailyPlan } = useTaskStore();
+    const { isPremium: profilePremium, setWeeklyTasks } = useUserProfileStore();
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -38,14 +37,21 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
         if (userId) {
             fetchDailyPlan(userId);
         }
-    }, [userId, fetchDailyPlan]);
+    }, [userId]);
+
+    // Sync task titles into weeklyTasks whenever dailyTasks change
+    useEffect(() => {
+        if (engineTasks.length > 0) {
+            setWeeklyTasks(engineTasks.map(t => ({ text: t.title, completed: t.status === 'completed' })));
+        }
+    }, [dailyTasks]);
 
     const handleAddPress = () => {
         const maxTasks = (isPremium || profilePremium) ? 4 : 3;
         const canAddMore = engineTasks.length < maxTasks;
 
         if (!canAddMore && !(isPremium || profilePremium)) {
-            router.push('/subscription');
+            router.push('/Paywall' as any);
         } else {
             router.push('/your-tasks');
         }
@@ -100,13 +106,9 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
         }
     };
 
+    // Fixed visual order: 1) Теория, 2) Практика, 3) Анализ, 4) Задачи
     const orderedTasks: Task[] = ENGINE_TYPES
         .flatMap(type => engineTasks.filter(t => t.type === type));
-
-    const handleTaskPress = async (task: Task) => {
-        if (!userId || !task.id || task.status === 'completed') return;
-        await completeTask(userId, task.id);
-    };
 
     if (error && engineTasks.length === 0) {
         return (
@@ -154,7 +156,6 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
             {orderedTasks.map((task) => {
                 const cardStyle = getCardStyleForTask(task);
                 const title = getTitleForType(task.type);
-                const isCompleted = task.status === 'completed';
 
                 let iconSource = require('../../../icons/book.png');
                 if (task.type === 'practice') iconSource = require('../../../icons/dumbbell.png');
@@ -193,38 +194,14 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                             ? styles.tasksTitle
                             : styles.taskCardTitle;
 
-                if (isCompleted) {
-                    return (
-                        <View key={task.id || task.title} style={[cardStyle, styles.completedTaskCard]}>
-                            <Text style={[titleStyle, styles.completedTaskText]}>{title}</Text>
-                            <Text style={[descriptionStyle, styles.completedTaskText]}>{task.title}</Text>
-                            <View style={styles.checkmarkPill}>
-                                <Svg width={scale(28)} height={scale(20)} viewBox="0 0 28 20" fill="none">
-                                    <Polyline
-                                        points="3 11 10 17 25 3"
-                                        stroke="#FFFFFF"
-                                        strokeWidth="6"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    />
-                                </Svg>
-                            </View>
-                        </View>
-                    );
-                }
-
                 return (
-                    <TouchableOpacity
-                        key={task.id || task.title}
-                        style={cardStyle}
-                        activeOpacity={0.8}
-                        onPress={() => handleTaskPress(task)}
-                        disabled={!task.id}
-                    >
+                    <TouchableOpacity key={task.id || task.title} style={cardStyle} activeOpacity={0.8}>
                         <View style={styles.taskCardContent}>
                             <View style={styles.taskCardTextContainer}>
                                 <Text style={titleStyle}>{title}</Text>
-                                <Text style={descriptionStyle}>{task.title}</Text>
+                                <Text style={descriptionStyle}>
+                                    {task.title}
+                                </Text>
                             </View>
                             <View style={iconContainerStyle}>
                                 <Image source={iconSource} style={iconStyle} resizeMode="contain" />
@@ -234,6 +211,7 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                 );
             })}
 
+            {/* Add Task button */}
             {orderedTasks.length < ((isPremium || profilePremium) ? 4 : 3) && (
                 <TouchableOpacity
                     style={[
@@ -244,7 +222,7 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                     activeOpacity={0.8}
                     onPress={handleAddPress}
                 >
-                    <Image source={require('../../../icons/plus.png')} style={{ width: scale(21), height: scale(20), tintColor: colors.iconMuted }} resizeMode="contain" />
+                    <Image source={require('../../../icons/plus.png')} style={{ width: scale(32), height: scale(32), tintColor: colors.iconMuted }} resizeMode="contain" />
                 </TouchableOpacity>
             )}
         </ScrollView>
@@ -263,7 +241,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontSize: scale(32),
         lineHeight: scale(34),
         color: colors.sessionTimer.text,
-        marginBottom: scale(80),
+        marginBottom: scale(44),
         paddingHorizontal: scale(0),
     },
     theoryCard: {
@@ -300,14 +278,14 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontFamily: fonts.heading.bold,
         fontSize: scale(25),
         lineHeight: scale(30),
-        color: '#08132A', // Cards with specific backgrounds usually need good contrast
+        color: colors.black,
         marginBottom: scale(6),
     },
     analysisDescription: {
         fontFamily: fonts.body.light,
         fontSize: scale(20),
         lineHeight: scale(24),
-        color: '#08132A',
+        color: colors.black,
         alignSelf: 'stretch',
     },
     analysisIconContainer: {
@@ -315,7 +293,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         height: scale(44),
         justifyContent: 'center',
         alignItems: 'center',
-        alignSelf: 'center',
+        marginTop: scale(-25),
     },
     tasksCard: {
         height: scale(101),
@@ -331,7 +309,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontFamily: fonts.heading.bold,
         fontSize: scale(25),
         lineHeight: scale(30),
-        color: '#08132A',
+        color: colors.black,
         marginBottom: scale(6),
     },
     tasksDescription: {
@@ -346,7 +324,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         height: scale(40),
         justifyContent: 'center',
         alignItems: 'center',
-        alignSelf: 'center',
+        marginTop: scale(-25),
     },
     taskCardContent: {
         flex: 1,
@@ -371,47 +349,24 @@ const createStyles = (colors: any) => StyleSheet.create({
         lineHeight: scale(24),
         color: colors.text,
     },
-    completedTaskCard: {
-        opacity: 0.85,
-    },
-    completedTaskText: {
-        color: '#0F2A16',
-    },
-    checkmarkCircle: {
-        width: scale(44),
-        height: scale(44),
-        borderRadius: scale(22),
-        backgroundColor: '#3CEB59',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    checkmarkPill: {
-        marginTop: scale(12),
-        height: scale(44),
-        borderRadius: scale(22),
-        backgroundColor: '#3CEB59',
-        justifyContent: 'center',
-        alignItems: 'center',
-        alignSelf: 'stretch',
-    },
     theoryIconContainer: {
         width: scale(42),
         height: scale(42),
         justifyContent: 'center',
         alignItems: 'center',
-        alignSelf: 'center',
+        marginTop: scale(-35),
     },
     practiceIconContainer: {
         width: scale(40),
         height: scale(40),
         justifyContent: 'center',
         alignItems: 'center',
-        alignSelf: 'center',
+        marginTop: scale(-25),
     },
     iconTheory: {
         width: scale(42),
         height: scale(42),
-        tintColor: '#08132A', // Cards are light colored even in dark mode initially unless changed. But wait, I changed them in theme.
+        tintColor: '#08132A',
     },
     iconPractice: {
         width: scale(40),

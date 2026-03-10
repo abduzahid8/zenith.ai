@@ -42,7 +42,8 @@ export default function AuthScreen() {
 
             {/* Header with Star Logo - LEFT aligned */}
             <View style={styles.headerContainer}>
-                <LogoNew variant="full" width={110} height={25} color={colors.text} />
+                <LogoNew variant="icon" width={32} height={32} />
+                <Text style={styles.headerTitle}>Давайте начнем</Text>
             </View>
 
             {/* Subtitle - LEFT aligned */}
@@ -122,8 +123,9 @@ const createStyles = (colors: any) => StyleSheet.create({
     },
     headerTitle: {
         fontFamily: fonts.heading.bold,
-        fontSize: 26,
-        color: colors.buttonPrimary,
+        fontSize: 28,
+        color: colors.text,
+        fontWeight: '700',
     },
     subtitleContainer: {
         alignItems: 'flex-start',
