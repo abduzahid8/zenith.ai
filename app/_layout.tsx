@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet, View, Text, ActivityIndicator, AppState, Platform } from 'react-native';
 import { useAuthStore } from '../src/store/authStore';
 import { useTaskStore } from '../src/store/taskStore';
@@ -10,6 +9,16 @@ import { useUserProfileStore } from '../src/store/userProfileStore';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { useAppTheme } from '../src/theme/useAppTheme';
 import { ROUTES } from '../src/config/routes';
+
+// On web, use plain View; GestureHandlerRootView is only needed on native
+let RootView: typeof View = View;
+if (Platform.OS !== 'web') {
+    try {
+        RootView = require('react-native-gesture-handler').GestureHandlerRootView;
+    } catch {
+        // Fallback if gesture handler is unavailable
+    }
+}
 
 export default function RootLayout() {
     const [appIsReady, setAppIsReady] = useState(Platform.OS === 'web');
@@ -98,8 +107,8 @@ export default function RootLayout() {
     }
 
     return (
-        <GestureHandlerRootView style={styles.container}>
-            <ErrorBoundary colors={colors}>
+        <RootView style={styles.container}>
+            <ErrorBoundary>
                 <SafeAreaProvider>
                     <Stack screenOptions={{ headerShown: false }}>
                         <Stack.Screen name="(auth)" />
@@ -134,7 +143,7 @@ export default function RootLayout() {
                     </Stack>
                 </SafeAreaProvider>
             </ErrorBoundary>
-        </GestureHandlerRootView>
+        </RootView>
     );
 }
 
