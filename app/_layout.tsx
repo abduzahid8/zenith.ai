@@ -3,7 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet, View, Text, ActivityIndicator, AppState } from 'react-native';
+import { StyleSheet, View, Text, ActivityIndicator, AppState, Platform } from 'react-native';
 import { useAuthStore } from '../src/store/authStore';
 import { useTaskStore } from '../src/store/taskStore';
 import { useUserProfileStore } from '../src/store/userProfileStore';
@@ -41,6 +41,13 @@ export default function RootLayout() {
             setAppIsReady(true);
         }
     }, [fontsLoaded, fontError]);
+
+    // Safety timeout: on web, fonts may silently fail; unblock after 3s
+    useEffect(() => {
+        if (Platform.OS !== 'web') return;
+        const timer = setTimeout(() => setAppIsReady(true), 3000);
+        return () => clearTimeout(timer);
+    }, []);
 
     // Handle app state changes for midnight reset
     useEffect(() => {

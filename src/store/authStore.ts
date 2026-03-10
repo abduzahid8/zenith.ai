@@ -141,7 +141,11 @@ export const useAuthStore = create<AuthState>()(
 
         initialize: async () => {
             try {
-                const session = await authService.getSession();
+                const sessionPromise = authService.getSession();
+                const timeoutPromise = new Promise<null>((resolve) =>
+                    setTimeout(() => resolve(null), 5000)
+                );
+                const session = await Promise.race([sessionPromise, timeoutPromise]);
                 if (session) {
                     const profileStore = useUserProfileStore.getState();
                     if (!profileStore.userName) {
