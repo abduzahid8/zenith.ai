@@ -21,7 +21,7 @@ if (Platform.OS !== 'web') {
 }
 
 export default function RootLayout() {
-    const [appIsReady, setAppIsReady] = useState(Platform.OS === 'web');
+    const [appIsReady, setAppIsReady] = useState(false);
     const { isAuthenticated, initialize, isLoading } = useAuthStore();
     const { hasCompletedOnboarding } = useUserProfileStore();
     const segments = useSegments();
@@ -50,6 +50,13 @@ export default function RootLayout() {
             setAppIsReady(true);
         }
     }, [fontsLoaded, fontError]);
+
+    // Safety timeout: unblock after 3s if fonts stall on web
+    useEffect(() => {
+        if (Platform.OS !== 'web') return;
+        const timer = setTimeout(() => setAppIsReady(true), 3000);
+        return () => clearTimeout(timer);
+    }, []);
 
     // Handle app state changes for midnight reset
     useEffect(() => {
