@@ -151,24 +151,25 @@ export const useAuthStore = create<AuthState>()(
                     if (!profileStore.userName) {
                         profileStore.setUserName(session.user?.email?.split('@')[0] || '');
                     }
-                    // Sync onboarding state and selected hobby from server (multi-device / reinstall)
-                    try {
-                        const hobbies = await dbService.getUserHobbies(session.user.id);
+
+                    // Unblock UI immediately — hobbies sync runs in background
+                    set({
+                        session,
+                        user: session.user,
+                        isAuthenticated: true,
+                        isLoading: false,
+                    });
+
+                    // Sync onboarding state from server in background (multi-device / reinstall)
+                    dbService.getUserHobbies(session.user.id).then((hobbies) => {
                         const hasOnboarded = hobbies && hobbies.length > 0;
                         const primaryHobby = hobbies?.find((h: { is_primary?: boolean }) => h.is_primary) || hobbies?.[0];
                         useUserProfileStore.setState({
                             hasCompletedOnboarding: hasOnboarded,
                             ...(primaryHobby && { selectedHobby: primaryHobby.hobby_id }),
                         });
-                    } catch (dbError) {
+                    }).catch((dbError) => {
                         console.warn('Failed to sync onboarding state:', dbError);
-                    }
-
-                    set({
-                        session,
-                        user: session.user,
-                        isAuthenticated: true,
-                        isLoading: false,
                     });
                 } else {
                     set({ isLoading: false });

@@ -42,10 +42,10 @@ export default function RootLayout() {
         }
     }, [fontsLoaded, fontError]);
 
-    // Safety timeout: on web, fonts may silently fail; unblock after 3s
+    // Safety timeout: on web, fonts may silently fail; unblock after 2s
     useEffect(() => {
         if (Platform.OS !== 'web') return;
-        const timer = setTimeout(() => setAppIsReady(true), 3000);
+        const timer = setTimeout(() => setAppIsReady(true), 2000);
         return () => clearTimeout(timer);
     }, []);
 
@@ -66,6 +66,7 @@ export default function RootLayout() {
     }, []);
 
     useEffect(() => {
+        // Wait for both app ready AND auth to finish before redirecting
         if (isLoading || !appIsReady) return;
 
         const inAuthGroup = segments[0] === '(auth)';
@@ -77,14 +78,11 @@ export default function RootLayout() {
                 router.replace(ROUTES.AUTH as any);
             }
         } else {
-            // User is authenticated
             if (!hasCompletedOnboarding) {
-                // Should be in onboarding flow (not in auth or app groups)
                 if ((inAuthGroup || inAppGroup) && !isPrivacy) {
                     router.replace('/quiz-intro');
                 }
             } else {
-                // Completed onboarding
                 if (inAuthGroup && !isPrivacy) {
                     router.replace(ROUTES.APP as any);
                 }
@@ -92,12 +90,11 @@ export default function RootLayout() {
         }
     }, [isAuthenticated, segments, isLoading, appIsReady, hasCompletedOnboarding]);
 
-    // Show loading screen while fonts or auth load
-    if (!appIsReady || isLoading) {
+    // Show loading screen only until fonts/app are ready (NOT blocked on auth)
+    if (!appIsReady) {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={styles.loadingText}>Загрузка...</Text>
             </View>
         );
     }
