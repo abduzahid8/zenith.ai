@@ -5,15 +5,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Subscription level type for dynamic text display
 export type SubscriptionLevel = 'free' | 'trial' | 'premium';
 
-// Helper to get subscription display text
+// Helper to get subscription display text (English for UI)
 export const getSubscriptionDisplayText = (level: SubscriptionLevel): string => {
     switch (level) {
         case 'premium':
-            return 'Премиум';
+            return 'Premium';
         case 'trial':
-            return 'Пробный период';
+            return 'Trial';
+        case 'free':
         default:
-            return 'Бесплатный';
+            return 'Free';
     }
 };
 
@@ -81,10 +82,7 @@ const initialProfileState = {
     isPremium: false,
     selectedHobby: null as string | null,
     hasCompletedOnboarding: false,
-    weeklyTasks: [
-        { text: 'Изучить 1 базовый дебют', completed: false },
-        { text: 'Сыграть 2 партии без отвлечений', completed: false },
-    ] as WeeklyTask[],
+    weeklyTasks: [] as WeeklyTask[],
 };
 
 export const useUserProfileStore = create<UserProfileState>()(
@@ -131,7 +129,7 @@ export const useUserProfileStore = create<UserProfileState>()(
                 subscriptionLevel: isPremium ? 'premium' : get().subscriptionLevel,
             }),
 
-            setSelectedHobby: (hobbyId) => set({ selectedHobby: hobbyId }),
+            setSelectedHobby: (hobbyId) => set({ selectedHobby: hobbyId, weeklyTasks: [] }),
 
             completeOnboarding: () => set({ hasCompletedOnboarding: true }),
 

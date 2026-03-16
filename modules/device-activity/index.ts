@@ -18,6 +18,10 @@ function getDeviceActivity() {
     return DeviceActivityModule;
 }
 
+function hasNativeDeviceActivityModule(): boolean {
+    return !!getDeviceActivity();
+}
+
 // ============= Types =============
 
 export interface UsageStats {
@@ -59,13 +63,15 @@ export function getUsageStats(startTime: number, endTime: number): UsageStats[] 
 export function requestUsagePermission(): Promise<boolean> {
     const module = getDeviceActivity();
     if (Platform.OS !== 'android' || !module) return Promise.resolve(false);
-    return module.requestUsagePermission();
+    const result = module.requestUsagePermission();
+    return Promise.resolve(typeof result === 'boolean' ? result : false);
 }
 
 export function hasUsagePermission(): Promise<boolean> {
     const module = getDeviceActivity();
     if (Platform.OS !== 'android' || !module) return Promise.resolve(false);
-    return module.hasUsagePermission();
+    const result = module.hasUsagePermission();
+    return Promise.resolve(!!result);
 }
 
 // ============= iOS Functions =============
@@ -84,23 +90,19 @@ export function getAuthorizationStatus(): AuthorizationStatus {
  * Shows the FamilyControls authorization prompt
  */
 export async function requestAuthorization(): Promise<boolean> {
-    console.log('JS: requestAuthorization called');
     const module = getDeviceActivity();
     if (Platform.OS !== 'ios') {
-        console.log('JS: Platform is not iOS');
         return false;
     }
     if (!module) {
-        console.error('JS: Native module is null');
+        console.warn('DeviceActivity native module is null. Are you running in Expo Go?');
         return false;
     }
-    console.log('JS: Calling native requestAuthorization...');
     try {
         const result = await module.requestAuthorization();
-        console.log('JS: Native requestAuthorization returned:', result);
         return result;
     } catch (error) {
-        console.error('JS: Native requestAuthorization failed:', error);
+        console.error('Native requestAuthorization failed:', error);
         return false;
     }
 }
@@ -186,12 +188,10 @@ export async function getWeeklyStats(): Promise<DailyUsageSummary[]> {
  */
 export function isScreenTimeAvailable(): boolean {
     if (Platform.OS === 'ios') {
-        // Screen Time API requires iOS 15+
-        // The app already targets iOS 15+ so always return true on iOS
-        return true;
+        return hasNativeDeviceActivityModule();
     }
     if (Platform.OS === 'android') {
-        return true; // Available on all Android versions with UsageStats
+        return hasNativeDeviceActivityModule();
     }
     return false;
 }
@@ -214,6 +214,10 @@ export async function requestScreenTimePermission(): Promise<boolean> {
  */
 export async function hasScreenTimePermission(): Promise<boolean> {
     if (Platform.OS === 'ios') {
+        // Prefer explicit status when available, then fallback to boolean check.
+        const status = getAuthorizationStatus();
+        if (status === 'approved') return true;
+        if (status === 'denied') return false;
         return isAuthorized();
     }
     if (Platform.OS === 'android') {
@@ -249,9 +253,8 @@ export async function getWeeklyScreenTime(): Promise<{ date: string; seconds: nu
 
     if (Platform.OS === 'ios') {
         const stats = await getWeeklyStats();
-        console.log('JS: getWeeklyStats returned:', JSON.stringify(stats));
         if (!Array.isArray(stats)) {
-            console.error('JS: getWeeklyStats returned non-array:', stats);
+            console.error('getWeeklyStats returned non-array:', stats);
             return [];
         }
         return stats

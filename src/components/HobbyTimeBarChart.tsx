@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 import { scale } from '../constants';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface DayData {
     day: string;
@@ -39,6 +40,9 @@ const gridImage = require('../../assets/images/grid_pattern.png');
 export const HobbyTimeBarChart: React.FC<HobbyTimeBarChartProps> = ({
     data = defaultData,
 }) => {
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     const maxValue = 7;
     const yAxisLabels = ['7+', '6', '5', '4', '3', '2', '1'];
     const chartHeight = scale(160);
@@ -96,14 +100,14 @@ export const HobbyTimeBarChart: React.FC<HobbyTimeBarChartProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         width: '100%',
         paddingHorizontal: scale(20),
     },
     // Pink/Purple tinted background container
     chartContainer: {
-        backgroundColor: '#EFD6F8', // Light purple tint
+        backgroundColor: colors.statistics.hobbyCardLight, // '#EFD6F8' in light mode
         borderRadius: scale(30),
         height: scale(258),
         alignSelf: 'center',
@@ -120,8 +124,7 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
         borderRadius: scale(30),
-        tintColor: '#E8D5F0', // Pink/purple tint for grid
-        opacity: 0.5,
+        opacity: 1,
     },
     chartContent: {
         flex: 1,

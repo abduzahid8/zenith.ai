@@ -1,29 +1,55 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Animated, Easing } from 'react-native';
+import { Animated, Easing, AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import { scale } from '../constants';
 import { SessionTask } from '../components/session/TaskDrawer';
 import { ChatMessage, aiService } from '../services/ai';
+import { useTaskStore } from '../store/taskStore';
+import { useAuthStore } from '../store/authStore';
+import { useUserProfileStore } from '../store/userProfileStore';
+import { sessionService } from '../services/supabase/sessions';
 
 export type TimerStatus = 'idle' | 'running' | 'paused';
 
 const TOTAL_TIME = 30 * 60; // 30 minutes
+const STORAGE_KEY_PREF = 'session_stop_confirm_pref';
+const STORAGE_KEY_START_TS = 'session_timer_start_ts';
 
-const DEFAULT_TASKS: SessionTask[] = [
-    { id: '1', title: 'Теория', subtitle: 'Изучить Королевский Гамбит', completed: false, completedAt: null },
-    { id: '2', title: 'Практика', subtitle: 'Сыграть 2 партии', completed: false, completedAt: null },
-    { id: '3', title: 'Анализ', subtitle: 'Рассмотреть партию', completed: false, completedAt: null },
-    { id: '4', title: 'Задачи', subtitle: 'Решить 15 тактических задач', completed: false, completedAt: null },
-];
+const TYPE_LABEL: Record<string, string> = {
+    theory: 'Теория',
+    practice: 'Практика',
+    analysis: 'Анализ',
+    puzzles: 'Задачи',
+};
 
 export function useTimer() {
+    const { dailyTasks, completeTask } = useTaskStore();
+    const user = useAuthStore(s => s.user);
+    const { selectedHobby } = useUserProfileStore();
+
     // --- Timer state ---
     const [timerStatus, setTimerStatus] = useState<TimerStatus>('idle');
     const [timeLeft, setTimeLeft] = useState(TOTAL_TIME);
     const progress = timeLeft / TOTAL_TIME;
 
-    // --- Task state ---
-    const [tasks, setTasks] = useState<SessionTask[]>(DEFAULT_TASKS);
+    // --- Tasks derived from real store ---
+    const [tasks, setTasks] = useState<SessionTask[]>([]);
+
+    // Sync tasks from store whenever dailyTasks changes
+    useEffect(() => {
+        const sessionTasks: SessionTask[] = dailyTasks
+            .filter(t => t.status !== 'skipped')
+            .map((t, index) => ({
+                id: t.id ?? `local-${t.type}-${index}`,
+                storeTaskId: t.id ?? null,
+                title: TYPE_LABEL[t.type] ?? t.type,
+                subtitle: t.title,
+                completed: t.status === 'completed',
+                completedAt: t.status === 'completed' ? Date.now() : null,
+            }));
+        setTasks(sessionTasks);
+    }, [dailyTasks]);
 
     // --- UI state ---
     const [isTaskListVisible, setIsTaskListVisible] = useState(false);
@@ -48,7 +74,7 @@ export function useTimer() {
 
     // --- Load preferences ---
     useEffect(() => {
-        AsyncStorage.getItem('session_stop_confirm_pref').then(val => {
+        AsyncStorage.getItem(STORAGE_KEY_PREF).then(val => {
             if (val === 'true') setPrefDontShowStop(true);
         });
     }, []);
@@ -58,6 +84,30 @@ export function useTimer() {
         setStartTime(Date.now());
     }, []);
 
+    // --- Persist timer across app background ---
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', async (nextState: AppStateStatus) => {
+            if (timerStatus === 'running') {
+                if (nextState === 'background' || nextState === 'inactive') {
+                    // Save the timestamp when app goes to background
+                    await AsyncStorage.setItem(STORAGE_KEY_START_TS, String(Date.now()));
+                } else if (nextState === 'active') {
+                    // Recover elapsed time
+                    const savedTs = await AsyncStorage.getItem(STORAGE_KEY_START_TS);
+                    if (savedTs) {
+                        const elapsed = Math.floor((Date.now() - Number(savedTs)) / 1000);
+                        await AsyncStorage.removeItem(STORAGE_KEY_START_TS);
+                        setTimeLeft(prev => {
+                            const updated = prev - elapsed;
+                            return updated <= 0 ? 0 : updated;
+                        });
+                    }
+                }
+            }
+        });
+        return () => subscription.remove();
+    }, [timerStatus]);
+
     // --- Timer countdown ---
     useEffect(() => {
         let interval: ReturnType<typeof setInterval>;
@@ -65,8 +115,11 @@ export function useTimer() {
             interval = setInterval(() => {
                 setTimeLeft(prev => prev - 1);
             }, 1000);
-        } else if (timeLeft === 0) {
+        } else if (timeLeft === 0 && timerStatus === 'running') {
+            // Timer naturally completed — save session and show summary
             setTimerStatus('idle');
+            saveSessionToSupabase(TOTAL_TIME);
+            setShowSummary(true);
         }
         return () => clearInterval(interval);
     }, [timerStatus, timeLeft]);
@@ -129,6 +182,18 @@ export function useTimer() {
         }
     }, [isTaskListVisible]);
 
+    // --- Save session to Supabase (fire-and-forget) ---
+    const saveSessionToSupabase = useCallback((durationSeconds: number) => {
+        if (!user?.id || !selectedHobby) return;
+        const completedTaskIds = tasks
+            .filter(t => t.completed)
+            .map(t => t.storeTaskId)
+            .filter((id): id is string => !!id);
+        sessionService.saveSession(user.id, selectedHobby, durationSeconds, {
+            tasksCompleted: completedTaskIds,
+        }).catch(err => console.error('Failed to save session:', err));
+    }, [user, selectedHobby, tasks]);
+
     // --- Actions ---
     const formatTime = useCallback((seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -136,9 +201,13 @@ export function useTimer() {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }, []);
 
-    const handlePlay = useCallback(() => setTimerStatus('running'), []);
+    const handlePlay = useCallback(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setTimerStatus('running');
+    }, []);
 
     const handlePause = useCallback(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         setTimerStatus(prev => (prev === 'running' ? 'paused' : 'running'));
     }, []);
 
@@ -148,6 +217,8 @@ export function useTimer() {
     }, []);
 
     const handleCompleteTask = useCallback((id: string) => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        // Update local session UI immediately
         setTasks(prev =>
             prev.map(task =>
                 task.id === id && !task.completed
@@ -155,28 +226,28 @@ export function useTimer() {
                     : task
             )
         );
-    }, []);
+        // Persist completion to real task store and Supabase
+        const selectedTask = tasks.find(task => task.id === id);
+        if (user?.id && selectedTask?.storeTaskId) {
+            completeTask(user.id, selectedTask.storeTaskId).catch(err =>
+                console.error('Failed to persist task completion:', err)
+            );
+        }
+    }, [user, completeTask, tasks]);
 
     const handleStopPress = useCallback(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
         if (prefDontShowStop) {
-            const completedTasks = tasks.filter(t => t.completed);
-            if (completedTasks.length > 0) {
-                setShowSummary(true);
-            } else {
-                setTimeLeft(TOTAL_TIME);
-                setTimerStatus('idle');
-            }
+            finishSession();
         } else {
             setIsStopModalVisible(true);
         }
     }, [prefDontShowStop, tasks]);
 
-    const confirmStop = useCallback(async () => {
-        if (dontShowAgainChecked) {
-            await AsyncStorage.setItem('session_stop_confirm_pref', 'true');
-            setPrefDontShowStop(true);
-        }
-        setIsStopModalVisible(false);
+    const finishSession = useCallback(() => {
+        const elapsed = TOTAL_TIME - timeLeft;
+        const durationSeconds = elapsed > 0 ? elapsed : 0;
+        saveSessionToSupabase(durationSeconds);
 
         const completedTasks = tasks.filter(t => t.completed);
         if (completedTasks.length > 0) {
@@ -185,10 +256,19 @@ export function useTimer() {
             setTimeLeft(TOTAL_TIME);
             setTimerStatus('idle');
         }
-    }, [dontShowAgainChecked, tasks]);
+    }, [timeLeft, tasks, saveSessionToSupabase]);
+
+    const confirmStop = useCallback(async () => {
+        if (dontShowAgainChecked) {
+            await AsyncStorage.setItem(STORAGE_KEY_PREF, 'true');
+            setPrefDontShowStop(true);
+        }
+        setIsStopModalVisible(false);
+        finishSession();
+    }, [dontShowAgainChecked, finishSession]);
 
     const handleSendMessage = useCallback(async () => {
-        if (!chatInput.trim()) return;
+        if (!chatInput.trim() || isAiLoading) return;
 
         const userMsg: ChatMessage = { role: 'user', content: chatInput.trim() };
         const newMessages = [...messages, userMsg];
@@ -197,7 +277,7 @@ export function useTimer() {
         setIsAiLoading(true);
 
         try {
-            const response = await aiService.sendMessage(newMessages, 'General');
+            const response = await aiService.sendMessage(newMessages, selectedHobby ?? undefined);
             const assistantMsg: ChatMessage = { role: 'assistant', content: response };
             setMessages(prev => [...prev, assistantMsg]);
         } catch (error) {
@@ -207,7 +287,7 @@ export function useTimer() {
         } finally {
             setIsAiLoading(false);
         }
-    }, [chatInput, messages]);
+    }, [chatInput, isAiLoading, messages, selectedHobby]);
 
     return {
         // Timer

@@ -1,10 +1,11 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import PagerView from '../ui/PagerView';
 import { scale } from '../../constants';
-import { colors, fonts } from '../../theme';
+import { fonts } from '../../theme';
 import { SessionTask } from './TaskDrawer';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 const TOTAL_SESSION_SECONDS = 30 * 60; // 30 minutes = 100% of circle
 
@@ -18,6 +19,8 @@ const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ tasks, startTim
     const completedTasks = tasks.filter(t => t.completed).sort((a, b) => (a.completedAt || 0) - (b.completedAt || 0));
     const scrollX = useRef(new Animated.Value(0)).current;
     const pagerRef = useRef<PagerView>(null);
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     const getElapsedString = (completedAt: number) => {
         if (!startTime) return '0:00';
@@ -70,7 +73,8 @@ const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ tasks, startTim
                                         r="109"
                                         stroke={index % 2 === 0 ? colors.sessionTimer.ringStrokeA : colors.sessionTimer.ringStrokeB}
                                         strokeWidth="38"
-                                        strokeDasharray={`${circumference * taskProgress} ${circumference}`}
+                                        strokeDasharray={`${circumference} ${circumference}`}
+                                        strokeDashoffset={circumference - (taskProgress * circumference)}
                                         strokeLinecap="round"
                                         rotation="-90"
                                         origin="128, 128"
@@ -126,7 +130,7 @@ const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ tasks, startTim
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     summaryContainer: {
         flex: 1,
         backgroundColor: colors.sessionTimer.background,

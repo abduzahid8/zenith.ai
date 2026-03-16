@@ -1,7 +1,19 @@
 import { requireNativeModule } from 'expo-modules-core';
 import { PermissionsAndroid, Platform } from 'react-native';
 
-const SmsReader = Platform.OS === 'android' ? requireNativeModule('SmsReader') : null;
+let SmsReaderModule: ReturnType<typeof requireNativeModule> | null = null;
+
+function getSmsReader() {
+    if (SmsReaderModule) return SmsReaderModule;
+    if (Platform.OS === 'android') {
+        try {
+            SmsReaderModule = requireNativeModule('SmsReader');
+        } catch (e) {
+            SmsReaderModule = null;
+        }
+    }
+    return SmsReaderModule;
+}
 
 export interface SmsMessage {
     address: string;
@@ -10,11 +22,12 @@ export interface SmsMessage {
 }
 
 export async function getAllSms(limit: number = 50): Promise<SmsMessage[]> {
+    const SmsReader = getSmsReader();
     if (Platform.OS !== 'android' || !SmsReader) return [];
     const hasPermission = await requestSmsPermission();
     if (!hasPermission) return [];
 
-    return SmsReader.getAllSms(limit);
+    return (SmsReader as any).getAllSms(limit);
 }
 
 export async function requestSmsPermission(): Promise<boolean> {

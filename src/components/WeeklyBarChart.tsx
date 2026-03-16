@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 import { scale } from '../constants';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface DayData {
     day: string;
@@ -25,8 +25,6 @@ const defaultData: DayData[] = [
     { day: 'Вс', value: 3 },
 ];
 
-// Color palette for bars - matching Figma goal design
-// Moved outside component to prevent recreation on every render
 const BAR_COLORS = [
     '#5ECFCF', // Пн - teal/cyan
     '#37A0EF', // Вт - dark blue
@@ -37,34 +35,28 @@ const BAR_COLORS = [
     '#7EC8FF', // Вс - medium/light blue
 ] as const;
 
-
-
-// Grid image for chart background
 const gridImage = require('../../assets/images/grid_pattern.png');
 
 export const WeeklyBarChart: React.FC<WeeklyBarChartProps> = ({
     data = defaultData,
 }) => {
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     const maxValue = 7;
     const yAxisLabels = ['7+', '6', '5', '4', '3', '2', '1'];
-    const chartHeight = scale(160); // Height for actual chart bars area
+    const chartHeight = scale(160);
 
     return (
         <View style={styles.container}>
-            {/* Main chart container - Figma: 362x304, border-radius: 30, background: #D6DEF8 */}
             <View style={styles.chartContainer}>
-                {/* Grid Background Image - at container level for 100% coverage */}
                 <Image
                     source={gridImage}
                     style={styles.gridImage}
                     resizeMode="cover"
                 />
 
-
-
-                {/* Chart content wrapper */}
                 <View style={styles.chartContent}>
-                    {/* Y-axis labels */}
                     <View style={styles.yAxis}>
                         {yAxisLabels.map((label, index) => (
                             <View key={index} style={label === '7+' ? styles.yAxisLabelWideWrapper : styles.yAxisLabelWrapper}>
@@ -77,9 +69,7 @@ export const WeeklyBarChart: React.FC<WeeklyBarChartProps> = ({
                         ))}
                     </View>
 
-                    {/* Bars area */}
                     <View style={styles.barsArea}>
-                        {/* Bars container */}
                         <View style={styles.barsContainer}>
                             {data.map((item, index) => {
                                 const barHeight = (item.value / maxValue) * chartHeight;
@@ -106,12 +96,11 @@ export const WeeklyBarChart: React.FC<WeeklyBarChartProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         width: '100%',
         paddingHorizontal: scale(20),
     },
-    // Figma: width: 362px, height: 304px, border-radius: 30px, background: #D6DEF8
     chartContainer: {
         backgroundColor: colors.aiCoach.bubble,
         borderRadius: scale(30),
@@ -130,8 +119,8 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
         borderRadius: scale(30),
+        opacity: 1,
     },
-
     chartContent: {
         flex: 1,
         flexDirection: 'row',
@@ -140,7 +129,6 @@ const styles = StyleSheet.create({
         paddingRight: scale(10),
         paddingBottom: 0,
     },
-    // Y-axis on the left - absolute positioned
     yAxis: {
         position: 'absolute',
         left: scale(10),
@@ -149,11 +137,10 @@ const styles = StyleSheet.create({
         width: scale(25),
         justifyContent: 'space-between',
     },
-    // Wrappers to enforce the exact layout position (10px wide)
     yAxisLabelWrapper: {
         width: scale(10),
         height: scale(15),
-        overflow: 'visible', // Allow absolute text to go outside
+        overflow: 'visible',
         justifyContent: 'center',
     },
     yAxisLabelWideWrapper: {
@@ -162,7 +149,6 @@ const styles = StyleSheet.create({
         overflow: 'visible',
         justifyContent: 'center',
     },
-    // Text anchored to the right - width is large to fit any content
     yAxisLabel: {
         fontFamily: fonts.body.light,
         fontSize: scale(14),
@@ -170,12 +156,11 @@ const styles = StyleSheet.create({
         textAlign: 'right',
         lineHeight: scale(22),
         position: 'absolute',
-        right: 0, // Anchored to right edge
-        width: scale(100), // Much wider than needed
-        height: scale(22), // Proper line height
-        top: scale(-3), // Slight adjustment for line-height centering if needed, or 0
+        right: 0,
+        width: scale(100),
+        height: scale(22),
+        top: scale(-3),
     },
-    // 7+ label - same style
     yAxisLabelWide: {
         fontFamily: fonts.body.light,
         fontSize: scale(14),
@@ -188,12 +173,10 @@ const styles = StyleSheet.create({
         height: scale(22),
         top: scale(-3),
     },
-    // Bars area - takes remaining space, bars at bottom
     barsArea: {
         flex: 1,
         justifyContent: 'flex-end',
     },
-    // Bars container with gap
     barsContainer: {
         flexDirection: 'row',
         justifyContent: 'center',
@@ -205,7 +188,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         position: 'relative',
     },
-    // Figma: width: 35px, border-radius: 8px 8px 0 0, background: #37A0EF
     bar: {
         width: scale(35),
         borderTopLeftRadius: scale(8),

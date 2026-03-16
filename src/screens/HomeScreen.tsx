@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
     View,
     Text,
@@ -10,25 +10,19 @@ import {
     Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { colors, fonts } from '../theme';
 import { scale } from '../constants';
+import { fonts } from '../theme';
 import { useUserProfileStore, getGreeting } from '../store/userProfileStore';
 import { MenuDrawer } from '../components/NavigationSidebar';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { HomeScreenSkeleton } from '../components/UIStateComponents';
 import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
 import HomeTab from './tabs/HomeTab';
+import { HobbyIcon } from '../components/HobbyIcon';
+import { useAppTheme } from '../theme/useAppTheme';
 
 const FireIcon = () => (
-    <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24) }} resizeMode="contain" />
-);
-
-// Chess piece icon
-const ChessIcon = () => (
-    <View style={styles.chessIcon}>
-        <Text style={{ fontSize: scale(22) }}>♞</Text>
-    </View>
+    <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24), marginTop: -scale(2) }} resizeMode="contain" />
 );
 
 export const HomeScreen: React.FC = () => {
@@ -36,6 +30,9 @@ export const HomeScreen: React.FC = () => {
     const { fetchTodayData, checkPermission, requestPermission } = useDeviceScreenTimeStore();
     const [menuVisible, setMenuVisible] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     const fadeAnim = useRef(new Animated.Value(1)).current;
     const iconTranslateY = fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] });
@@ -77,7 +74,7 @@ export const HomeScreen: React.FC = () => {
             <View style={styles.header}>
                 <Text style={styles.greetingText}>{greeting}</Text>
                 <View style={styles.headerRight}>
-                    <ChessIcon />
+                    <HobbyIcon />
                     <View style={styles.streakContainer}>
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
@@ -98,7 +95,7 @@ export const HomeScreen: React.FC = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -112,7 +109,6 @@ const styles = StyleSheet.create({
         paddingTop: scale(16),
         paddingBottom: scale(24),
     },
-    // Figma: font-size 32px, weight 700, line-height 22px
     greetingText: {
         fontFamily: fonts.heading.bold,
         fontSize: scale(32),
@@ -122,19 +118,12 @@ const styles = StyleSheet.create({
     headerRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: scale(8),
-    },
-    chessIcon: {
-        width: scale(28),
-        height: scale(28),
-        justifyContent: 'center',
-        alignItems: 'center',
+        gap: scale(16),
     },
     streakContainer: {
         flexDirection: 'row',
         alignItems: 'center',
     },
-    // Figma: font-size 24px, weight 700
     streakNumber: {
         fontFamily: fonts.heading.bold,
         fontSize: scale(24),

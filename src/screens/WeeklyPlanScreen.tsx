@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 import { scale } from '../constants';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { MenuDrawer } from '../components/NavigationSidebar';
 import { BottomNavigation } from '../components/BottomNavigation';
 import WeeklyPlanTab from './tabs/WeeklyPlanTab';
+import { useAppTheme } from '../theme/useAppTheme';
 
 const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24) }} resizeMode="contain" />;
 
@@ -14,6 +15,9 @@ export const WeeklyPlanScreen: React.FC = () => {
     const [menuVisible, setMenuVisible] = useState(false);
     const { streakDays, subscriptionLevel } = useUserProfileStore();
     const isPremium = subscriptionLevel === 'premium' || subscriptionLevel === 'trial';
+
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     return (
         <SafeAreaView style={styles.container}>
@@ -43,7 +47,7 @@ export const WeeklyPlanScreen: React.FC = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,

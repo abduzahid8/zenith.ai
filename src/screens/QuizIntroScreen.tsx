@@ -1,16 +1,19 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LogoNew } from '../components/Logo';
 import { Button } from '../components/Button';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 import { scale } from '../constants';
 import { useQuizStore } from '../store/quizStore';
+import { useAppTheme } from '../theme/useAppTheme';
 
 export default function QuizIntroScreen() {
     const router = useRouter();
     const resetQuiz = useQuizStore((state) => state.resetQuiz);
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     // Reset quiz when entering this screen
     useEffect(() => {
@@ -27,7 +30,7 @@ export default function QuizIntroScreen() {
 
             {/* Logo at top */}
             <View style={styles.logoContainer}>
-                <LogoNew width={scale(177)} height={scale(40)} variant="full" />
+                <LogoNew width={scale(177)} height={scale(40)} variant="full" color={colors.text} />
             </View>
 
             {/* Content */}
@@ -51,7 +54,7 @@ export default function QuizIntroScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -70,15 +73,15 @@ const styles = StyleSheet.create({
         fontFamily: fonts.heading.bold,
         fontSize: 26,
         lineHeight: 34,
-        color: colors.text, // Color change
+        color: colors.text,
         textAlign: 'center',
         marginBottom: 16,
     },
     subtitleText: {
-        fontFamily: fonts.body.light, // Font change
+        fontFamily: fonts.body.light,
         fontSize: 16,
         lineHeight: 24,
-        color: colors.text, // Color change
+        color: colors.text,
         textAlign: 'center',
     },
     buttonContainer: {

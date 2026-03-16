@@ -2,8 +2,12 @@
 // Handles all AI calls server-side to keep API keys secure
 // Deploy: npx supabase functions deploy ai-proxy
 
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
 const GEMINI_MODEL = 'gemini-2.0-flash';
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -32,6 +36,25 @@ interface RequestBody {
     answers?: Record<number, number>;
 }
 
+async function requireAuthenticatedUser(req: Request): Promise<string> {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+        throw new Error('Unauthorized: missing bearer token');
+    }
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        throw new Error('Unauthorized: auth provider config missing');
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        global: { headers: { Authorization: authHeader } },
+    });
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) {
+        throw new Error('Unauthorized: invalid token');
+    }
+    return data.user.id;
+}
+
 // Call Gemini API
 async function callGemini(
     messages: Array<{ role: string; content: string }>,
@@ -56,27 +79,46 @@ async function callGemini(
         contents.unshift({ role: 'user', parts: [{ text: systemPrompt }] });
     }
 
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents,
-            generationConfig: { temperature, maxOutputTokens: maxTokens },
-        }),
-    });
+    // Gemini can respond with transient 429/503. Retry a few times with backoff.
+    let lastErrorText = '';
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents,
+                generationConfig: { temperature, maxOutputTokens: maxTokens },
+            }),
+        });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Gemini API ${response.status}: ${errorText}`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+                return data.candidates[0].content.parts[0].text;
+            }
+            return 'Извините, получен пустой ответ от сервиса.';
+        }
+
+        lastErrorText = await response.text();
+        const status = response.status;
+        const retryAfterHeader = response.headers.get('retry-after');
+        const retryAfterMs = retryAfterHeader ? Number(retryAfterHeader) * 1000 : NaN;
+
+        const isRetryable = status === 429 || status === 503 || status === 500;
+        const hasMoreAttempts = attempt < 2;
+
+        if (isRetryable && hasMoreAttempts) {
+            const backoffMs = Number.isFinite(retryAfterMs)
+                ? Math.max(250, Math.min(10_000, retryAfterMs))
+                : 350 * Math.pow(2, attempt);
+            await new Promise((r) => setTimeout(r, backoffMs));
+            continue;
+        }
+
+        throw new Error(`Gemini API ${status}: ${lastErrorText}`);
     }
 
-    const data = await response.json();
-
-    if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-        return data.candidates[0].content.parts[0].text;
-    }
-
-    return 'Извините, получен пустой ответ от сервиса.';
+    throw new Error(`Gemini API 429: ${lastErrorText || 'Too many requests'}`);
 }
 
 // ── Action Handlers ──────────────────────────────────────
@@ -205,8 +247,12 @@ Deno.serve(async (req) => {
             throw new Error('GEMINI_API_KEY not configured. Run: npx supabase secrets set GEMINI_API_KEY=...');
         }
 
+        await requireAuthenticatedUser(req);
         const body: RequestBody = await req.json();
         const { action } = body;
+        if (!action) {
+            throw new Error('Bad request: missing action');
+        }
 
         let result: string;
 
@@ -250,6 +296,11 @@ Deno.serve(async (req) => {
         console.error('ai-proxy error:', message);
 
         let status = 500;
+        if (message.startsWith('Unauthorized')) {
+            status = 401;
+        } else if (message.startsWith('Bad request')) {
+            status = 400;
+        }
         if (message.includes('429') || message.includes('Quota')) {
             status = 429;
         }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     View,
     Text,
@@ -12,15 +12,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LogoNew } from '../components/Logo';
 import { Button } from '../components/Button';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 import { scale } from '../constants';
 import { useQuizStore, QUIZ_QUESTIONS } from '../store/quizStore';
 import { useAuthStore } from '../store/authStore';
 import { dbService } from '../services/supabase';
+import { useAppTheme } from '../theme/useAppTheme';
 
 export default function QuizScreen() {
     const router = useRouter();
     const user = useAuthStore((s) => s.user);
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     const {
         currentQuestion,
         answers,
@@ -77,36 +81,51 @@ export default function QuizScreen() {
 
             {/* Logo at top */}
             <View style={styles.logoContainer}>
-                <LogoNew width={scale(160)} height={scale(36)} variant="full" />
+                <LogoNew width={scale(160)} height={scale(36)} variant="full" color={colors.text} />
             </View>
 
-            {/* Question area - fixed height */}
-            <View style={styles.questionContainer}>
-                <Text style={styles.questionText}>{question.question}</Text>
+            {/* Progress indicator */}
+            <View style={styles.progressContainer}>
+                <View style={styles.progressTrack}>
+                    <View
+                        style={[
+                            styles.progressFill,
+                            { width: `${(currentQuestion / QUIZ_QUESTIONS.length) * 100}%` },
+                        ]}
+                    />
+                </View>
+                <Text style={styles.progressLabel}>
+                    {currentQuestion} / {QUIZ_QUESTIONS.length}
+                </Text>
             </View>
 
-            {/* Options area */}
-            <View style={styles.optionsContainer}>
-                {question.options.map((option, index) => (
-                    <TouchableOpacity
-                        key={index}
-                        style={styles.optionRow}
-                        onPress={() => handleSelectOption(index)}
-                        activeOpacity={0.7}
-                    >
-                        <View style={[
-                            styles.radioCircle,
-                            selectedOption === index && styles.radioCircleSelected
-                        ]}>
-                            {selectedOption === index && <View style={styles.radioInner} />}
-                        </View>
-                        <Text style={styles.optionText}>{option}</Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
+            {/* Content Wrapper to center vertically */}
+            <View style={styles.contentWrapper}>
+                {/* Question area */}
+                <View style={styles.questionContainer}>
+                    <Text style={styles.questionText}>{question.question}</Text>
+                </View>
 
-            {/* Spacer */}
-            <View style={styles.spacer} />
+                {/* Options area */}
+                <View style={styles.optionsContainer}>
+                    {question.options.map((option, index) => (
+                        <TouchableOpacity
+                            key={index}
+                            style={styles.optionRow}
+                            onPress={() => handleSelectOption(index)}
+                            activeOpacity={0.7}
+                        >
+                            <View style={[
+                                styles.radioCircle,
+                                selectedOption === index && styles.radioCircleSelected
+                            ]}>
+                                {selectedOption === index && <View style={styles.radioInner} />}
+                            </View>
+                            <Text style={styles.optionText}>{option}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            </View>
 
             {/* Bottom controls */}
             <View style={styles.bottomContainer}>
@@ -118,7 +137,7 @@ export default function QuizScreen() {
                     >
                         <Image
                             source={require('../../assets/icons/back-arrow.png')}
-                            style={styles.backIcon}
+                            style={[styles.backIcon, { tintColor: colors.text }]}
                             resizeMode="contain"
                         />
                     </TouchableOpacity>
@@ -137,7 +156,7 @@ export default function QuizScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -146,24 +165,56 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 60,
     },
-    questionContainer: {
-        height: 120,
+    progressContainer: {
+        position: 'absolute',
+        top: 250, // Adjust this value to position it correctly beneath the logo
+        left: 0,
+        right: 0,
         paddingHorizontal: 24,
-        marginTop: 40,
-        justifyContent: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        zIndex: 1,
+    },
+    progressTrack: {
+        flex: 1,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: colors.surface || colors.surfaceLight,
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        borderRadius: 2,
+        backgroundColor: '#102852',
+    },
+    progressLabel: {
+        fontFamily: fonts.body.medium,
+        fontSize: 13,
+        color: colors.textSecondary,
+        minWidth: 36,
+        textAlign: 'right',
+    },
+    contentWrapper: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    questionContainer: {
+        paddingHorizontal: 24,
+        marginBottom: 32,
     },
     questionText: {
         fontFamily: fonts.heading.bold,
         fontSize: 24,
         lineHeight: 32,
-        color: colors.text, // Color change
+        color: colors.text,
     },
     optionsContainer: {
         paddingHorizontal: 24,
     },
     optionRow: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         paddingVertical: 12,
         minHeight: 48,
     },
@@ -172,30 +223,26 @@ const styles = StyleSheet.create({
         height: 24,
         borderRadius: 12,
         borderWidth: 1.5,
-        borderColor: colors.text, // Color change
+        borderColor: colors.text,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 16,
-        marginTop: 2,
     },
     radioCircleSelected: {
-        borderColor: colors.text, // Color change
+        borderColor: colors.text,
     },
     radioInner: {
         width: 12,
         height: 12,
         borderRadius: 6,
-        backgroundColor: colors.text, // Color change
+        backgroundColor: colors.text,
     },
     optionText: {
         flex: 1,
-        fontFamily: fonts.body.light, // Font change
+        fontFamily: fonts.body.light,
         fontSize: 16,
         lineHeight: 24,
-        color: colors.text, // Color change
-    },
-    spacer: {
-        flex: 1,
+        color: colors.text,
     },
     bottomContainer: {
         paddingHorizontal: 24,
@@ -210,7 +257,7 @@ const styles = StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
-        backgroundColor: colors.quiz.backButtonBg,
+        backgroundColor: colors.quiz?.backButtonBg || colors.surfaceLight,
         justifyContent: 'center',
         alignItems: 'center',
     },

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
     View,
     Text,
@@ -15,11 +15,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius } from '../theme';
-import { scaleWidth, scaleHeight, scaleFont } from '../theme/responsive';
+import { fonts } from '../theme';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { aiService, ChatMessage } from '../services/ai';
 import { BottomNavigation } from '../components/BottomNavigation';
+import { useAppTheme } from '../theme/useAppTheme';
+import { scale } from '../constants';
 
 interface DisplayMessage {
     id: string;
@@ -31,6 +32,9 @@ interface DisplayMessage {
 export const AICoachScreen: React.FC = () => {
     const router = useRouter();
     const { selectedHobby } = useUserProfileStore();
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     const [messages, setMessages] = useState<DisplayMessage[]>([]);
     const [inputText, setInputText] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -135,7 +139,7 @@ export const AICoachScreen: React.FC = () => {
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-                    <Image source={require('../../icons/back.png')} style={{ width: scaleWidth(24), height: scaleWidth(24), tintColor: colors.text }} resizeMode="contain" />
+                    <Image source={require('../../icons/back.png')} style={{ width: scale(24), height: scale(24), tintColor: colors.text }} resizeMode="contain" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>ИИ-тренер</Text>
                 <View style={styles.placeholder} />
@@ -170,7 +174,7 @@ export const AICoachScreen: React.FC = () => {
                         value={inputText}
                         onChangeText={setInputText}
                         placeholder="Напиши сообщение..."
-                        placeholderTextColor={colors.textLight}
+                        placeholderTextColor={colors.textSecondary}
                         multiline
                         maxLength={500}
                     />
@@ -185,7 +189,7 @@ export const AICoachScreen: React.FC = () => {
                         <Ionicons
                             name="send"
                             size={20}
-                            color={inputText.trim() && !isLoading ? colors.text : colors.textLight}
+                            color="#FFFFFF"
                         />
                     </TouchableOpacity>
                 </View>
@@ -196,7 +200,7 @@ export const AICoachScreen: React.FC = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -205,47 +209,47 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: scaleWidth(spacing.lg),
-        paddingVertical: scaleHeight(spacing.md),
+        paddingHorizontal: scale(20),
+        paddingVertical: scale(16),
         borderBottomWidth: 1,
-        borderBottomColor: colors.surfaceLight,
+        borderBottomColor: colors.border,
     },
     backButton: {
-        padding: scaleWidth(8),
+        padding: scale(8),
     },
     headerTitle: {
-        fontFamily: typography.h3.fontFamily,
-        fontSize: scaleFont(18),
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(18),
         color: colors.text,
     },
     placeholder: {
-        width: scaleWidth(40),
+        width: scale(40),
     },
     messagesContainer: {
-        paddingHorizontal: scaleWidth(spacing.lg),
-        paddingVertical: scaleHeight(spacing.md),
+        paddingHorizontal: scale(20),
+        paddingVertical: scale(16),
     },
     messageContainer: {
         maxWidth: '80%',
-        marginBottom: scaleHeight(spacing.md),
-        padding: scaleWidth(spacing.md),
-        borderRadius: borderRadius.md,
+        marginBottom: scale(16),
+        padding: scale(12),
+        borderRadius: scale(16),
     },
     userMessage: {
         alignSelf: 'flex-end',
-        backgroundColor: colors.text,
+        backgroundColor: colors.primary,
     },
     assistantMessage: {
         alignSelf: 'flex-start',
         backgroundColor: colors.surfaceLight,
     },
     messageText: {
-        fontFamily: typography.body.fontFamily,
-        fontSize: scaleFont(15),
-        lineHeight: scaleHeight(22),
+        fontFamily: fonts.body.regular,
+        fontSize: scale(15),
+        lineHeight: scale(22),
     },
     userMessageText: {
-        color: colors.background,
+        color: '#FFFFFF',
     },
     assistantMessageText: {
         color: colors.text,
@@ -254,46 +258,46 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: scaleHeight(spacing.sm),
-        gap: scaleWidth(8),
+        paddingVertical: scale(8),
+        gap: scale(8),
     },
     loadingText: {
-        fontFamily: typography.body.fontFamily,
-        fontSize: scaleFont(14),
+        fontFamily: fonts.body.regular,
+        fontSize: scale(14),
         color: colors.textSecondary,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'flex-end',
-        paddingHorizontal: scaleWidth(spacing.lg),
-        paddingVertical: scaleHeight(spacing.md),
+        paddingHorizontal: scale(20),
+        paddingVertical: scale(16),
         borderTopWidth: 1,
-        borderTopColor: colors.surfaceLight,
+        borderTopColor: colors.border,
         backgroundColor: colors.background,
     },
     input: {
         flex: 1,
-        minHeight: scaleHeight(44),
-        maxHeight: scaleHeight(120),
+        minHeight: scale(44),
+        maxHeight: scale(120),
         backgroundColor: colors.surfaceLight,
-        borderRadius: borderRadius.lg,
-        paddingHorizontal: scaleWidth(spacing.md),
-        paddingVertical: scaleHeight(12),
-        fontFamily: typography.body.fontFamily,
-        fontSize: scaleFont(16),
+        borderRadius: scale(22),
+        paddingHorizontal: scale(16),
+        paddingVertical: scale(10),
+        fontFamily: fonts.body.regular,
+        fontSize: scale(16),
         color: colors.text,
-        marginRight: scaleWidth(spacing.sm),
+        marginRight: scale(12),
     },
     sendButton: {
-        width: scaleWidth(44),
-        height: scaleWidth(44),
-        borderRadius: scaleWidth(22),
-        backgroundColor: colors.primary,
+        width: scale(44),
+        height: scale(44),
+        borderRadius: scale(22),
+        backgroundColor: colors.buttonPrimary,
         justifyContent: 'center',
         alignItems: 'center',
     },
     sendButtonDisabled: {
-        backgroundColor: colors.surfaceLight,
+        opacity: 0.5,
     },
 });
 

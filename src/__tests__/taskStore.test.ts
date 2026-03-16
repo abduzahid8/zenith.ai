@@ -16,7 +16,7 @@ jest.mock('../services/taskService', () => ({
 
 // ─── Helpers ─────────────────────────────────────────
 
-const TASK_TYPES: TaskType[] = ['learning', 'practice', 'action', 'wellbeing'];
+const TASK_TYPES: TaskType[] = ['theory', 'practice', 'analysis', 'puzzles'];
 
 const makeTasks = (count: number) =>
     Array.from({ length: count }, (_, i) => ({

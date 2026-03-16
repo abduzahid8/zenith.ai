@@ -1,17 +1,5 @@
-import { useEffect } from 'react';
-import { useRouter } from 'expo-router';
-import { View, ActivityIndicator } from 'react-native';
-import { colors } from '../../src/theme';
+import { MainTabsScreen } from '../../src/screens/MainTabsScreen';
 
-/** Redirect to main app on AI Coach tab (tab 2). */
-export default function AICoachRedirect() {
-    const router = useRouter();
-    useEffect(() => {
-        router.replace('/(app)/?tab=2');
-    }, []);
-    return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
-            <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-    );
+export default function AICoachRoute() {
+    return <MainTabsScreen initialTab={2} />;
 }

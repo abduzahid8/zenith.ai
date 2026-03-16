@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
     View,
     Text,
@@ -8,8 +8,9 @@ import {
     TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 import { scale } from '../constants';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface WarningModalProps {
     visible: boolean;
@@ -32,6 +33,9 @@ export const WarningModal: React.FC<WarningModalProps> = ({
     onCancel,
     type = 'warning',
 }) => {
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     const getIconColor = () => {
         switch (type) {
             case 'danger':
@@ -116,7 +120,7 @@ export const WarningModal: React.FC<WarningModalProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -147,7 +151,7 @@ const styles = StyleSheet.create({
     title: {
         fontFamily: fonts.heading.bold,
         fontSize: scale(22),
-        color: colors.black,
+        color: colors.text,
         textAlign: 'center',
         marginBottom: scale(12),
     },
@@ -175,7 +179,7 @@ const styles = StyleSheet.create({
     cancelButtonText: {
         fontFamily: fonts.heading.medium,
         fontSize: scale(16),
-        color: colors.black,
+        color: colors.text,
     },
     confirmButton: {
         flex: 1,
@@ -193,7 +197,7 @@ const styles = StyleSheet.create({
     confirmButtonText: {
         fontFamily: fonts.heading.bold,
         fontSize: scale(16),
-        color: colors.black,
+        color: colors.text, // Warning confirm usually dark text on light button
     },
 });
 

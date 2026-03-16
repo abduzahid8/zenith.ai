@@ -47,7 +47,11 @@ export const aiService = {
     ): Promise<string> => {
         try {
             return await invokeAI<string>('sendMessage', { messages, hobby });
-        } catch {
+        } catch (error) {
+            const status = (error as any)?.context?.status ?? (error as any)?.status;
+            if (status === 429) {
+                return 'Слишком много запросов к ИИ. Подождите 10–20 секунд и попробуйте снова.';
+            }
             return 'Извините, сейчас я не могу ответить. Проверьте соединение или попробуйте позже.';
         }
     },

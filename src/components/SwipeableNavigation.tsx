@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
     View,
     StyleSheet,
@@ -6,9 +6,10 @@ import {
     ScrollView,
     Image,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { scale, SCREEN_WIDTH } from '../constants';
-import { colors } from '../theme';
 import { APP_TAB_ROUTES } from '../config/navigation';
+import { useAppTheme } from '../theme/useAppTheme';
 
 const TABS = APP_TAB_ROUTES;
 
@@ -23,6 +24,7 @@ export const SwipeableNavigation: React.FC<SwipeableNavigationProps> = ({
 }) => {
     const scrollViewRef = useRef<ScrollView>(null);
     const [activeTab, setActiveTab] = useState(initialIndex);
+    const styles = useMemo(() => createStyles(), []);
 
     const handleTabPress = (index: number) => {
         scrollViewRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: true });
@@ -59,7 +61,8 @@ export const SwipeableNavigation: React.FC<SwipeableNavigationProps> = ({
             </ScrollView>
 
             {/* Bottom Navigation */}
-            <View style={styles.bottomNav}>
+            <View style={styles.bottomNavContainer}>
+                <BlurView intensity={100} tint={'light'} style={styles.glassBackground} />
                 {TABS.slice(0, children.length).map((tab, index) => (
                     <TouchableOpacity
                         key={tab.key}
@@ -71,7 +74,8 @@ export const SwipeableNavigation: React.FC<SwipeableNavigationProps> = ({
                             style={{
                                 width: scale(28),
                                 height: scale(28),
-                                opacity: activeTab === index ? 1 : 0.5
+                                opacity: activeTab === index ? 1 : 0.5,
+                                tintColor: undefined,
                             }}
                             resizeMode="contain"
                         />
@@ -82,7 +86,7 @@ export const SwipeableNavigation: React.FC<SwipeableNavigationProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
     container: {
         flex: 1,
     },
@@ -93,28 +97,33 @@ const styles = StyleSheet.create({
         width: SCREEN_WIDTH,
         flex: 1,
     },
-    bottomNav: {
+    bottomNavContainer: {
         position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
+        bottom: scale(34),
+        alignSelf: 'center',
+        width: 362,
         flexDirection: 'row',
         justifyContent: 'space-around',
         alignItems: 'center',
-        height: scale(60),
-        marginHorizontal: scale(16),
-        marginBottom: scale(16),
-        borderRadius: scale(47),
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        shadowColor: colors.text,
+        height: 67,
+        borderRadius: 47,
+        shadowColor: 'rgba(0, 0, 0, 0.25)',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 1,
         shadowRadius: 4,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
+        elevation: 4,
+    },
+    glassBackground: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        borderRadius: 47,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: 'rgba(255, 255, 255, 0.4)',
+        overflow: 'hidden',
     },
     navItem: {
         padding: scale(12),
     },
 });
+
+export default SwipeableNavigation;

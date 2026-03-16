@@ -39,4 +39,10 @@ export const authService = {
         if (error) throw error;
         return data.user;
     },
+
+    forgotPassword: async (email: string) => {
+        const supabase = getSupabase();
+        const { error } = await supabase.auth.resetPasswordForEmail(email);
+        if (error) throw error;
+    },
 };

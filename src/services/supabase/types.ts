@@ -189,7 +189,7 @@ export interface SubstituteNotification {
     created_at?: string;
 }
 
-export type TaskType = 'learning' | 'practice' | 'action' | 'wellbeing';
+export type TaskType = 'theory' | 'practice' | 'analysis' | 'puzzles';
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'skipped' | 'replaced';
 export type AiJobType = 'PROFILE_UPDATE' | 'REBUILD_DAY' | 'BEHAVIOR_RECALIBRATION';
 export type AiJobStatus = 'pending' | 'processing' | 'completed' | 'failed';
@@ -229,6 +229,8 @@ export interface Task {
     difficulty_rating?: number;
     engagement_rating?: number;
     user_notes?: string;
+    is_manual?: boolean;
+    completed_at?: string;
     created_at?: string;
     updated_at?: string;
 }

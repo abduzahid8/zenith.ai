@@ -15,6 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
+      "buildNumber": "3",
       "bundleIdentifier": "com.zenyth.ai",
       "usesAppleSignIn": true,
       "entitlements": {
@@ -40,7 +41,7 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [

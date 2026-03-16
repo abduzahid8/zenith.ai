@@ -5,25 +5,34 @@ import {
     StyleSheet,
     StatusBar,
     Image,
+    ScrollView,
+    TouchableOpacity,
+    ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 import { WeeklyBarChart } from '../components/WeeklyBarChart';
 import { MenuDrawer } from '../components/NavigationSidebar';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
 import { scale } from '../constants';
+import { useAppTheme } from '../theme/useAppTheme';
 
 const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24) }} resizeMode="contain" />;
 
 const WEEK_DAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 
 export const ScreenTimeScreen: React.FC = () => {
-    const router = useRouter();
     const { streakDays } = useUserProfileStore();
     const {
+        isAuthorized,
+        isChecking,
+        isLoading,
+        error,
+        dataSource,
+        checkPermission,
+        requestPermission,
         changeFromLastWeek,
         weeklyData,
         fetchWeeklyData,
@@ -31,10 +40,32 @@ export const ScreenTimeScreen: React.FC = () => {
     } = useDeviceScreenTimeStore();
     const [menuVisible, setMenuVisible] = useState(false);
 
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     useEffect(() => {
-        fetchWeeklyData();
-        fetchTodayData();
-    }, []);
+        const init = async () => {
+            const granted = await checkPermission();
+            if (!granted) {
+                await Promise.all([fetchWeeklyData(), fetchTodayData()]);
+                return;
+            }
+            await Promise.all([fetchWeeklyData(), fetchTodayData()]);
+        };
+        init();
+    }, [checkPermission, fetchWeeklyData, fetchTodayData]);
+
+    const handleGrantAccess = async () => {
+        let granted = await requestPermission();
+        if (!granted) {
+            granted = await checkPermission();
+        }
+        if (granted) {
+            await Promise.all([fetchWeeklyData(), fetchTodayData()]);
+            return;
+        }
+        await Promise.all([fetchWeeklyData(), fetchTodayData()]);
+    };
 
     const chartData = useMemo(() => {
         if (!weeklyData || weeklyData.length === 0) {
@@ -61,6 +92,8 @@ export const ScreenTimeScreen: React.FC = () => {
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     }, [weeklyData]);
 
+    const hasAnalyticsData = isAuthorized || (weeklyData?.length ?? 0) > 0;
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
@@ -84,28 +117,86 @@ export const ScreenTimeScreen: React.FC = () => {
                 showsVerticalScrollIndicator={false}
             >
                 <Text style={styles.screenTitle}>Экранное время</Text>
-                <WeeklyBarChart data={chartData} />
+                {!hasAnalyticsData ? (
+                    <View style={styles.permissionCard}>
+                        <Text style={styles.permissionTitle}>Нет доступа к данным</Text>
+                        <Text style={styles.permissionText}>
+                            Разрешите доступ к Screen Time/Usage Access, чтобы увидеть недельную аналитику.
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.permissionButton}
+                            onPress={handleGrantAccess}
+                            activeOpacity={0.8}
+                            disabled={isChecking}
+                        >
+                            {isChecking ? (
+                                <ActivityIndicator color={colors.white} />
+                            ) : (
+                                <Text style={styles.permissionButtonText}>Открыть доступ</Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <>
+                        {!isAuthorized && (
+                            <View style={styles.fallbackInfo}>
+                                <Text style={styles.fallbackInfoText}>
+                                    Нет прямого доступа к данным устройства. Показана серверная аналитика приложения.
+                                </Text>
+                                <TouchableOpacity
+                                    style={styles.fallbackButton}
+                                    onPress={handleGrantAccess}
+                                    activeOpacity={0.8}
+                                    disabled={isChecking}
+                                >
+                                    {isChecking ? (
+                                        <ActivityIndicator color={colors.white} />
+                                    ) : (
+                                        <Text style={styles.fallbackButtonText}>Открыть доступ к устройству</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        )}
 
-                <View style={styles.statCardBlue}>
-                    <Text style={styles.statCardBigText}>
-                        {changeFromLastWeek >= 0 ? '+' : ''}{changeFromLastWeek}%
-                    </Text>
-                    <Text style={styles.statCardSmallText}>За последнюю неделю</Text>
-                </View>
+                        <WeeklyBarChart data={chartData} />
 
-                <View style={styles.statCardDarkBlue}>
-                    <Text style={styles.statCardBigText}>{totalDurationFormatted}</Text>
-                    <Text style={styles.statCardSmallText}>Экранное время{'\n'}за неделю</Text>
-                </View>
+                        <View style={styles.statCardBlue}>
+                            <Text style={styles.statCardBigText}>
+                                {changeFromLastWeek >= 0 ? '+' : ''}{changeFromLastWeek}%
+                            </Text>
+                            <Text style={styles.lastWeekText}>За последнюю неделю</Text>
+                        </View>
+
+                        <View style={styles.statCardDarkBlue}>
+                            <Text style={styles.statCardBigText}>{totalDurationFormatted}</Text>
+                            <Text style={styles.screenTimeText}>Экранное время{'\n'}за неделю</Text>
+                        </View>
+
+                        {(isLoading || isChecking) && (
+                            <View style={styles.loadingRow}>
+                                <ActivityIndicator color={colors.text} />
+                                <Text style={styles.loadingText}>Обновляем данные...</Text>
+                            </View>
+                        )}
+
+                        {!!error && (
+                            <Text style={styles.errorText}>{error}</Text>
+                        )}
+
+                        {dataSource === 'supabase' && (
+                            <Text style={styles.sourceText}>Источник данных: серверные логи приложения</Text>
+                        )}
+                    </>
+                )}
             </ScrollView>
 
-            <BottomNavigation activeTab="statistics" />
+            <BottomNavigation />
             <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />
         </SafeAreaView>
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -130,7 +221,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
     },
-    // Figma: font-size: 24px, font-weight: 700, line-height: 21px
     streakNumber: {
         fontFamily: fonts.heading.bold,
         fontSize: scale(24),
@@ -179,13 +269,104 @@ const styles = StyleSheet.create({
     statCardBigText: {
         fontFamily: fonts.heading.bold,
         fontSize: scale(32),
-        color: colors.text,
+        color: colors.statistics.darkText,
     },
-    statCardSmallText: {
+    lastWeekText: {
         fontFamily: fonts.body.light,
-        fontSize: scale(16),
+        fontSize: scale(20),
         color: colors.statistics.darkText,
         lineHeight: scale(20),
+        width: scale(232),
+        height: scale(24),
+    },
+    screenTimeText: {
+        fontFamily: fonts.body.light,
+        fontSize: scale(20),
+        color: colors.statistics.darkText,
+        lineHeight: scale(20),
+        width: scale(168),
+        height: scale(40),
+    },
+    permissionCard: {
+        marginTop: scale(8),
+        borderRadius: scale(20),
+        backgroundColor: colors.surfaceLight,
+        padding: scale(20),
+        gap: scale(12),
+    },
+    permissionTitle: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(22),
+        lineHeight: scale(26),
+        color: colors.text,
+    },
+    permissionText: {
+        fontFamily: fonts.body.regular,
+        fontSize: scale(15),
+        lineHeight: scale(22),
+        color: colors.textSecondary,
+    },
+    permissionButton: {
+        marginTop: scale(8),
+        height: scale(52),
+        borderRadius: scale(30),
+        backgroundColor: colors.buttonPrimary,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    permissionButtonText: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(16),
+        color: colors.buttonTextPrimary,
+    },
+    loadingRow: {
+        marginTop: scale(14),
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: scale(8),
+    },
+    loadingText: {
+        fontFamily: fonts.body.regular,
+        fontSize: scale(14),
+        color: colors.textSecondary,
+    },
+    errorText: {
+        marginTop: scale(10),
+        fontFamily: fonts.body.regular,
+        fontSize: scale(14),
+        color: colors.error,
+    },
+    fallbackInfo: {
+        marginBottom: scale(12),
+        padding: scale(12),
+        borderRadius: scale(14),
+        backgroundColor: colors.surfaceLight,
+    },
+    fallbackInfoText: {
+        fontFamily: fonts.body.regular,
+        fontSize: scale(13),
+        lineHeight: scale(18),
+        color: colors.textSecondary,
+    },
+    fallbackButton: {
+        marginTop: scale(10),
+        borderRadius: scale(20),
+        height: scale(40),
+        paddingHorizontal: scale(14),
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.buttonPrimary,
+    },
+    fallbackButtonText: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(13),
+        color: colors.buttonTextPrimary,
+    },
+    sourceText: {
+        marginTop: scale(10),
+        fontFamily: fonts.body.light,
+        fontSize: scale(12),
+        color: colors.textSecondary,
     },
 });
 

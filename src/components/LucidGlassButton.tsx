@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import {
     Text,
     StyleSheet,
@@ -8,8 +8,9 @@ import {
     Animated,
     View,
 } from 'react-native';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 import { scale } from '../constants';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface LucidGlassButtonProps {
     /** Button text */
@@ -42,13 +43,12 @@ export const LucidGlassButton: React.FC<LucidGlassButtonProps> = ({
     textStyle,
     disabled = false,
 }) => {
-    // Separate animation values:
-    // - scaleAnim: uses native driver (transform only)
-    // - selectionAnim: uses JS driver (layout/color properties)
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     const scaleAnim = useRef(new Animated.Value(1)).current;
     const selectionAnim = useRef(new Animated.Value(0)).current;
 
-    // Animate selection state (JS driver for layout properties)
     useEffect(() => {
         Animated.spring(selectionAnim, {
             toValue: isSelected ? 1 : 0,
@@ -59,7 +59,6 @@ export const LucidGlassButton: React.FC<LucidGlassButtonProps> = ({
         }).start();
     }, [isSelected, selectionAnim]);
 
-    // Press handlers (native driver for scale - smooth 60fps)
     const handlePressIn = () => {
         Animated.spring(scaleAnim, {
             toValue: 1.02,
@@ -76,14 +75,14 @@ export const LucidGlassButton: React.FC<LucidGlassButtonProps> = ({
             damping: 10,
             stiffness: 200,
             mass: 0.5,
-            useNativeDriver: true, // Native driver for transform
+            useNativeDriver: true,
         }).start();
     };
 
     // Interpolated styles for selection (JS driven)
     const backgroundColor = selectionAnim.interpolate({
         inputRange: [0, 1],
-        outputRange: ['#FFFFFF', '#D9D9D9'],
+        outputRange: ['rgba(255,255,255,1)', 'rgba(217,217,217,1)'],
     });
 
     const paddingH = selectionAnim.interpolate({
@@ -98,9 +97,7 @@ export const LucidGlassButton: React.FC<LucidGlassButtonProps> = ({
             onPress={onPress}
             disabled={disabled}
         >
-            {/* Outer wrapper for native-driver scale transform */}
             <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-                {/* Inner view for JS-driver layout/color animations */}
                 <Animated.View
                     style={[
                         styles.container,
@@ -124,14 +121,14 @@ export const LucidGlassButton: React.FC<LucidGlassButtonProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         height: scale(45),
         paddingHorizontal: scale(24),
         borderRadius: scale(24),
         borderWidth: 2,
-        borderColor: colors.black,
-        backgroundColor: '#FFFFFF',
+        borderColor: colors.text,
+        backgroundColor: colors.surface,
         alignItems: 'center',
         justifyContent: 'center',
         flexDirection: 'row',
@@ -139,7 +136,7 @@ const styles = StyleSheet.create({
     text: {
         fontFamily: fonts.heading.medium,
         fontSize: scale(16),
-        color: colors.black,
+        color: colors.text,
         textAlign: 'center',
     },
 });

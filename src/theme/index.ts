@@ -3,7 +3,7 @@
  * Based on Figma design analysis
  */
 
-export const colors = {
+export const lightColors = {
     // Primary gradient colors
     primary: '#1AFFD5',
     primaryGradient: {
@@ -93,10 +93,10 @@ export const colors = {
     home: {
         cardBorder: '#DCDCDC',
         darkText: '#1E1E2E',
-        lightBg: '#F5F5F5',
+        lightBg: '#EAF0F8',
     },
     errorBoundary: {
-        background: '#F2F6FC',
+        background: '#EAF0F8',
         primary: '#37A0EF',
         text: '#2E2E43',
         muted: '#666',
@@ -135,7 +135,7 @@ export const colors = {
     // Subscription
     subscription: {
         freeCardBg: '#C4DCFB',
-        premiumAccent: '#00FFC2',
+        premiumAccent: '#43C2F8',
         confirmBg: '#E8E4DF',
     },
 
@@ -148,8 +148,8 @@ export const colors = {
 
     // Phone analysis
     phoneAnalysis: {
-        cardBg: '#f9f9f9',
-        secondaryBg: '#f5f5f5',
+        cardBg: '#EAF0F8',
+        secondaryBg: '#EAF0F8',
         highlightBg: '#EAF4FF',
         actionBg: '#007AFF',
     },
@@ -173,7 +173,9 @@ export const colors = {
         shadow: '#000000',
         confirmDefault: '#E8E4DF',
     },
-} as const;
+};
+
+export type Colors = typeof lightColors;
 
 export const fonts = {
     // Gramatika - Headings
@@ -196,19 +198,19 @@ export const fonts = {
     system: 'System',
 } as const;
 
-export const typography = {
+export const getTypography = (currentColors: Colors) => ({
     // Welcome Screen
     welcomeTitle: {
         fontFamily: fonts.heading.bold,
         fontSize: 28,
         lineHeight: 38,
-        color: colors.text,
+        color: currentColors.text,
     },
     welcomeSubtitle: {
         fontFamily: fonts.body.light,
         fontSize: 20,
         lineHeight: 25,
-        color: colors.text,
+        color: currentColors.text,
     },
 
     // Buttons
@@ -216,13 +218,13 @@ export const typography = {
         fontFamily: fonts.heading.bold,
         fontSize: 20,
         lineHeight: 28,
-        color: colors.text,
+        color: currentColors.text,
     },
     buttonTextSmall: {
         fontFamily: fonts.heading.medium,
         fontSize: 16,
         lineHeight: 22,
-        color: colors.text,
+        color: currentColors.text,
     },
 
     // Quiz
@@ -230,13 +232,13 @@ export const typography = {
         fontFamily: fonts.heading.bold,
         fontSize: 24,
         lineHeight: 32,
-        color: colors.text,
+        color: currentColors.text,
     },
     quizOption: {
         fontFamily: fonts.body.regular,
         fontSize: 16,
         lineHeight: 22,
-        color: colors.text,
+        color: currentColors.text,
     },
 
     // Labels
@@ -244,7 +246,7 @@ export const typography = {
         fontFamily: fonts.body.regular,
         fontSize: 14,
         lineHeight: 20,
-        color: colors.textSecondary,
+        color: currentColors.textSecondary,
     },
 
     // Headings
@@ -252,19 +254,19 @@ export const typography = {
         fontFamily: fonts.heading.bold,
         fontSize: 28,
         lineHeight: 38,
-        color: colors.text,
+        color: currentColors.text,
     },
     h2: {
         fontFamily: fonts.heading.bold,
         fontSize: 22,
         lineHeight: 30,
-        color: colors.text,
+        color: currentColors.text,
     },
     h3: {
         fontFamily: fonts.heading.medium,
         fontSize: 18,
         lineHeight: 26,
-        color: colors.text,
+        color: currentColors.text,
     },
 
     // Body text
@@ -272,15 +274,15 @@ export const typography = {
         fontFamily: fonts.body.regular,
         fontSize: 16,
         lineHeight: 24,
-        color: colors.text,
+        color: currentColors.text,
     },
     bodySmall: {
         fontFamily: fonts.body.regular,
         fontSize: 14,
         lineHeight: 20,
-        color: colors.textSecondary,
+        color: currentColors.textSecondary,
     },
-} as const;
+} as const);
 
 export const spacing = {
     xs: 4,
@@ -305,9 +307,9 @@ export const screen = {
 } as const;
 
 export default {
-    colors,
+    lightColors,
     fonts,
-    typography,
+    getTypography,
     spacing,
     borderRadius,
     screen,

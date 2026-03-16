@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
     TouchableOpacity,
     View,
@@ -11,8 +11,9 @@ import Animated, {
     useAnimatedStyle,
     withSpring,
 } from 'react-native-reanimated';
-import { colors, typography, borderRadius, spacing } from '../theme';
+import { borderRadius, spacing } from '../theme';
 import { scaleWidth, scaleHeight, scaleFont } from '../theme/responsive';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface QuizOptionProps {
     text: string;
@@ -28,6 +29,8 @@ export const QuizOption: React.FC<QuizOptionProps> = ({
     style,
 }) => {
     const scale = useSharedValue(1);
+    const { colors, typography } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [{ scale: scale.value }],
@@ -64,7 +67,7 @@ export const QuizOption: React.FC<QuizOptionProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any, typography: any) => StyleSheet.create({
     container: {
         flexDirection: 'row',
         alignItems: 'center',

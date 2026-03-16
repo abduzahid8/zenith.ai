@@ -1,11 +1,10 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     StatusBar,
     TouchableOpacity,
-    Dimensions,
     Platform,
     UIManager,
     Animated,
@@ -21,40 +20,36 @@ if (Platform.OS === 'android') {
 }
 
 import { useRouter, useFocusEffect } from 'expo-router';
-// import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons'; // Removing unused vector icons
 import PagerView from '../components/ui/PagerView';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 import { MenuDrawer } from '../components/NavigationSidebar';
-import { useAuthStore } from '../store/authStore';
 import { useUserProfileStore, getGreeting } from '../store/userProfileStore';
 import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
-import { requestScreenTimePermission } from 'device-activity';
-import { scale, SCREEN_WIDTH, TABS } from '../constants';
+import { scale, SCREEN_WIDTH } from '../constants';
+import { BottomTabBar } from '../components/navigation/BottomTabBar';
+import { HobbyIcon } from '../components/HobbyIcon';
+import { useAppTheme } from '../theme/useAppTheme';
 
 // Tab components
 import HomeTab from './tabs/HomeTab';
 import WeeklyPlanTab from './tabs/WeeklyPlanTab';
 import AICoachTab from './tabs/AICoachTab';
-import StatisticsTab from './tabs/StatisticsTab';
 
-const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24) }} resizeMode="contain" />;
-const ChessIcon = () => (
-    <View style={styles.chessIcon}>
-        <Text style={{ fontSize: scale(22) }}>♞</Text>
-    </View>
-);
+const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24), marginTop: -scale(2) }} resizeMode="contain" />;
 
 export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab = 0 }) => {
     const router = useRouter();
     const pagerRef = useRef<PagerView>(null);
     const [activeTab, setActiveTab] = useState(initialTab);
 
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     useEffect(() => {
         setActiveTab(initialTab);
         pagerRef.current?.setPage(initialTab);
     }, [initialTab]);
 
-    const { user } = useAuthStore();
     const { streakDays, subscriptionLevel } = useUserProfileStore();
     const isPremium = subscriptionLevel === 'premium' || subscriptionLevel === 'trial';
 
@@ -129,20 +124,7 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
         }
     };
 
-    const renderTabIcon = (tab: (typeof TABS)[number], index: number) => {
-        const isActive = activeTab === index;
-        return (
-            <Image
-                source={tab.image}
-                style={{
-                    width: scale(28),
-                    height: scale(28),
-                    opacity: isActive ? 1 : 0.5
-                }}
-                resizeMode="contain"
-            />
-        );
-    };
+
 
     const getHeaderTitle = () => {
         switch (activeTab) {
@@ -159,7 +141,7 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
             <View style={styles.header}>
                 <Text style={styles.greetingText}>{getHeaderTitle()}</Text>
                 <View style={styles.headerRight}>
-                    {activeTab === 0 && <ChessIcon />}
+                    <HobbyIcon />
                     <View style={styles.streakContainer}>
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
@@ -183,7 +165,7 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
                         iconTranslateY={iconTranslateY}
                         onDailyGoal={() => handleTabPress(1)}
                         onAICoach={() => handleTabPress(2)}
-                        onScreenTime={() => handleTabPress(3)}
+                        onScreenTime={() => router.push('/(app)/screen-time')}
                     />
                 </View>
 
@@ -194,31 +176,17 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
                 <View key="3" style={styles.page}>
                     <AICoachTab />
                 </View>
-
-                <View key="4" style={styles.page}>
-                    <StatisticsTab />
-                </View>
             </PagerView>
 
             {/* Bottom Navigation */}
-            <View style={styles.bottomNav}>
-                {TABS.map((tab, index) => (
-                    <TouchableOpacity
-                        key={tab.key}
-                        style={styles.navItem}
-                        onPress={() => handleTabPress(index)}
-                    >
-                        {renderTabIcon(tab, index)}
-                    </TouchableOpacity>
-                ))}
-            </View>
+            <BottomTabBar activeTab={activeTab} onTabPress={handleTabPress} />
 
             <MenuDrawer visible={menuVisible} onClose={() => setMenuVisible(false)} />
         </SafeAreaView>
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -240,14 +208,9 @@ const styles = StyleSheet.create({
     headerRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: scale(8),
+        gap: scale(16),
     },
-    chessIcon: {
-        width: scale(28),
-        height: scale(28),
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
+
     streakContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -267,26 +230,7 @@ const styles = StyleSheet.create({
         width: SCREEN_WIDTH,
         flex: 1,
     },
-    bottomNav: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        height: scale(60),
-        marginHorizontal: scale(16),
-        marginBottom: scale(16),
-        borderRadius: scale(47),
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        shadowColor: colors.text,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
-    },
-    navItem: {
-        padding: scale(12),
-    },
+
 });
 
 export default MainTabsScreen;

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
     View,
     Text,
@@ -9,17 +9,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import Svg, { Path } from 'react-native-svg';
 import { FontAwesome } from '@expo/vector-icons';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 import { Button } from '../components/Button';
-
-
-
 import { LogoNew } from '../components/Logo';
+import { useAppTheme } from '../theme/useAppTheme';
 
 export default function AuthScreen() {
     const router = useRouter();
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     const handleGoogleSignIn = () => {
         router.push('/quiz-intro');
@@ -43,7 +42,8 @@ export default function AuthScreen() {
 
             {/* Header with Star Logo - LEFT aligned */}
             <View style={styles.headerContainer}>
-                <LogoNew variant="full" width={110} height={25} />
+                <LogoNew variant="icon" width={32} height={32} />
+                <Text style={styles.headerTitle}>Давайте начнем</Text>
             </View>
 
             {/* Subtitle - LEFT aligned */}
@@ -107,7 +107,7 @@ export default function AuthScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -123,8 +123,9 @@ const styles = StyleSheet.create({
     },
     headerTitle: {
         fontFamily: fonts.heading.bold,
-        fontSize: 26,
-        color: colors.buttonPrimary,
+        fontSize: 28,
+        color: colors.text,
+        fontWeight: '700',
     },
     subtitleContainer: {
         alignItems: 'flex-start',
@@ -134,7 +135,7 @@ const styles = StyleSheet.create({
         fontFamily: fonts.heading.light,
         fontSize: 16,
         lineHeight: 24,
-        color: colors.textMuted,
+        color: colors.textMuted || colors.textSecondary,
         textAlign: 'left',
         width: '90%',
     },
@@ -154,12 +155,12 @@ const styles = StyleSheet.create({
     dividerLine: {
         flex: 1,
         height: 1,
-        backgroundColor: colors.auth.divider,
+        backgroundColor: colors.auth?.divider || colors.border,
     },
     dividerText: {
         fontFamily: fonts.heading.regular,
         fontSize: 14,
-        color: colors.auth.dividerText,
+        color: colors.auth?.dividerText || colors.textSecondary,
         marginHorizontal: 16,
     },
     socialContainer: {
@@ -173,7 +174,7 @@ const styles = StyleSheet.create({
         height: 56,
         borderRadius: 28,
         borderWidth: 1,
-        borderColor: colors.auth.socialBorder,
+        borderColor: colors.auth?.socialBorder || colors.border,
         backgroundColor: 'transparent',
         gap: 12,
     },
@@ -184,6 +185,6 @@ const styles = StyleSheet.create({
     socialButtonText: {
         fontFamily: fonts.heading.medium,
         fontSize: 18,
-        color: colors.black,
+        color: colors.text,
     },
 });

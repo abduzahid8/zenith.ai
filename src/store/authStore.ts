@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Session, User } from '@supabase/supabase-js';
 import { authService, dbService } from '../services/supabase';
 import { useUserProfileStore } from './userProfileStore';
+import { toAppError } from '../shared/errors';
 
 interface AuthState {
     user: User | null;
@@ -54,13 +55,13 @@ export const useAuthStore = create<AuthState>()(
                 const profileStore = useUserProfileStore.getState();
                 profileStore.setUserName(user?.email?.split('@')[0] || '');
 
-                // Fetch user hobbies to check if onboarding is complete
+                // Fetch user hobbies to determine if onboarding is complete
                 try {
                     const hobbies = await dbService.getUserHobbies(user.id);
                     const hasOnboarded = hobbies && hobbies.length > 0;
-                    profileStore.completeOnboarding();
-                    if (!hasOnboarded) {
-                        // Reset onboarding flag if no hobbies
+                    if (hasOnboarded) {
+                        profileStore.completeOnboarding();
+                    } else {
                         useUserProfileStore.setState({ hasCompletedOnboarding: false });
                     }
                 } catch (dbError) {
@@ -75,12 +76,19 @@ export const useAuthStore = create<AuthState>()(
                 });
             } catch (error: unknown) {
                 console.error('Login error:', error);
-                const msg = error instanceof Error ? error.message : 'Unknown error';
-                let errorMessage = msg;
+                const hasStructuredMessage =
+                    error instanceof Error ||
+                    (typeof error === 'object' &&
+                        error !== null &&
+                        'message' in error &&
+                        typeof (error as { message?: unknown }).message === 'string');
+                let errorMessage = hasStructuredMessage
+                    ? toAppError(error).message
+                    : 'Unknown error';
 
-                if (msg.includes('Email not confirmed')) {
+                if (errorMessage.includes('Email not confirmed')) {
                     errorMessage = 'Email не подтвержден. Проверьте почту.';
-                } else if (msg.includes('Invalid login credentials')) {
+                } else if (errorMessage.includes('Invalid login credentials')) {
                     errorMessage = 'Неверный email или пароль.';
                 }
 
@@ -105,8 +113,8 @@ export const useAuthStore = create<AuthState>()(
                 });
             } catch (error: unknown) {
                 console.error('Signup error:', error);
-                const msg = error instanceof Error ? error.message : 'Unknown error';
-                set({ error: msg, isLoading: false });
+                const appError = toAppError(error);
+                set({ error: appError.message, isLoading: false });
                 throw error;
             }
         },
@@ -126,37 +134,42 @@ export const useAuthStore = create<AuthState>()(
                     isLoading: false,
                 });
             } catch (error: unknown) {
-                const msg = error instanceof Error ? error.message : 'Unknown error';
-                set({ error: msg, isLoading: false });
+                const appError = toAppError(error);
+                set({ error: appError.message, isLoading: false });
             }
         },
 
         initialize: async () => {
             try {
-                const session = await authService.getSession();
+                const sessionPromise = authService.getSession();
+                const timeoutPromise = new Promise<null>((resolve) =>
+                    setTimeout(() => resolve(null), 5000)
+                );
+                const session = await Promise.race([sessionPromise, timeoutPromise]);
                 if (session) {
                     const profileStore = useUserProfileStore.getState();
                     if (!profileStore.userName) {
                         profileStore.setUserName(session.user?.email?.split('@')[0] || '');
                     }
-                    // Sync onboarding state and selected hobby from server (multi-device / reinstall)
-                    try {
-                        const hobbies = await dbService.getUserHobbies(session.user.id);
+
+                    // Unblock UI immediately — hobbies sync runs in background
+                    set({
+                        session,
+                        user: session.user,
+                        isAuthenticated: true,
+                        isLoading: false,
+                    });
+
+                    // Sync onboarding state from server in background (multi-device / reinstall)
+                    dbService.getUserHobbies(session.user.id).then((hobbies) => {
                         const hasOnboarded = hobbies && hobbies.length > 0;
                         const primaryHobby = hobbies?.find((h: { is_primary?: boolean }) => h.is_primary) || hobbies?.[0];
                         useUserProfileStore.setState({
                             hasCompletedOnboarding: hasOnboarded,
                             ...(primaryHobby && { selectedHobby: primaryHobby.hobby_id }),
                         });
-                    } catch (dbError) {
+                    }).catch((dbError) => {
                         console.warn('Failed to sync onboarding state:', dbError);
-                    }
-
-                    set({
-                        session,
-                        user: session.user,
-                        isAuthenticated: true,
-                        isLoading: false,
                     });
                 } else {
                     set({ isLoading: false });

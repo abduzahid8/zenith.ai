@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
     View,
+    ScrollView,
     Text,
     StyleSheet,
     TouchableOpacity,
@@ -10,7 +11,8 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { scale } from '../../constants';
-import { colors, fonts } from '../../theme';
+import { fonts } from '../../theme';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 const booksImage = require('../../../assets/images/home-books.png');
 const targetImage = require('../../../assets/images/home-target.png');
@@ -34,21 +36,27 @@ const HomeTab: React.FC<HomeTabProps> = ({
     onScreenTime,
 }) => {
     const router = useRouter();
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     const handleNavigate = (route: string) => {
         router.push(route as any);
     };
 
     return (
-        <View style={styles.homeContent}>
+        <ScrollView
+            style={styles.homeContent}
+            contentContainerStyle={{ paddingBottom: scale(100), flexGrow: 1, justifyContent: 'flex-end' }}
+            showsVerticalScrollIndicator={false}
+        >
             <TouchableOpacity
                 onPress={() => handleNavigate('/session-timer')}
                 activeOpacity={0.8}
                 style={styles.cardShadowProp}
             >
                 <LinearGradient
-                    start={{ x: 1, y: 1 }}
-                    end={{ x: 0, y: 0 }}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                     colors={['#BFD8F9', '#CDE3FC', '#DAEEFF']}
                     locations={[0.0258, 0.6253, 1.0]}
                     style={styles.startSessionCard}
@@ -129,7 +137,9 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    onPress={() => (onScreenTime ? onScreenTime() : handleNavigate('/statistics'))}
+                    onPress={() =>
+                        onScreenTime ? onScreenTime() : handleNavigate('/(app)/screen-time')
+                    }
                     activeOpacity={0.8}
                     style={[styles.cardShadowProp, { flex: 1 }]}
                 >
@@ -156,22 +166,16 @@ const HomeTab: React.FC<HomeTabProps> = ({
                     </LinearGradient>
                 </TouchableOpacity>
             </View>
-        </View>
+        </ScrollView>
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     homeContent: {
         flex: 1,
         paddingHorizontal: scale(16),
-        marginTop: scale(140),
     },
     cardShadowProp: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
         marginBottom: scale(24),
     },
     startSessionCard: {
@@ -186,14 +190,14 @@ const styles = StyleSheet.create({
         width: 213,
         height: 188,
         right: scale(-20),
-        bottom: scale(-30),
+        bottom: scale(-40),
         transform: [{ rotate: '-5.4deg' }],
     },
     cardTitle: {
         fontFamily: fonts.heading.bold,
         fontSize: scale(24),
         lineHeight: scale(26),
-        color: colors.home.darkText,
+        color: '#1E1E2E',
         zIndex: 1,
     },
     dailyGoalButton: {
@@ -247,7 +251,7 @@ const styles = StyleSheet.create({
         fontFamily: fonts.heading.bold,
         fontSize: scale(24),
         lineHeight: scale(28),
-        color: colors.home.darkText,
+        color: '#1E1E2E',
     },
 });
 

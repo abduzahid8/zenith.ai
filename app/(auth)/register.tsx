@@ -1,5 +1,5 @@
 // Auth Fix
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     View,
     Text,
@@ -12,28 +12,24 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import Svg, { Path } from 'react-native-svg';
 import { FontAwesome, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { Button } from '../../src/components/Button';
-import { colors } from '../../src/theme';
+import { fonts } from '../../src/theme';
+import { useAppTheme } from '../../src/theme/useAppTheme';
 import { useAuthStore } from '../../src/store/authStore';
+import { LogoNew } from '../../src/components/Logo';
 
-const StarLogo = () => (
-    <Svg width="36" height="36" viewBox="0 0 40 40" fill="none">
-        <Path
-            d="M38.1298 20.0451L28.0658 23.7851L31.0126 30.2195C31.2849 30.8153 30.6732 31.4261 30.0801 31.1526L23.6791 28.1958L19.9527 38.3064C19.7289 38.921 18.8635 38.921 18.6359 38.3064L14.9132 28.1958L8.50853 31.1526C7.91543 31.4261 7.30368 30.8153 7.57598 30.2195L10.5228 23.7851L0.458811 20.0451C-0.152937 19.8165 -0.152937 18.9471 0.458811 18.7223L10.5191 14.9786L7.57598 8.54794C7.30368 7.95209 7.91543 7.33751 8.50853 7.61107L14.9132 10.5716L18.6359 0.460937C18.8635 -0.153646 19.7289 -0.153646 19.9527 0.460937L23.6791 10.5678L30.0801 7.61107C30.6732 7.33751 31.2849 7.95209 31.0126 8.54794L28.0695 14.9786L38.1298 18.7223C38.7416 18.9471 38.7416 19.8165 38.1298 20.0451Z"
-            fill={colors.primary}
-        />
-    </Svg>
-);
 
 export default function RegisterScreen() {
     const router = useRouter();
     const { signUp, isLoading } = useAuthStore();
+    const { colors, isDark } = useAppTheme();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     const handleRegister = async () => {
         if (!email || !password) {
@@ -47,30 +43,28 @@ export default function RegisterScreen() {
         }
 
         try {
-            const trimmedEmail = email.trim();
-            console.log('Submitting registration for:', trimmedEmail);
-            await signUp(trimmedEmail, password);
-        } catch (error: any) {
-            console.error('Registration UI error:', error);
-            Alert.alert('Ошибка регистрации', error.message || 'Произошла ошибка');
+            await signUp(email.trim(), password);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : 'Произошла ошибка';
+            Alert.alert('Ошибка регистрации', msg);
         }
     };
 
     const handleGoogleSignIn = () => {
-        router.push('/quiz-intro');
+        Alert.alert('Скоро', 'Регистрация через Google будет доступна в следующем обновлении.');
     };
 
     const handleAppleSignIn = () => {
-        router.push('/quiz-intro');
+        Alert.alert('Скоро', 'Регистрация через Apple будет доступна в следующем обновлении.');
     };
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
             {/* Header */}
             <View style={styles.headerContainer}>
-                <StarLogo />
+                <LogoNew variant="icon" width={36} height={36} color={colors.text} />
                 <Text style={styles.headerTitle}>Регистрация</Text>
             </View>
 
@@ -79,11 +73,11 @@ export default function RegisterScreen() {
                 {/* Email */}
                 <Text style={styles.inputLabel}>Почта</Text>
                 <View style={styles.inputContainer}>
-                    <MaterialCommunityIcons name="email-outline" size={20} color="#999" style={styles.inputIcon} />
+                    <MaterialCommunityIcons name="email-outline" size={20} color={colors.textLight} style={styles.inputIcon} />
                     <TextInput
                         style={styles.input}
                         placeholder="example@gmail.com"
-                        placeholderTextColor="#999"
+                        placeholderTextColor={colors.textLight}
                         value={email}
                         onChangeText={setEmail}
                         keyboardType="email-address"
@@ -94,11 +88,11 @@ export default function RegisterScreen() {
                 {/* Password */}
                 <Text style={styles.inputLabel}>Пароль</Text>
                 <View style={styles.inputContainer}>
-                    <Ionicons name="lock-closed-outline" size={20} color="#999" style={styles.inputIcon} />
+                    <Ionicons name="lock-closed-outline" size={20} color={colors.textLight} style={styles.inputIcon} />
                     <TextInput
                         style={styles.input}
                         placeholder="••••••••"
-                        placeholderTextColor="#999"
+                        placeholderTextColor={colors.textLight}
                         value={password}
                         onChangeText={setPassword}
                         secureTextEntry={!showPassword}
@@ -107,7 +101,7 @@ export default function RegisterScreen() {
                         spellCheck={false}
                     />
                     <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-                        <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color="#999" />
+                        <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color={colors.textLight} />
                     </TouchableOpacity>
                 </View>
 
@@ -127,7 +121,7 @@ export default function RegisterScreen() {
                     onPress={() => setAgreedToTerms(!agreedToTerms)}
                 >
                     <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
-                        {agreedToTerms && <Ionicons name="checkmark" size={14} color="#fff" />}
+                        {agreedToTerms && <Ionicons name="checkmark" size={14} color={colors.white} />}
                     </View>
                     <Text style={styles.termsText}>Я согласен с условиями пользования</Text>
                 </TouchableOpacity>
@@ -152,7 +146,7 @@ export default function RegisterScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.socialButton} onPress={handleAppleSignIn}>
-                    <FontAwesome name="apple" size={24} color="black" />
+                    <FontAwesome name="apple" size={24} color={isDark ? colors.white : colors.black} />
                     <Text style={styles.socialButtonText}>Войти с Apple</Text>
                 </TouchableOpacity>
             </View>
@@ -160,7 +154,7 @@ export default function RegisterScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -174,28 +168,28 @@ const styles = StyleSheet.create({
         gap: 10,
     },
     headerTitle: {
-        fontFamily: 'Gramatika-Bold',
+        fontFamily: fonts.heading.bold,
         fontSize: 26,
-        color: '#08132A', // Color change
+        color: colors.text,
     },
     formContainer: {
         marginBottom: 16,
     },
     inputLabel: {
-        fontFamily: 'Geometria-Light', // Font change
+        fontFamily: fonts.body.light,
         fontSize: 14,
-        color: '#08132A', // Color change
+        color: colors.text,
         marginBottom: 8,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(8, 19, 42, 0.3)', // Color change
+        borderColor: colors.border,
         borderRadius: 28,
         paddingHorizontal: 16,
         height: 52,
-        backgroundColor: 'transparent',
+        backgroundColor: colors.surfaceLight,
         marginBottom: 20,
     },
     inputIcon: {
@@ -203,9 +197,9 @@ const styles = StyleSheet.create({
     },
     input: {
         flex: 1,
-        fontFamily: 'Geometria-Light', // Font change
+        fontFamily: fonts.body.light,
         fontSize: 15,
-        color: '#4A515B', // Color change
+        color: colors.text,
     },
     eyeIcon: {
         padding: 4,
@@ -223,19 +217,19 @@ const styles = StyleSheet.create({
         width: 20,
         height: 20,
         borderWidth: 1,
-        borderColor: '#808B9B', // Color change
+        borderColor: colors.textSecondary,
         borderRadius: 4,
         alignItems: 'center',
         justifyContent: 'center',
     },
     checkboxChecked: {
-        backgroundColor: '#102852',
-        borderColor: '#102852',
+        backgroundColor: colors.buttonPrimary,
+        borderColor: colors.buttonPrimary,
     },
     termsText: {
-        fontFamily: 'Geometria-Medium', // Font change
+        fontFamily: fonts.body.medium,
         fontSize: 13,
-        color: '#808B9B', // Color change
+        color: colors.textSecondary,
     },
     dividerContainer: {
         flexDirection: 'row',
@@ -246,12 +240,12 @@ const styles = StyleSheet.create({
     dividerLine: {
         flex: 1,
         height: 1,
-        backgroundColor: 'rgba(8, 19, 42, 0.5)', // Color change
+        backgroundColor: colors.border,
     },
     dividerText: {
-        fontFamily: 'Geometria-Light', // Font change
+        fontFamily: fonts.body.light,
         fontSize: 14,
-        color: 'rgba(8, 19, 42, 0.5)', // Color change
+        color: colors.textSecondary,
         marginHorizontal: 16,
     },
     socialContainer: {
@@ -265,8 +259,8 @@ const styles = StyleSheet.create({
         height: 56,
         borderRadius: 28,
         borderWidth: 1,
-        borderColor: 'rgba(8, 19, 42, 0.3)', // Color change
-        backgroundColor: 'transparent',
+        borderColor: colors.border,
+        backgroundColor: colors.surfaceLight,
         gap: 12,
     },
     socialIcon: {
@@ -274,8 +268,8 @@ const styles = StyleSheet.create({
         height: 24,
     },
     socialButtonText: {
-        fontFamily: 'Gramatika-Bold', // Font change
+        fontFamily: fonts.heading.bold,
         fontSize: 18,
-        color: '#08132A', // Color change
+        color: colors.text,
     },
 });

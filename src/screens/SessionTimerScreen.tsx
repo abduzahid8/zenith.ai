@@ -1,4 +1,5 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
+import { BlurView } from 'expo-blur';
 import {
     View,
     Text,
@@ -14,8 +15,8 @@ import { useRouter } from 'expo-router';
 
 import PagerView from '../components/ui/PagerView';
 import { scale } from '../constants';
-import { colors, fonts } from '../theme';
-import { APP_TAB_ROUTES, getMainTabUrl } from '../config/navigation';
+import { fonts } from '../theme';
+import { APP_TAB_ROUTES } from '../config/navigation';
 import { useTimer } from '../hooks/useTimer';
 
 // Extracted components
@@ -26,12 +27,14 @@ import {
     StopConfirmationModal,
     SessionSummaryView,
 } from '../components/session';
-
-const TABS = APP_TAB_ROUTES;
+import { BottomTabBar } from '../components/navigation/BottomTabBar';
+import { useAppTheme } from '../theme/useAppTheme';
 
 export const SessionTimerScreen: React.FC = () => {
     const router = useRouter();
     const pagerViewRef = useRef<PagerView>(null);
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     const {
         // Timer
@@ -50,15 +53,11 @@ export const SessionTimerScreen: React.FC = () => {
         chatInput, setChatInput, messages, isAiLoading, handleSendMessage,
         // Animations
         controlsAnim, drawerAnim, backdropAnim, bottomNavVisible,
-        // Constants
-        totalTime,
     } = useTimer();
 
     const handleStop = () => {
         router.back();
     };
-
-    // --- All hooks must be called before any conditional return (React rules of hooks) ---
 
     // Main pager scroll animation
     const mainPagerPosition = useRef(new Animated.Value(0)).current;
@@ -81,9 +80,7 @@ export const SessionTimerScreen: React.FC = () => {
         return <SessionSummaryView tasks={tasks} startTime={startTime} onExit={handleStop} />;
     }
 
-
-
-    // --- Control button slide animations ---
+    // Control button slide animations
     const translateXReset = controlsAnim.interpolate({
         inputRange: [0, 1],
         outputRange: [scale(120), 0],
@@ -95,7 +92,7 @@ export const SessionTimerScreen: React.FC = () => {
 
     return (
         <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-            <StatusBar barStyle="dark-content" />
+            <StatusBar barStyle="dark-content" backgroundColor={colors.sessionTimer.background} />
 
             <PagerView
                 style={{ flex: 1 }}
@@ -119,7 +116,8 @@ export const SessionTimerScreen: React.FC = () => {
                                     activeOpacity={0.7}
                                     onPress={() => setIsTaskListVisible(true)}
                                 >
-                                    <Image source={require('../../icons/tasks.png')} style={{ width: scale(24), height: scale(24), tintColor: '#1E1E2E' }} resizeMode="contain" />
+                                    <BlurView intensity={80} tint="light" style={styles.floatingMenuGlass} />
+                                    <Image source={require('../../icons/tasks.png')} style={{ width: scale(24), height: scale(24), tintColor: '#1E1E2E', zIndex: 1 }} resizeMode="contain" />
                                 </TouchableOpacity>
                             </Animated.View>
                         )}
@@ -139,13 +137,21 @@ export const SessionTimerScreen: React.FC = () => {
                             <View style={styles.controlsContainer}>
                                 {timerStatus === 'idle' ? (
                                     <TouchableOpacity style={styles.playButton} onPress={handlePlay} activeOpacity={0.8}>
-                                        <Image source={require('../../icons/play.png')} style={{ width: scale(40), height: scale(40), tintColor: colors.buttonTextPrimary, marginLeft: scale(5) }} resizeMode="contain" />
+                                        <Image source={require('../../icons/play.png')} style={{ width: scale(30), height: scale(40), tintColor: colors.buttonTextPrimary || 'white', marginLeft: scale(5) }} resizeMode="contain" />
                                     </TouchableOpacity>
                                 ) : (
                                     <View style={styles.activeControls}>
                                         <Animated.View style={{ transform: [{ translateX: translateXReset }] }}>
                                             <TouchableOpacity style={styles.secondaryControl} onPress={handleReset} activeOpacity={0.8}>
-                                                <Image source={require('../../icons/back.png')} style={{ width: scale(32), height: scale(32), tintColor: colors.buttonTextPrimary }} resizeMode="contain" />
+                                                <Image
+                                                    source={require('../../icons/back.png')}
+                                                    style={{
+                                                        width: scale(34.437),
+                                                        height: scale(32.746),
+                                                        tintColor: colors.buttonTextPrimary || 'white'
+                                                    }}
+                                                    resizeMode="contain"
+                                                />
                                             </TouchableOpacity>
                                         </Animated.View>
 
@@ -160,19 +166,36 @@ export const SessionTimerScreen: React.FC = () => {
                                         >
                                             <Image
                                                 source={timerStatus === 'running' ? require('../../icons/pause.png') : require('../../icons/play.png')}
-                                                style={{
-                                                    width: scale(40),
-                                                    height: scale(40),
-                                                    tintColor: colors.buttonTextPrimary,
-                                                    marginLeft: timerStatus === 'running' ? 0 : scale(5)
-                                                }}
+                                                style={[
+                                                    {
+                                                        tintColor: colors.buttonTextPrimary || 'white',
+                                                        marginLeft: timerStatus === 'running' ? 0 : scale(5)
+                                                    },
+                                                    timerStatus === 'running'
+                                                        ? {
+                                                            width: scale(29),
+                                                            height: scale(35),
+                                                        }
+                                                        : {
+                                                            width: scale(40),
+                                                            height: scale(40)
+                                                        }
+                                                ]}
                                                 resizeMode="contain"
                                             />
                                         </TouchableOpacity>
 
                                         <Animated.View style={{ transform: [{ translateX: translateXStop }] }}>
                                             <TouchableOpacity style={styles.secondaryControl} onPress={handleStopPress} activeOpacity={0.8}>
-                                                <Image source={require('../../icons/stop.png')} style={{ width: scale(32), height: scale(32), tintColor: colors.buttonTextPrimary }} resizeMode="contain" />
+                                                <Image
+                                                    source={require('../../icons/stop.png')}
+                                                    style={{
+                                                        width: scale(24),
+                                                        height: scale(24),
+                                                        tintColor: colors.buttonTextPrimary || 'white',
+                                                    }}
+                                                    resizeMode="contain"
+                                                />
                                             </TouchableOpacity>
                                         </Animated.View>
                                     </View>
@@ -209,7 +232,7 @@ export const SessionTimerScreen: React.FC = () => {
             {/* Bottom Navigation — animates out when timer is running/paused */}
             <Animated.View
                 style={[
-                    styles.bottomNav,
+                    styles.bottomNavWrapper,
                     {
                         opacity: bottomNavVisible,
                         transform: [{
@@ -222,26 +245,16 @@ export const SessionTimerScreen: React.FC = () => {
                 ]}
                 pointerEvents={timerStatus === 'idle' ? 'auto' : 'none'}
             >
-                {TABS.map((tab, index) => (
-                    <TouchableOpacity
-                        key={tab.key}
-                        style={styles.navItem}
-                        onPress={() => {
-                            if (tab.key === 'home') router.dismissAll();
-                            else router.replace(getMainTabUrl(tab.key) as any);
-                        }}
-                    >
-                        <Image
-                            source={tab.image}
-                            style={{
-                                width: scale(28),
-                                height: scale(28),
-                                tintColor: tab.key === 'home' ? colors.nav.active : colors.nav.inactive
-                            }}
-                            resizeMode="contain"
-                        />
-                    </TouchableOpacity>
-                ))}
+                <BottomTabBar
+                    activeTab={0}
+                    onTabPress={(index) => {
+                        if (index === 0) {
+                            router.dismissAll();
+                        } else {
+                            router.replace({ pathname: '/(app)', params: { initialTab: index } });
+                        }
+                    }}
+                />
             </Animated.View>
 
             {/* Task Drawer */}
@@ -265,7 +278,7 @@ export const SessionTimerScreen: React.FC = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.sessionTimer.background,
@@ -275,23 +288,29 @@ const styles = StyleSheet.create({
         height: scale(50),
     },
     floatingMenu: {
-        width: scale(48),
-        height: scale(48),
-        borderRadius: scale(24),
-        backgroundColor: colors.buttonTextPrimary,
+        width: scale(55),
+        height: scale(55),
+        borderRadius: scale(27.5),
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: colors.shadow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 5,
+        overflow: 'hidden',
+    },
+    floatingMenuGlass: {
+        ...StyleSheet.absoluteFillObject,
+        borderRadius: scale(27.5),
+        overflow: 'hidden',
+        backgroundColor: 'rgba(255, 255, 255, 0.25)',
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.4)',
+        borderTopColor: 'rgba(255, 255, 255, 1)',
+        borderLeftColor: 'rgba(255, 255, 255, 0.9)',
     },
     content: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
         marginTop: scale(20),
+        paddingBottom: scale(80),
     },
     timerText: {
         fontSize: scale(64),
@@ -323,41 +342,21 @@ const styles = StyleSheet.create({
     activeControls: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: scale(20),
+        gap: scale(36),
         position: 'absolute',
     },
     secondaryControl: {
-        width: scale(60),
-        height: scale(60),
-        borderRadius: scale(30),
+        width: scale(65),
+        height: scale(65),
+        borderRadius: scale(32.5),
         backgroundColor: colors.sessionTimer.text,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: colors.shadow,
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
         shadowRadius: 8,
         elevation: 5,
-    },
-    bottomNav: {
-        height: scale(60),
-        marginHorizontal: scale(16),
-        marginBottom: scale(16),
-        borderRadius: scale(47),
-        backgroundColor: colors.nav.floatingBg,
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        shadowColor: colors.shadow,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: colors.nav.floatingBorder,
-    },
-    navItem: {
-        padding: scale(12),
     },
     mainPaginationContainer: {
         position: 'absolute',
@@ -374,6 +373,13 @@ const styles = StyleSheet.create({
         height: scale(13),
         borderRadius: scale(31),
         backgroundColor: colors.sessionTimer.dotActive,
+    },
+    bottomNavWrapper: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
     },
 });
 

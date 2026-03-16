@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     View,
     Text,
@@ -11,10 +11,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LogoNew } from '../components/Logo';
 import { Button } from '../components/Button';
-import { colors, fonts, spacing } from '../theme';
+import { fonts } from '../theme';
 import { scale } from '../constants';
 import { ROUTES } from '../config/routes';
 import { useUserProfileStore } from '../store/userProfileStore';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface PlanFeature {
     text: string;
@@ -42,15 +43,18 @@ const PREMIUM_FEATURES: PlanFeature[] = [
 export const SubscriptionScreen: React.FC = () => {
     const router = useRouter();
     const { setPremium, completeOnboarding } = useUserProfileStore();
-    const [selectedPlan, setSelectedPlan] = useState<'free' | 'premium'>('premium'); // Default to premium usually converts better, or stick to free if simpler. Let's default to free as per image order or premium as per business goal. User selected Free in image, let's default to Free to match screenshot state? No, normally apps default to Premium. I'll stick to 'premium' as default or 'free' if that was previous behavior. Previous was 'free'.
+    const [selectedPlan, setSelectedPlan] = useState<'free' | 'premium'>('premium');
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
-    const handleContinue = async () => {
-        if (selectedPlan === 'premium') {
-            // TODO: Implement in-app purchase
-            setPremium(true);
-        } else {
-            setPremium(false);
-        }
+    const handleSelectPremium = () => {
+        setPremium(true);
+        completeOnboarding();
+        router.replace(ROUTES.APP as any);
+    };
+
+    const handleSelectFree = () => {
+        setPremium(false);
         completeOnboarding();
         router.replace(ROUTES.APP as any);
     };
@@ -61,7 +65,7 @@ export const SubscriptionScreen: React.FC = () => {
 
             {/* Logo at top */}
             <View style={styles.logoContainer}>
-                <LogoNew width={scale(177)} height={scale(40)} variant="full" />
+                <LogoNew width={scale(177)} height={scale(40)} variant="full" color={colors.text} />
             </View>
 
             {/* Title */}
@@ -82,6 +86,7 @@ export const SubscriptionScreen: React.FC = () => {
                     style={[
                         styles.planCard,
                         styles.freeCard,
+                        selectedPlan === 'free' && styles.planCardSelected,
                     ]}
                     onPress={() => setSelectedPlan('free')}
                     activeOpacity={0.9}
@@ -105,6 +110,7 @@ export const SubscriptionScreen: React.FC = () => {
                     style={[
                         styles.planCard,
                         styles.premiumCard,
+                        selectedPlan === 'premium' && styles.planCardSelected,
                     ]}
                     onPress={() => setSelectedPlan('premium')}
                     activeOpacity={0.9}
@@ -133,22 +139,14 @@ export const SubscriptionScreen: React.FC = () => {
             <View style={styles.buttonContainer}>
                 <Button
                     title="Оформить Premium"
-                    onPress={() => {
-                        setPremium(true);
-                        completeOnboarding();
-                        router.replace(ROUTES.APP as any);
-                    }}
+                    onPress={handleSelectPremium}
                     variant="primary"
                     size="large"
                     style={styles.continueButton}
                 />
                 <TouchableOpacity
                     style={styles.freeLink}
-                    onPress={() => {
-                        setPremium(false);
-                        completeOnboarding();
-                        router.replace(ROUTES.APP as any);
-                    }}
+                    onPress={handleSelectFree}
                     activeOpacity={0.7}
                 >
                     <Text style={styles.freeLinkText}>Продолжить с Free</Text>
@@ -158,7 +156,7 @@ export const SubscriptionScreen: React.FC = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -195,8 +193,11 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: 'transparent',
     },
+    planCardSelected: {
+        borderColor: colors.primary,
+    },
     freeCard: {
-        backgroundColor: colors.subscription.freeCardBg,
+        backgroundColor: colors.subscription?.freeCardBg || colors.surfaceLight,
     },
     premiumCard: {
         backgroundColor: colors.buttonPrimary,
@@ -213,7 +214,7 @@ const styles = StyleSheet.create({
         color: colors.text,
     },
     premiumTitle: {
-        color: colors.white,
+        color: '#FFFFFF',
     },
     planPrice: {
         fontFamily: fonts.heading.bold,
@@ -221,7 +222,7 @@ const styles = StyleSheet.create({
         color: colors.text,
     },
     premiumPrice: {
-        color: colors.subscription.premiumAccent,
+        color: colors.subscription?.premiumAccent || '#FFD700',
     },
     priceContainer: {
         flexDirection: 'row',
@@ -248,7 +249,7 @@ const styles = StyleSheet.create({
         lineHeight: scale(18),
     },
     premiumBullet: {
-        color: colors.subscription.premiumAccent,
+        color: colors.subscription?.premiumAccent || '#FFD700',
     },
     featureText: {
         flex: 1,
@@ -258,7 +259,7 @@ const styles = StyleSheet.create({
         lineHeight: scale(17),
     },
     premiumFeatureText: {
-        color: colors.white,
+        color: '#FFFFFF',
     },
     buttonContainer: {
         paddingHorizontal: scale(24),

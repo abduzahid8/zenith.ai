@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { colors } from '../theme';
 import { scaleWidth } from '../theme/responsive';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface ProgressDotsProps {
     total: number;
@@ -13,9 +13,16 @@ interface ProgressDotsProps {
 export const ProgressDots: React.FC<ProgressDotsProps> = ({
     total,
     current,
-    activeColor = colors.text,
-    inactiveColor = colors.surface,
+    activeColor,
+    inactiveColor,
 }) => {
+    const { colors } = useAppTheme();
+
+    const finalActiveColor = activeColor || colors.text;
+    const finalInactiveColor = inactiveColor || colors.surface;
+
+    const styles = useMemo(() => createStyles(), []);
+
     return (
         <View style={styles.container}>
             {Array.from({ length: total }, (_, index) => (
@@ -24,7 +31,7 @@ export const ProgressDots: React.FC<ProgressDotsProps> = ({
                     style={[
                         styles.dot,
                         {
-                            backgroundColor: index < current ? activeColor : inactiveColor,
+                            backgroundColor: index < current ? finalActiveColor : finalInactiveColor,
                             width: scaleWidth(index === current - 1 ? 24 : 8),
                         },
                     ]}
@@ -34,7 +41,7 @@ export const ProgressDots: React.FC<ProgressDotsProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
     container: {
         flexDirection: 'row',
         justifyContent: 'center',

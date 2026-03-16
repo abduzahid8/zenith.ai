@@ -1,8 +1,12 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Task, UserStateSnapshot } from '../services/supabase/types';
+import { Task, TaskType, UserStateSnapshot } from '../services/supabase/types';
 import { taskService } from '../services/taskService';
+import { useUserProfileStore } from './userProfileStore';
+import { getTodayDateString } from '../utils/date';
+import { canAddTask } from '../domain/tasks/rules';
+import { toAppError } from '../shared/errors';
 
 interface TaskState {
     dailyTasks: Task[];
@@ -12,6 +16,7 @@ interface TaskState {
     lastFetchDate: string | null;
 
     fetchDailyPlan: (userId: string) => Promise<void>;
+    addTask: (userId: string, type: TaskType, template?: { title: string; duration: number }) => Promise<void>;
     completeTask: (userId: string, taskId: string, feedback?: {
         difficulty_rating?: number;
         engagement_rating?: number;
@@ -31,10 +36,10 @@ export const useTaskStore = create<TaskState>()(
             lastFetchDate: null,
 
             fetchDailyPlan: async (userId: string) => {
-                const today = new Date().toISOString().split('T')[0];
+                const today = getTodayDateString();
                 const { lastFetchDate, dailyTasks } = get();
 
-                if (lastFetchDate === today && dailyTasks.length >= 4) {
+                if (lastFetchDate === today && dailyTasks.length >= 2) {
                     return; // Use cached data if available for today
                 }
 
@@ -44,6 +49,40 @@ export const useTaskStore = create<TaskState>()(
                     set({ dailyTasks: tasks, lastFetchDate: today, loading: false });
                 } catch (e: unknown) {
                     set({ error: e instanceof Error ? e.message : 'Unknown error', loading: false });
+                }
+            },
+
+            addTask: async (userId: string, type: TaskType, template?: { title: string; duration: number }) => {
+                const profile = useUserProfileStore.getState();
+                const isPremium = profile.isPremium;
+                const { dailyTasks } = get();
+                const addCheck = canAddTask({
+                    existingTasks: dailyTasks,
+                    type,
+                    template,
+                    isPremium,
+                });
+
+                if (!addCheck.allowed) {
+                    set({ error: addCheck.errorMessage || null });
+                    if (addCheck.errorMessage) {
+                        throw new Error(addCheck.errorMessage);
+                    }
+                    return;
+                }
+
+                set({ loading: true, error: null });
+                try {
+                    const today = getTodayDateString();
+                    const newTask = await taskService.createManualTask(userId, type, today, template);
+                    set(state => ({
+                        dailyTasks: [...state.dailyTasks, newTask],
+                        loading: false
+                    }));
+                } catch (e: unknown) {
+                    const appError = toAppError(e, 'Failed to add task');
+                    console.error('Failed to add task:', e);
+                    set({ error: appError.message, loading: false });
                 }
             },
 

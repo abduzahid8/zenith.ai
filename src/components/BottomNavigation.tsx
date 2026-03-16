@@ -1,29 +1,33 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { scale } from '../constants';
-import { colors } from '../theme';
 import { APP_TAB_ROUTES, getMainTabUrl, type AppTabKey } from '../config/navigation';
+import { useAppTheme } from '../theme/useAppTheme';
 
 export type TabKey = AppTabKey;
 
 interface BottomNavigationProps {
-    activeTab: TabKey;
+    activeTab?: TabKey;
 }
 
 export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab }) => {
     const router = useRouter();
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(), []);
 
     const handleTabPress = (key: AppTabKey) => {
         router.replace(getMainTabUrl(key) as any);
     };
 
     return (
-        <View style={styles.bottomNav}>
+        <View style={styles.container}>
+            <BlurView intensity={60} tint={'light'} style={styles.glassBackground} />
             {APP_TAB_ROUTES.map((tab) => {
                 const isActive = tab.key === activeTab;
-                const iconColor = isActive ? colors.text : colors.textLight;
-                const iconName = isActive ? tab.icon : tab.iconOutline;
+                // Currently tab icons are images, so we manage opacity. If they were SVGs we would use iconColor.
+                // const iconColor = isActive ? colors.text : colors.textLight;
 
                 return (
                     <TouchableOpacity
@@ -36,7 +40,8 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab })
                             style={{
                                 width: scale(28),
                                 height: scale(28),
-                                opacity: isActive ? 1 : 0.5
+                                opacity: isActive ? 1 : 0.5,
+                                tintColor: undefined,
                             }}
                             resizeMode="contain"
                         />
@@ -47,24 +52,32 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab })
     );
 };
 
-const styles = StyleSheet.create({
-    bottomNav: {
+const createStyles = () => StyleSheet.create({
+    container: {
+        position: 'absolute',
+        bottom: scale(34),
+        alignSelf: 'center',
+        width: 280,
         flexDirection: 'row',
         justifyContent: 'space-around',
         alignItems: 'center',
-        height: scale(60),
-        marginHorizontal: scale(16),
-        marginBottom: scale(16),
-        marginTop: 'auto',
-        borderRadius: scale(47),
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        shadowColor: colors.text,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
+        height: 67,
+        borderRadius: 47,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
+        elevation: 10,
+    },
+    glassBackground: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(255, 255, 255, 0.45)',
+        borderRadius: 47,
+        borderWidth: 1.5,
+        borderColor: 'rgba(255, 255, 255, 0.8)',
+        borderBottomColor: 'rgba(255, 255, 255, 0.3)',
+        borderRightColor: 'rgba(255, 255, 255, 0.3)',
+        overflow: 'hidden',
     },
     navItem: {
         padding: scale(12),

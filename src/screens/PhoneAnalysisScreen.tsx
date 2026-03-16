@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, ActivityIndicator, FlatList, TextInput, Linking, Image } from 'react-native';
+import React, { useEffect, useState, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, ActivityIndicator, TextInput, Linking, Image, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { requestUsagePermission, hasUsagePermission, getUsageStats } from 'device-activity';
 import { requestSmsPermission, getAllSms } from 'sms-reader';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme';
 import { scale } from '../constants';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface UsageStat {
     packageName: string;
@@ -20,6 +20,9 @@ interface SmsMessage {
 
 export default function PhoneAnalysisScreen() {
     const router = useRouter();
+    const { colors } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+
     const [loading, setLoading] = useState(false);
     const [hasUsagePerm, setHasUsagePerm] = useState(false);
     const [hasSmsPerm, setHasSmsPerm] = useState(false);
@@ -91,14 +94,15 @@ export default function PhoneAnalysisScreen() {
     if (Platform.OS !== 'android') {
         return (
             <SafeAreaView style={styles.container}>
+                <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
                 <View style={[styles.header, { borderBottomWidth: 0 }]}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                        <Image source={require('../../icons/back.png')} style={{ width: scale(24), height: scale(24), tintColor: '#000' }} resizeMode="contain" />
+                        <Image source={require('../../icons/back.png')} style={{ width: scale(24), height: scale(24), tintColor: colors.text }} resizeMode="contain" />
                     </TouchableOpacity>
                     <Text style={styles.title}>Data Analysis</Text>
                 </View>
 
-                <View style={styles.centerContent}>
+                <View style={[styles.centerContent, { backgroundColor: colors.phoneAnalysis?.secondaryBg }]}>
                     {step === 'instruction' ? (
                         <View style={styles.card}>
                             <View style={styles.iconCircle}>
@@ -138,6 +142,7 @@ export default function PhoneAnalysisScreen() {
                                 <TextInput
                                     style={styles.input}
                                     placeholder="e.g. 4h 12m"
+                                    placeholderTextColor={colors.textSecondary}
                                     value={manualTime}
                                     onChangeText={setManualTime}
                                 />
@@ -148,6 +153,7 @@ export default function PhoneAnalysisScreen() {
                                 <TextInput
                                     style={styles.input}
                                     placeholder="e.g. Instagram"
+                                    placeholderTextColor={colors.textSecondary}
                                     value={manualApp}
                                     onChangeText={setManualApp}
                                 />
@@ -166,9 +172,10 @@ export default function PhoneAnalysisScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Image source={require('../../icons/back.png')} style={{ width: scale(24), height: scale(24), tintColor: '#000' }} resizeMode="contain" />
+                    <Image source={require('../../icons/back.png')} style={{ width: scale(24), height: scale(24), tintColor: colors.text }} resizeMode="contain" />
                 </TouchableOpacity>
                 <Text style={styles.title}>Data Analysis</Text>
             </View>
@@ -187,7 +194,7 @@ export default function PhoneAnalysisScreen() {
                                     </View>
                                 ))
                             ) : (
-                                <Text>No usage data available (or refresh needed)</Text>
+                                <Text style={{ color: colors.textSecondary }}>No usage data available (or refresh needed)</Text>
                             )}
                         </View>
                     ) : (
@@ -209,7 +216,7 @@ export default function PhoneAnalysisScreen() {
                                     </View>
                                 ))
                             ) : (
-                                <Text>No SMS found</Text>
+                                <Text style={{ color: colors.textSecondary }}>No SMS found</Text>
                             )}
                         </View>
                     ) : (
@@ -228,10 +235,10 @@ export default function PhoneAnalysisScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.white,
+        backgroundColor: colors.background,
     },
     header: {
         flexDirection: 'row',
@@ -246,6 +253,7 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 20,
         fontWeight: 'bold',
+        color: colors.text,
     },
     content: {
         padding: 16,
@@ -253,7 +261,7 @@ const styles = StyleSheet.create({
     section: {
         marginBottom: 24,
         padding: 16,
-        backgroundColor: colors.phoneAnalysis.cardBg,
+        backgroundColor: colors.phoneAnalysis?.cardBg || colors.surfaceLight,
         borderRadius: 12,
     },
     sectionTitle: {
@@ -262,26 +270,15 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         color: colors.text,
     },
-    center: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 32,
-    },
-    message: {
-        textAlign: 'center',
-        color: colors.textSecondary,
-        fontSize: 16,
-    },
     button: {
-        backgroundColor: colors.black,
+        backgroundColor: colors.buttonPrimary,
         paddingVertical: 12,
         paddingHorizontal: 20,
         borderRadius: 8,
         alignItems: 'center',
     },
     buttonText: {
-        color: colors.white,
+        color: '#FFF',
         fontWeight: '600',
     },
     refreshButton: {
@@ -298,6 +295,7 @@ const styles = StyleSheet.create({
     appName: {
         fontSize: 14,
         fontWeight: '500',
+        color: colors.text,
     },
     appTime: {
         fontSize: 14,
@@ -317,11 +315,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: colors.textSecondary,
     },
-    messageText: {
-        fontSize: 15,
-        color: colors.textMuted,
-        lineHeight: 22,
-    },
     inputGroup: {
         marginBottom: 16,
     },
@@ -337,21 +330,20 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         padding: 12,
         fontSize: 16,
-        backgroundColor: colors.white,
+        backgroundColor: colors.surfaceLight || '#FFF',
+        color: colors.text,
     },
-    // Styles for iOS Step Flow
     centerContent: {
         flex: 1,
         justifyContent: 'center',
         padding: 24,
-        backgroundColor: colors.phoneAnalysis.secondaryBg,
     },
     card: {
-        backgroundColor: colors.white,
+        backgroundColor: colors.surfaceLight || '#FFF',
         borderRadius: 24,
         padding: 32,
         alignItems: 'center',
-        shadowColor: colors.shadow,
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
         shadowRadius: 12,
@@ -362,7 +354,7 @@ const styles = StyleSheet.create({
         width: 64,
         height: 64,
         borderRadius: 32,
-        backgroundColor: colors.phoneAnalysis.highlightBg,
+        backgroundColor: colors.phoneAnalysis?.highlightBg || colors.background,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 20,
@@ -372,7 +364,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         marginBottom: 12,
         textAlign: 'center',
-        color: colors.black,
+        color: colors.text,
     },
     cardBody: {
         fontSize: 16,
@@ -382,7 +374,7 @@ const styles = StyleSheet.create({
         lineHeight: 24,
     },
     primaryButton: {
-        backgroundColor: colors.phoneAnalysis.actionBg,
+        backgroundColor: colors.buttonPrimary,
         width: '100%',
         paddingVertical: 16,
         borderRadius: 14,
@@ -391,7 +383,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     primaryButtonText: {
-        color: colors.white,
+        color: '#FFF',
         fontSize: 17,
         fontWeight: '600',
         textAlign: 'center',

@@ -1,10 +1,12 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface Props {
     children: ReactNode;
     fallback?: ReactNode;
+    colors: any;
 }
 
 interface State {
@@ -16,7 +18,7 @@ interface State {
  * Global error boundary that prevents white-screen-of-death crashes.
  * Catches unhandled JS errors in the component tree and shows a recovery UI.
  */
-export class ErrorBoundary extends Component<Props, State> {
+class ErrorBoundaryInner extends Component<Props, State> {
     constructor(props: Props) {
         super(props);
         this.state = { hasError: false, error: null };
@@ -38,6 +40,9 @@ export class ErrorBoundary extends Component<Props, State> {
     };
 
     render(): ReactNode {
+        const { colors } = this.props;
+        const styles = createStyles(colors);
+
         if (this.state.hasError) {
             if (this.props.fallback) {
                 return this.props.fallback;
@@ -66,7 +71,7 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         justifyContent: 'center',
@@ -113,5 +118,10 @@ const styles = StyleSheet.create({
         color: '#FFF',
     },
 });
+
+export const ErrorBoundary = (props: Omit<Props, 'colors'>) => {
+    const { colors } = useAppTheme();
+    return <ErrorBoundaryInner {...props} colors={colors} />;
+};
 
 export default ErrorBoundary;
