@@ -9,7 +9,7 @@ declare namespace Deno {
     export function serve(handler: (req: Request) => Promise<Response>): void;
 }
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
 const GEMINI_MODEL = 'gemini-2.0-flash';
