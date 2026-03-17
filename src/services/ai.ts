@@ -12,14 +12,34 @@ export interface ChatMessage {
 
 async function invokeAI<T>(action: string, payload: Record<string, unknown>): Promise<T> {
     const supabase = getSupabase();
+    
+    // Debug: Check if user is authenticated
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log('[AI Service] Session exists:', !!session);
+    console.log('[AI Service] User ID:', session?.user?.id);
+    
+    // Explicitly pass authorization header to the edge function
     const { data, error } = await supabase.functions.invoke('ai-proxy', {
         body: { action, ...payload },
+        headers: {
+            Authorization: `Bearer ${session?.access_token || ''}`,
+        },
     });
 
     if (error) {
         console.error(`AI proxy error (${action}):`, error);
         if ('context' in error) {
-            console.error('Error context:', (error as any).context);
+            const context = (error as any).context;
+            console.error('Error context:', context);
+            
+            // Try to extract and log the JSON error body if available
+            if (context._bodyText) {
+                try {
+                    console.error('Error body:', JSON.parse(context._bodyText));
+                } catch {
+                    console.error('Error body (raw):', context._bodyText);
+                }
+            }
         }
         throw error;
     }
@@ -101,26 +121,6 @@ export const aiService = {
                 type: 'reminder',
                 message: 'Есть минутка? Может, практика вместо скроллинга? 🎯',
                 action: 'Начать 15-минутную сессию',
-            };
-        }
-    },
-
-    // Analyze screen time patterns and suggest improvements
-    analyzeScreenTimePatterns: async (
-        weeklyData: { app: string; category: string; minutes: number }[]
-    ): Promise<{ insights: string[]; suggestions: string[] }> => {
-        try {
-            const parsed = await invokeAI<{ insights?: string[]; suggestions?: string[] }>(
-                'analyzeScreenTimePatterns', { weeklyData }
-            );
-            return {
-                insights: parsed.insights || ['Анализ данных недоступен'],
-                suggestions: parsed.suggestions || ['Попробуй сократить время в соцсетях'],
-            };
-        } catch {
-            return {
-                insights: ['Требуется больше данных для анализа'],
-                suggestions: ['Продолжай отслеживать экранное время'],
             };
         }
     },

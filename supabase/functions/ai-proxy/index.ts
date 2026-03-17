@@ -2,12 +2,21 @@
 // Handles all AI calls server-side to keep API keys secure
 // Deploy: npx supabase functions deploy ai-proxy
 
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+declare namespace Deno {
+    export namespace env {
+        export function get(key: string): string | undefined;
+    }
+    export function serve(handler: (req: Request) => Promise<Response>): void;
+}
+
+import { createClient } from '@supabase/supabase-js';
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
 const GEMINI_MODEL = 'gemini-2.0-flash';
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+
+// Use environment variables provided by Supabase Edge Runtime, with fallbacks to the project's values
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || 'https://rxnquxqknzbbtfepvtxk.supabase.co';
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4bnF1eHFrbnpiYnRmZXB2dHhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyOTc2NjAsImV4cCI6MjA4Mzg3MzY2MH0.ZqcbDyrr9w5x4NJvhGEmNVn2-lsT5--Grwdb534ufrY';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -38,21 +47,29 @@ interface RequestBody {
 
 async function requireAuthenticatedUser(req: Request): Promise<string> {
     const authHeader = req.headers.get('Authorization');
+
     if (!authHeader) {
+        console.error('[Auth] Missing Authorization header');
         throw new Error('Unauthorized: missing bearer token');
     }
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-        throw new Error('Unauthorized: auth provider config missing');
-    }
 
+    // Initialize Supabase client with the user's token
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         global: { headers: { Authorization: authHeader } },
     });
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) {
-        throw new Error('Unauthorized: invalid token');
+
+    // Note: If we are using the project's own supabase instance, 
+    // we should be able to verify this token.
+    const { data: { user }, error } = await supabase.auth.getUser();
+
+    if (error || !user) {
+        console.error('[Auth] Verification failed:', error?.message);
+        // Provide more context in the error message for the client to see
+        throw new Error(`Unauthorized: Verification failed - ${error?.message || 'No user'}`);
     }
-    return data.user.id;
+
+    console.log('[Auth] Authenticated user:', user.id);
+    return user.id;
 }
 
 // Call Gemini API
