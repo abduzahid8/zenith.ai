@@ -47,28 +47,34 @@ interface RequestBody {
 
 async function requireAuthenticatedUser(req: Request): Promise<string> {
     const authHeader = req.headers.get('Authorization');
-
+    
     if (!authHeader) {
         console.error('[Auth] Missing Authorization header');
         throw new Error('Unauthorized: missing bearer token');
     }
 
-    // Initialize Supabase client with the user's token
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        global: { headers: { Authorization: authHeader } },
-    });
-
-    // Note: If we are using the project's own supabase instance, 
-    // we should be able to verify this token.
-    const { data: { user }, error } = await supabase.auth.getUser();
-
-    if (error || !user) {
-        console.error('[Auth] Verification failed:', error?.message);
-        // Provide more context in the error message for the client to see
-        throw new Error(`Unauthorized: Verification failed - ${error?.message || 'No user'}`);
+    // Explicitly extract the token from the Bearer header
+    const token = authHeader.replace('Bearer ', '').trim();
+    if (!token) {
+        console.error('[Auth] Empty token after stripping Bearer');
+        throw new Error('Unauthorized: empty bearer token');
     }
 
-    console.log('[Auth] Authenticated user:', user.id);
+    // Initialize Supabase client
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    // Use the explicit token with getUser() for more robust verification
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+        const detail = error?.message || 'No user found for this token';
+        console.error('[Auth] Verification failed:', detail);
+        
+        // Return a very specific error message so the client can see it in logs
+        throw new Error(`Unauthorized (V3): ${detail} (Token length: ${token.length})`);
+    }
+
+    console.log('[Auth] Successfully authenticated user:', user.id);
     return user.id;
 }
 

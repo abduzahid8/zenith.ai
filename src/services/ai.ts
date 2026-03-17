@@ -30,14 +30,31 @@ async function invokeAI<T>(action: string, payload: Record<string, unknown>): Pr
         console.error(`AI proxy error (${action}):`, error);
         if ('context' in error) {
             const context = (error as any).context;
-            console.error('Error context:', context);
+            console.error('Error Status:', context.status);
             
-            // Try to extract and log the JSON error body if available
-            if (context._bodyText) {
+            // In React Native, the body might be a Blob that needs to be read
+            const extractErrorBody = async () => {
                 try {
-                    console.error('Error body:', JSON.parse(context._bodyText));
+                    if (context._bodyText) return context._bodyText;
+                    if (context._bodyBlob) {
+                        return new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result);
+                            reader.readAsText(context._bodyBlob);
+                        });
+                    }
+                    return null;
+                } catch (e) {
+                    return `Error reading body: ${e}`;
+                }
+            };
+
+            const body = await extractErrorBody();
+            if (body) {
+                try {
+                    console.error('Error Body (JSON):', JSON.parse(body as string));
                 } catch {
-                    console.error('Error body (raw):', context._bodyText);
+                    console.error('Error Body (Raw):', body);
                 }
             }
         }
