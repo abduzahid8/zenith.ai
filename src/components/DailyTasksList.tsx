@@ -90,6 +90,8 @@ const AddTaskCard = ({ onPress, isUpgrade = false, taskCount = 0, colors }: { on
             ? { height: scale(100) }
             : {};
 
+    const iconSource = isUpgrade ? require('../../icons/lock.png') : require('../../icons/plus.png');
+
     return (
         <TouchableOpacity
             style={[styles.card, styles.addCard, dynamicStyle]}
@@ -97,8 +99,8 @@ const AddTaskCard = ({ onPress, isUpgrade = false, taskCount = 0, colors }: { on
             activeOpacity={0.8}
         >
             <Image
-                source={require('../../icons/plus.png')}
-                style={[styles.addIcon, { tintColor: '#ADADAD' }]} // Gray color for plus
+                source={iconSource}
+                style={[styles.addIcon, { tintColor: '#ADADAD' }]} // Gray color for plus/lock
             />
             {isUpgrade && (
                 <Text style={styles.upgradeText}>Unlock Premium</Text>
@@ -165,7 +167,11 @@ export const DailyTasksList = () => {
     }
 
     const ENGINE_TYPES: TaskType[] = ['theory', 'practice', 'analysis', 'puzzles'];
-    const engineTasks = dailyTasks.filter(t => ENGINE_TYPES.includes(t.type as TaskType));
+    const allEngineTasks = dailyTasks.filter(t => ENGINE_TYPES.includes(t.type as TaskType));
+    
+    // Enforce display limit based on subscription
+    const maxTasks = isPremium ? 4 : 3;
+    const engineTasks = allEngineTasks.slice(0, maxTasks);
 
     const showAddButton = true; // Always allow user to try to add or see categories
     const isUpgradeButton = !isPremium && engineTasks.length >= 3;

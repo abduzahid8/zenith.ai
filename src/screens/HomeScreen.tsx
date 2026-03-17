@@ -16,7 +16,6 @@ import { useUserProfileStore, getGreeting } from '../store/userProfileStore';
 import { MenuDrawer } from '../components/NavigationSidebar';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { HomeScreenSkeleton } from '../components/UIStateComponents';
-import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
 import HomeTab from './tabs/HomeTab';
 import { HobbyIcon } from '../components/HobbyIcon';
 import { useAppTheme } from '../theme/useAppTheme';
@@ -27,33 +26,14 @@ const FireIcon = () => (
 
 export const HomeScreen: React.FC = () => {
     const { streakDays } = useUserProfileStore();
-    const { fetchTodayData, checkPermission, requestPermission } = useDeviceScreenTimeStore();
     const [menuVisible, setMenuVisible] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
 
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
 
     const fadeAnim = useRef(new Animated.Value(1)).current;
     const iconTranslateY = fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] });
-
-    useEffect(() => {
-        const initScreenTime = async () => {
-            try {
-                if (Platform.OS === 'ios' || Platform.OS === 'android') {
-                    const authorized = await checkPermission();
-                    if (!authorized) {
-                        await requestPermission();
-                    } else {
-                        await fetchTodayData();
-                    }
-                }
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        initScreenTime();
-    }, []);
 
     const greeting = getGreeting();
 

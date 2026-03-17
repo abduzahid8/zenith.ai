@@ -154,38 +154,6 @@ describe('aiService.generateSubstituteContent', () => {
     });
 });
 
-// ─── analyzeScreenTimePatterns ───────────────────────
-
-describe('aiService.analyzeScreenTimePatterns', () => {
-    it('returns parsed insights and suggestions', async () => {
-        mockInvoke.mockResolvedValue({
-            data: {
-                data: JSON.stringify({
-                    insights: ['You spend 3h on social media'],
-                    suggestions: ['Limit to 1h'],
-                }),
-            },
-            error: null,
-        });
-
-        const result = await aiService.analyzeScreenTimePatterns([
-            { app: 'Instagram', category: 'social', minutes: 180 },
-        ]);
-
-        expect(result.insights).toEqual(['You spend 3h on social media']);
-        expect(result.suggestions).toEqual(['Limit to 1h']);
-    });
-
-    it('returns defaults on error', async () => {
-        mockInvoke.mockResolvedValue({ data: null, error: new Error('x') });
-
-        const result = await aiService.analyzeScreenTimePatterns([]);
-
-        expect(result.insights).toBeTruthy();
-        expect(result.suggestions).toBeTruthy();
-    });
-});
-
 // ─── analyzeUserProfile ──────────────────────────────
 
 describe('aiService.analyzeUserProfile', () => {

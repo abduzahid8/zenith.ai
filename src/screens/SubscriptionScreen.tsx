@@ -190,11 +190,9 @@ const createStyles = (colors: any) => StyleSheet.create({
         paddingVertical: scale(14),
         paddingHorizontal: scale(18),
         marginBottom: scale(12),
-        borderWidth: 2,
-        borderColor: 'transparent',
     },
     planCardSelected: {
-        borderColor: colors.primary,
+        // Selection effect removed
     },
     freeCard: {
         backgroundColor: colors.subscription?.freeCardBg || colors.surfaceLight,

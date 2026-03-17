@@ -31,7 +31,11 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
     const styles = useMemo(() => createStyles(colors), [colors]);
 
     const ENGINE_TYPES: TaskType[] = ['theory', 'practice', 'analysis', 'puzzles'];
-    const engineTasks = dailyTasks.filter(t => ENGINE_TYPES.includes(t.type as TaskType));
+    const allEngineTasks = dailyTasks.filter(t => ENGINE_TYPES.includes(t.type as TaskType));
+    
+    // Enforce display limit based on subscription
+    const maxTasks = (isPremium || profilePremium) ? 4 : 3;
+    const engineTasks = allEngineTasks.slice(0, maxTasks);
 
     useEffect(() => {
         if (userId) {
@@ -51,7 +55,7 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
         const canAddMore = engineTasks.length < maxTasks;
 
         if (!canAddMore && !(isPremium || profilePremium)) {
-            router.push('/Paywall' as any);
+            router.push('/subscription' as any);
         } else {
             router.push('/your-tasks');
         }
@@ -212,7 +216,7 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
             })}
 
             {/* Add Task button */}
-            {orderedTasks.length < ((isPremium || profilePremium) ? 4 : 3) && (
+            {(orderedTasks.length < ((isPremium || profilePremium) ? 4 : 3) || (!(isPremium || profilePremium) && orderedTasks.length === 3)) && (
                 <TouchableOpacity
                     style={[
                         styles.addTaskCard,
@@ -222,7 +226,11 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                     activeOpacity={0.8}
                     onPress={handleAddPress}
                 >
-                    <Image source={require('../../../icons/plus.png')} style={{ width: scale(32), height: scale(32), tintColor: colors.iconMuted }} resizeMode="contain" />
+                    <Image 
+                        source={(!(isPremium || profilePremium) && orderedTasks.length === 3) ? require('../../../icons/lock.png') : require('../../../icons/plus.png')} 
+                        style={{ width: scale(32), height: scale(32), tintColor: colors.iconMuted }} 
+                        resizeMode="contain" 
+                    />
                 </TouchableOpacity>
             )}
         </ScrollView>

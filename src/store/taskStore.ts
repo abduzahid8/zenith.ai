@@ -22,6 +22,7 @@ interface TaskState {
         engagement_rating?: number;
         user_notes?: string;
     }) => Promise<void>;
+    uncompleteTask: (userId: string, taskId: string) => Promise<void>;
     skipTask: (userId: string, taskId: string) => Promise<void>;
     resetTasks: () => void;
 }
@@ -116,6 +117,34 @@ export const useTaskStore = create<TaskState>()(
                     set((state) => ({
                         dailyTasks: state.dailyTasks.map((t) =>
                             t.id === taskId ? { ...t, status: 'pending' } : t
+                        ),
+                        error: 'Failed to update task status',
+                    }));
+                }
+            },
+
+            uncompleteTask: async (userId: string, taskId: string) => {
+                // Optimistic update
+                set((state) => ({
+                    dailyTasks: state.dailyTasks.map(t =>
+                        t.id === taskId ? { ...t, status: 'pending' } : t
+                    )
+                }));
+
+                try {
+                    const updated = await taskService.uncompleteTask(userId, taskId);
+                    if (updated) {
+                        set((state) => ({
+                            dailyTasks: state.dailyTasks.map(t =>
+                                t.id === taskId ? updated : t
+                            )
+                        }));
+                    }
+                } catch (e: unknown) {
+                    console.error('Failed to uncomplete task:', e);
+                    set((state) => ({
+                        dailyTasks: state.dailyTasks.map((t) =>
+                            t.id === taskId ? { ...t, status: 'completed' } : t
                         ),
                         error: 'Failed to update task status',
                     }));

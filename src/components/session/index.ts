@@ -12,3 +12,6 @@ export type { SessionChatProps } from './SessionChat';
 
 export { default as SessionSummaryView } from './SessionSummaryView';
 export type { SessionSummaryViewProps } from './SessionSummaryView';
+
+export { default as TimePickerModal } from './TimePickerModal';
+export type { TimePickerModalProps } from './TimePickerModal';

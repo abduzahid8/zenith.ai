@@ -47,6 +47,10 @@ export const YourTasksScreen = () => {
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
 
+    const ENGINE_TYPES: TaskType[] = ['theory', 'practice', 'analysis', 'puzzles'];
+    const engineTasksCount = dailyTasks.filter(t => ENGINE_TYPES.includes(t.type as TaskType)).length;
+    const maxTasks = isPremium ? 4 : 3;
+
     const handleAdd = (type: TaskType, label: string, bg: string) => {
         router.push({
             pathname: `/category/${type}` as any,
@@ -76,11 +80,16 @@ export const YourTasksScreen = () => {
 
                 <View style={styles.cardsContainer}>
                     {categories.map((cat) => {
+                        const existingTask = dailyTasks.find(t => t.type === cat.type) ?? null;
+                        const isLocked = !existingTask && engineTasksCount >= maxTasks;
                         return (
                             <View key={cat.type} style={{ marginBottom: scale(16) }}>
                                 <CategoryCard
                                     category={cat}
+                                    existingTask={existingTask}
+                                    isLocked={isLocked}
                                     onAdd={() => handleAdd(cat.type, cat.label, cat.bg)}
+                                    onUpgrade={() => router.push('/subscription')}
                                     colors={colors}
                                     styles={styles}
                                 />
@@ -104,28 +113,60 @@ export const YourTasksScreen = () => {
     );
 };
 
-const CategoryCard = ({ category, onAdd, styles }: any) => {
+const CategoryCard = ({ category, existingTask, isLocked, onAdd, onUpgrade, styles }: any) => {
+    const isAdded = !!existingTask;
+    const isCompleted = existingTask?.status === 'completed';
+
+    if (isLocked) {
+        return (
+            <TouchableOpacity style={styles.lockedCard} onPress={onUpgrade} activeOpacity={0.8}>
+                <Image source={require('../../icons/lock.png')} style={styles.lockIcon} resizeMode="contain" />
+            </TouchableOpacity>
+        );
+    }
+
     return (
-        <View style={[styles.card, { backgroundColor: category.bg }]}>
+        <View style={[
+            styles.card,
+            { backgroundColor: isCompleted ? '#3CEB59' : category.bg },
+        ]}>
             <View style={styles.cardInfo}>
                 <View style={styles.iconContainer}>
-                    <Image source={category.icon} style={styles.cardIcon} resizeMode="contain" />
+                    <Image
+                        source={isCompleted ? require('../../icons/checkbox-checked.png') : category.icon}
+                        style={styles.cardIcon}
+                        resizeMode="contain"
+                    />
                 </View>
                 <View style={styles.textContainer}>
                     <Text style={styles.cardTitle}>{category.label}</Text>
-                    <Text style={styles.cardSubtitle}>{category.subtitle}</Text>
+                    <Text style={styles.cardSubtitle} numberOfLines={2}>
+                        {existingTask ? existingTask.title : category.subtitle}
+                    </Text>
                 </View>
             </View>
 
-            <TouchableOpacity
-                style={[
-                    styles.addButton,
-                    styles.addedButton
-                ]}
-                onPress={onAdd}
-            >
-                <Image source={require('../../icons/back.png')} style={[styles.plusIcon, { transform: [{ rotate: '180deg' }] }]} />
-            </TouchableOpacity>
+            {isCompleted ? (
+                <View style={[styles.addButton, styles.doneButton]}>
+                    <Text style={styles.doneText}>✓</Text>
+                </View>
+            ) : isAdded ? (
+                <TouchableOpacity
+                    style={[styles.addButton, styles.addedButton]}
+                    onPress={onAdd}
+                    activeOpacity={0.7}
+                >
+                    <Image source={require('../../icons/plus.png')} style={[styles.plusIcon, { opacity: 0.5 }]} />
+                </TouchableOpacity>
+            ) : (
+                <TouchableOpacity
+                    style={styles.addButton}
+                    onPress={onAdd}
+                    activeOpacity={0.7}
+                >
+                    <Image source={require('../../icons/plus.png')} style={styles.plusIcon} />
+                </TouchableOpacity>
+            )}
         </View>
     );
 };
@@ -236,6 +277,31 @@ const createStyles = (colors: any) => StyleSheet.create({
     },
     addedButton: {
         backgroundColor: 'rgba(255,255,255,0.6)',
+    },
+    lockedCard: {
+        borderRadius: scale(25),
+        height: scale(100),
+        backgroundColor: '#E6EBF0',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 5,
+        elevation: 2,
+    },
+    lockIcon: {
+        width: scale(32),
+        height: scale(32),
+        tintColor: '#ADADAD',
+    },
+    doneButton: {
+        backgroundColor: 'rgba(255,255,255,0.5)',
+    },
+    doneText: {
+        fontSize: scale(22),
+        color: '#0F5C23',
+        fontWeight: '700',
     },
     plusIcon: {
         width: scale(20),

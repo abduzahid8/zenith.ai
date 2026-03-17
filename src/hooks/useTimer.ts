@@ -29,9 +29,17 @@ export function useTimer() {
     const { selectedHobby } = useUserProfileStore();
 
     // --- Timer state ---
+    const [totalTime, setTotalTime] = useState(30 * 60); // Default 30 minutes
     const [timerStatus, setTimerStatus] = useState<TimerStatus>('idle');
-    const [timeLeft, setTimeLeft] = useState(TOTAL_TIME);
-    const progress = timeLeft / TOTAL_TIME;
+    const [timeLeft, setTimeLeft] = useState(totalTime);
+    const progress = timeLeft / totalTime;
+
+    // Update timeLeft when totalTime changes, but only if idle
+    useEffect(() => {
+        if (timerStatus === 'idle') {
+            setTimeLeft(totalTime);
+        }
+    }, [totalTime, timerStatus]);
 
     // --- Tasks derived from real store ---
     const [tasks, setTasks] = useState<SessionTask[]>([]);
@@ -212,25 +220,39 @@ export function useTimer() {
     }, []);
 
     const handleReset = useCallback(() => {
-        setTimeLeft(TOTAL_TIME);
+        setTimeLeft(totalTime);
         setTimerStatus('idle');
-    }, []);
+    }, [totalTime]);
 
-    const handleCompleteTask = useCallback((id: string) => {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const handleToggleTask = useCallback((id: string) => {
+        const selectedTask = tasks.find(task => task.id === id);
+        if (!selectedTask) return;
+
+        const isCurrentlyCompleted = selectedTask.completed;
+
+        Haptics.notificationAsync(
+            isCurrentlyCompleted 
+                ? Haptics.NotificationFeedbackType.Warning 
+                : Haptics.NotificationFeedbackType.Success
+        );
+
         // Update local session UI immediately
         setTasks(prev =>
             prev.map(task =>
-                task.id === id && !task.completed
-                    ? { ...task, completed: true, completedAt: Date.now() }
+                task.id === id
+                    ? { ...task, completed: !isCurrentlyCompleted, completedAt: isCurrentlyCompleted ? null : Date.now() }
                     : task
             )
         );
-        // Persist completion to real task store and Supabase
-        const selectedTask = tasks.find(task => task.id === id);
-        if (user?.id && selectedTask?.storeTaskId) {
-            completeTask(user.id, selectedTask.storeTaskId).catch(err =>
-                console.error('Failed to persist task completion:', err)
+
+        // Persist toggling to real task store and Supabase
+        if (user?.id && selectedTask.storeTaskId) {
+            const storeAction = isCurrentlyCompleted
+                ? useTaskStore.getState().uncompleteTask(user.id, selectedTask.storeTaskId)
+                : completeTask(user.id, selectedTask.storeTaskId);
+            
+            storeAction.catch(err =>
+                console.error('Failed to persist task toggle:', err)
             );
         }
     }, [user, completeTask, tasks]);
@@ -245,7 +267,7 @@ export function useTimer() {
     }, [prefDontShowStop, tasks]);
 
     const finishSession = useCallback(() => {
-        const elapsed = TOTAL_TIME - timeLeft;
+        const elapsed = totalTime - timeLeft;
         const durationSeconds = elapsed > 0 ? elapsed : 0;
         saveSessionToSupabase(durationSeconds);
 
@@ -253,7 +275,7 @@ export function useTimer() {
         if (completedTasks.length > 0) {
             setShowSummary(true);
         } else {
-            setTimeLeft(TOTAL_TIME);
+            setTimeLeft(totalTime);
             setTimerStatus('idle');
         }
     }, [timeLeft, tasks, saveSessionToSupabase]);
@@ -299,10 +321,12 @@ export function useTimer() {
         handlePause,
         handleReset,
         handleStopPress,
+        setTotalTime,
+        totalTime,
 
         // Tasks
         tasks,
-        handleCompleteTask,
+        handleToggleTask,
 
         // Drawer
         isTaskListVisible,
@@ -333,6 +357,6 @@ export function useTimer() {
         bottomNavVisible,
 
         // Constants
-        totalTime: TOTAL_TIME,
+        // Removed static TOTAL_TIME
     };
 }

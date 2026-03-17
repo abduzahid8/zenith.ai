@@ -6,7 +6,6 @@ export default function AppLayout() {
             <Stack.Screen name="index" />
             <Stack.Screen name="home" />
             <Stack.Screen name="weekly-plan" />
-            <Stack.Screen name="screen-time" />
             <Stack.Screen name="ai-coach" />
         </Stack>
     );

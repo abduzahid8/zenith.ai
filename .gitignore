@@ -53,3 +53,6 @@ style_updates.txt
 *.backup
 # Large binary module artifacts
 modules/device-activity/ios/zenythai.app/
+
+# Supabase
+supabase/.temp/

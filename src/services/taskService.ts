@@ -107,6 +107,28 @@ export const taskService = {
         return updatedTask;
     },
 
+    // Un-complete a task
+    uncompleteTask: async (userId: string, taskId: string): Promise<Task | null> => {
+        // Update status to pending
+        const updatedTask = await tasksDbService.updateTaskStatus(userId, taskId, 'pending');
+
+        if (updatedTask) {
+            // Update stats
+            const today = getTodayDateString();
+            const currentStats = await dbService.getDailyStats(userId, today);
+            const newCount = Math.max(0, (currentStats?.tasks_completed || 0) - 1);
+
+            await dbService.updateDailyStats(userId, today, { tasks_completed: newCount });
+
+            // check Streak: decrementing isn't strictly necessary for a simple un-complete 
+            // since streak increments on the first time they finish all tasks.
+            // If they uncomplete, they still hit the streak that day unless we want strict retraction.
+            // For now, decreasing tasks counts is enough.
+        }
+
+        return updatedTask;
+    },
+
     // Skip a task
     skipTask: async (userId: string, taskId: string): Promise<Task | null> => {
         return await tasksDbService.updateTaskStatus(userId, taskId, 'skipped');

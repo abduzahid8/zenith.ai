@@ -26,13 +26,14 @@ import {
     TaskDrawer,
     StopConfirmationModal,
     SessionSummaryView,
+    TimePickerModal,
 } from '../components/session';
 import { BottomTabBar } from '../components/navigation/BottomTabBar';
 import { useAppTheme } from '../theme/useAppTheme';
 
 export const SessionTimerScreen: React.FC = () => {
     const router = useRouter();
-    const pagerViewRef = useRef<PagerView>(null);
+    const pagerViewRef = useRef<any>(null);
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -41,7 +42,7 @@ export const SessionTimerScreen: React.FC = () => {
         timerStatus, timeLeft, progress, formatTime,
         handlePlay, handlePause, handleReset, handleStopPress,
         // Tasks
-        tasks, handleCompleteTask,
+        tasks, handleToggleTask,
         // Drawer
         isTaskListVisible, setIsTaskListVisible,
         // Summary
@@ -49,6 +50,8 @@ export const SessionTimerScreen: React.FC = () => {
         // Stop modal
         isStopModalVisible, setIsStopModalVisible,
         dontShowAgainChecked, setDontShowAgainChecked, confirmStop,
+        // Time selection
+        totalTime, setTotalTime,
         // Chat
         chatInput, setChatInput, messages, isAiLoading, handleSendMessage,
         // Animations
@@ -58,6 +61,8 @@ export const SessionTimerScreen: React.FC = () => {
     const handleStop = () => {
         router.back();
     };
+
+    const [isTimePickerVisible, setIsTimePickerVisible] = React.useState(false);
 
     // Main pager scroll animation
     const mainPagerPosition = useRef(new Animated.Value(0)).current;
@@ -131,7 +136,14 @@ export const SessionTimerScreen: React.FC = () => {
                                 trackColor={colors.sessionTimer.primaryFaded}
                                 progress={progress}
                             >
-                                <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
+                                <TouchableOpacity
+                                    activeOpacity={0.7}
+                                    onPress={() => timerStatus === 'idle' && setIsTimePickerVisible(true)}
+                                    disabled={timerStatus !== 'idle'}
+                                    style={{ justifyContent: 'center', alignItems: 'center' }}
+                                >
+                                    <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
+                                </TouchableOpacity>
                             </TimerProgress>
 
                             <View style={styles.controlsContainer}>
@@ -262,7 +274,7 @@ export const SessionTimerScreen: React.FC = () => {
                 tasks={tasks}
                 drawerAnim={drawerAnim}
                 backdropAnim={backdropAnim}
-                onCompleteTask={handleCompleteTask}
+                onCompleteTask={handleToggleTask}
                 onClose={() => setIsTaskListVisible(false)}
             />
 
@@ -273,6 +285,14 @@ export const SessionTimerScreen: React.FC = () => {
                 onToggleDontShowAgain={() => setDontShowAgainChecked(!dontShowAgainChecked)}
                 onCancel={() => setIsStopModalVisible(false)}
                 onConfirm={confirmStop}
+            />
+
+            {/* Time Picker Modal */}
+            <TimePickerModal
+                visible={isTimePickerVisible}
+                currentDuration={totalTime}
+                onSelect={(mins) => setTotalTime(mins * 60)}
+                onClose={() => setIsTimePickerVisible(false)}
             />
         </SafeAreaView>
     );
@@ -317,7 +337,6 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontFamily: fonts.heading.bold,
         color: colors.sessionTimer.text,
         fontWeight: 'bold',
-        position: 'absolute',
     },
     controlsContainer: {
         flexDirection: 'row',

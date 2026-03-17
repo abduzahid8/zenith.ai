@@ -8,6 +8,7 @@ import {
     Animated,
     TouchableWithoutFeedback,
     Image,
+    Alert,
 } from 'react-native';
 import {
     Ionicons
@@ -18,6 +19,8 @@ import { useUserProfileStore, getSubscriptionDisplayText } from '../store/userPr
 import { scale } from '../constants';
 import { fonts } from '../theme';
 import { useAppTheme } from '../theme/useAppTheme';
+import { InfoModal } from './ui/InfoModal';
+import * as Linking from 'expo-linking';
 
 const SIDEBAR_WIDTH = scale(180);
 
@@ -43,6 +46,10 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
     const displaySubscription = getSubscriptionDisplayText(subscriptionLevel);
     const slideAnim = useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
+
+    const [howItWorksVisible, setHowItWorksVisible] = React.useState(false);
+    const [shareVisible, setShareVisible] = React.useState(false);
+    const [feedbackVisible, setFeedbackVisible] = React.useState(false);
 
     useEffect(() => {
         if (visible) {
@@ -97,22 +104,39 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
         }
     };
 
-    const handleSubItemPress = (route?: string) => {
-        if (route) {
+    const handleSubItemPress = (item: { label: string; route?: string }) => {
+        if (item.route) {
             onClose();
             setTimeout(() => {
-                router.replace(route as any);
+                router.replace(item.route as any);
             }, 300);
+            return;
+        }
+
+        switch (item.label) {
+            case 'Как это работает':
+                setHowItWorksVisible(true);
+                break;
+            case 'Обратная связь':
+                setFeedbackVisible(true);
+                break;
+            case 'Поделиться с другом':
+                setShareVisible(true);
+                break;
+            default:
+                Alert.alert('Скоро', 'Этот раздел находится в разработке и скоро будет доступен.');
         }
     };
 
-    const navigationItems = [
+    type SubItem = { label: string; route?: string };
+    type NavigationItem = { key: string; label: string; subItems: SubItem[] };
+
+    const navigationItems: NavigationItem[] = [
         {
             key: 'основное',
             label: 'Основное',
             subItems: [
                 { label: 'Главная', route: '/(app)/' },
-                { label: 'Прогресс', route: '/(app)/screen-time' },
                 { label: 'Хобби и план', route: '/(app)/weekly-plan' },
                 { label: 'AI-наставник', route: '/(app)/ai-coach' },
             ],
@@ -122,7 +146,6 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             label: 'Развитие',
             subItems: [
                 { label: 'Подборка контента' },
-                { label: 'Недельный отчёт', route: '/(app)/screen-time' },
                 { label: 'Достижения и бейджи' },
             ],
         },
@@ -132,7 +155,6 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             subItems: [
                 { label: 'Настройки' },
                 { label: 'Уведомления' },
-                { label: 'Экранное время', route: '/(app)/screen-time' },
             ],
         },
         {
@@ -213,7 +235,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                             <TouchableOpacity
                                                 key={index}
                                                 style={styles.subItem}
-                                                onPress={() => handleSubItemPress(subItem.route)}
+                                                onPress={() => handleSubItemPress(subItem)}
                                                 activeOpacity={0.7}
                                             >
                                                 <Text style={styles.subItemText}>{subItem.label}</Text>
@@ -229,11 +251,11 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
 
                     <View style={styles.footerSection}>
                         <View style={styles.footerContent}>
-                            <TouchableOpacity activeOpacity={0.7}>
+                            <TouchableOpacity activeOpacity={0.7} onPress={() => handleSubItemPress({ label: 'FAQ' })}>
                                 <Text style={styles.faqText}>FAQ</Text>
                             </TouchableOpacity>
                             <View style={styles.footerDivider} />
-                            <TouchableOpacity activeOpacity={0.7}>
+                            <TouchableOpacity activeOpacity={0.7} onPress={() => handleSubItemPress({ label: 'Privacy' })}>
                                 <Text style={styles.privacyText}>
                                     Политика{'\n'}Конфиденциальности
                                 </Text>
@@ -242,6 +264,28 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                     </View>
                 </Animated.View>
             </View>
+
+            <InfoModal
+                visible={howItWorksVisible}
+                onClose={() => setHowItWorksVisible(false)}
+                title="Как это работает"
+                content="Zenyth AI — это твой персональный ассистент для развития хобби. Мы помогаем тебе планировать занятия, отслеживать прогресс и общаться с умным AI-наставником, который всегда готов помочь советом или мотивацией."
+            />
+
+            <InfoModal
+                visible={shareVisible}
+                onClose={() => setShareVisible(false)}
+                title="Поделиться с другом"
+                type="share"
+                shareLink="https://zenyth.ai/download"
+            />
+
+            <InfoModal
+                visible={feedbackVisible}
+                onClose={() => setFeedbackVisible(false)}
+                title="Обратная связь"
+                content="Мы всегда рады вашим вопросам и предложениям! Напишите нам на info@zenyth.ai"
+            />
         </Modal>
     );
 };
@@ -257,16 +301,14 @@ const createStyles = (colors: any) => StyleSheet.create({
     sidebar: {
         position: 'absolute',
         right: 0,
-        top: scale(80),
-        bottom: scale(60),
+        top: 0,
+        bottom: 0,
         width: SIDEBAR_WIDTH,
         backgroundColor: colors.surfaceLight,
-        paddingTop: scale(24),
+        paddingTop: scale(80),
         paddingHorizontal: scale(16),
         paddingBottom: scale(20),
         justifyContent: 'space-between',
-        borderTopLeftRadius: scale(20),
-        borderBottomLeftRadius: scale(20),
         shadowColor: colors.shadow,
         shadowOffset: { width: -2, height: 0 },
         shadowOpacity: 0.15,

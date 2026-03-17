@@ -24,7 +24,6 @@ import PagerView from '../components/ui/PagerView';
 import { fonts } from '../theme';
 import { MenuDrawer } from '../components/NavigationSidebar';
 import { useUserProfileStore, getGreeting } from '../store/userProfileStore';
-import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
 import { scale, SCREEN_WIDTH } from '../constants';
 import { BottomTabBar } from '../components/navigation/BottomTabBar';
 import { HobbyIcon } from '../components/HobbyIcon';
@@ -39,7 +38,7 @@ const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ 
 
 export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab = 0 }) => {
     const router = useRouter();
-    const pagerRef = useRef<PagerView>(null);
+    const pagerRef = useRef<typeof PagerView>(null);
     const [activeTab, setActiveTab] = useState(initialTab);
 
     const { colors } = useAppTheme();
@@ -54,33 +53,7 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
     const isPremium = subscriptionLevel === 'premium' || subscriptionLevel === 'trial';
 
 
-    const {
-        checkPermission,
-        requestPermission: storeRequestPermission,
-        fetchWeeklyData,
-        fetchTodayData,
-    } = useDeviceScreenTimeStore();
-
     const [menuVisible, setMenuVisible] = useState(false);
-
-    // Fetch data on mount
-    useEffect(() => {
-        fetchTodayData();
-        fetchWeeklyData();
-    }, []);
-
-    // Permissions
-    useEffect(() => {
-        const initPermissions = async () => {
-            if (Platform.OS === 'ios') {
-                const hasPermission = await checkPermission();
-                if (!hasPermission) {
-                    await storeRequestPermission();
-                }
-            }
-        };
-        initPermissions();
-    }, []);
 
     // Home tab animation
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -165,7 +138,6 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
                         iconTranslateY={iconTranslateY}
                         onDailyGoal={() => handleTabPress(1)}
                         onAICoach={() => handleTabPress(2)}
-                        onScreenTime={() => router.push('/(app)/screen-time')}
                     />
                 </View>
 

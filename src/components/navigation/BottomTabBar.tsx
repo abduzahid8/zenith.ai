@@ -35,7 +35,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabPres
                             width: activeTab === 0 ? scale(24) : undefined,
                             aspectRatio: 1,
                             tintColor: activeTab === 0 ? activeIconTint : inactiveIconTint,
-                            transform: activeTab === 0 ? [{ translateY: -scale(2) }] : [],
+                            transform: activeTab === 0 ? [{ translateY: -scale(1) }] : [],
                         }
                     ]}
                     resizeMode="contain"

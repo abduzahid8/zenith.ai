@@ -45,4 +45,11 @@ export const authService = {
         const { error } = await supabase.auth.resetPasswordForEmail(email);
         if (error) throw error;
     },
+
+    updatePassword: async (password: string) => {
+        const supabase = getSupabase();
+        const { data, error } = await supabase.auth.updateUser({ password });
+        if (error) throw error;
+        return data;
+    },
 };

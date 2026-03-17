@@ -9,6 +9,7 @@ interface AuthState {
     session: Session | null;
     isLoading: boolean;
     isAuthenticated: boolean;
+    isResettingPassword: boolean;
     error: string | null;
 
     // Actions
@@ -16,18 +17,21 @@ interface AuthState {
     setSession: (session: Session | null) => void;
     setLoading: (loading: boolean) => void;
     setError: (error: string | null) => void;
+    setResettingPassword: (isResetting: boolean) => void;
     signIn: (email: string, password: string) => Promise<void>;
     signUp: (email: string, password: string) => Promise<void>;
     signOut: () => Promise<void>;
     initialize: () => Promise<void>;
+    updatePassword: (password: string) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
-    (set) => ({
+    (set, get) => ({
         user: null,
         session: null,
         isLoading: true,
         isAuthenticated: false,
+        isResettingPassword: false,
         error: null,
 
         setUser: (user) =>
@@ -46,6 +50,8 @@ export const useAuthStore = create<AuthState>()(
         setLoading: (isLoading) => set({ isLoading }),
 
         setError: (error) => set({ error }),
+
+        setResettingPassword: (isResettingPassword) => set({ isResettingPassword }),
 
         signIn: async (email, password) => {
             try {
@@ -141,6 +147,19 @@ export const useAuthStore = create<AuthState>()(
 
         initialize: async () => {
             try {
+                // Set up listener for auth changes
+                const { getSupabase } = require('../services/supabase/client');
+                const s = getSupabase();
+                s.auth.onAuthStateChange(async (event: string, session: any) => {
+                    if (event === 'SIGNED_IN') {
+                        set({ session, user: session?.user || null, isAuthenticated: true });
+                    } else if (event === 'SIGNED_OUT') {
+                        set({ session: null, user: null, isAuthenticated: false, isResettingPassword: false });
+                    } else if (event === 'PASSWORD_RECOVERY') {
+                        set({ isResettingPassword: true });
+                    }
+                });
+
                 const sessionPromise = authService.getSession();
                 const timeoutPromise = new Promise<null>((resolve) =>
                     setTimeout(() => resolve(null), 5000)
@@ -176,6 +195,19 @@ export const useAuthStore = create<AuthState>()(
                 }
             } catch (error) {
                 set({ isLoading: false });
+            }
+        },
+
+        updatePassword: async (password: string) => {
+            try {
+                set({ isLoading: true, error: null });
+                await authService.updatePassword(password);
+                set({ isResettingPassword: false, isLoading: false });
+            } catch (error: unknown) {
+                console.error('Update password error:', error);
+                const appError = toAppError(error);
+                set({ error: appError.message, isLoading: false });
+                throw error;
             }
         },
     })

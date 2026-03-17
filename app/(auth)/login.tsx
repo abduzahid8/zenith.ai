@@ -191,7 +191,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     },
     inputLabel: {
         fontFamily: fonts.body.light,
-        fontSize: 14,
+        fontSize: 18,
         color: colors.text,
         marginBottom: 8,
     },
@@ -203,7 +203,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         borderRadius: 28,
         paddingHorizontal: 16,
         height: 52,
-        backgroundColor: colors.surfaceLight,
+        backgroundColor: colors.background,
         marginBottom: 20,
     },
     inputIcon: {

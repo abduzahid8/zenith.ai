@@ -56,7 +56,6 @@ const TaskDrawer: React.FC<TaskDrawerProps> = ({
                             <TouchableOpacity
                                 style={[styles.addButton, task.completed && styles.completedButton]}
                                 onPress={() => onCompleteTask(task.id)}
-                                disabled={task.completed}
                             >
                                 {task.completed ? (
                                     <Svg
@@ -105,7 +104,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         top: 0,
         bottom: 0,
         width: scale(286),
-        backgroundColor: colors.sessionTimer?.drawerBg || colors.background,
+        backgroundColor: '#102852', // User specified background
         zIndex: 101,
         paddingHorizontal: scale(25),
         display: 'flex',
@@ -135,7 +134,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         alignSelf: 'stretch',
     },
     taskCard: {
-        backgroundColor: colors.sessionTimer?.taskBg || colors.surface,
+        backgroundColor: '#08132A', // User specified object color
         borderRadius: scale(16),
         padding: scale(16),
         width: '100%',

@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     Animated,
     Image,
+    Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,7 +26,6 @@ interface HomeTabProps {
     /** When inside MainTabsScreen, use these to switch tabs instead of pushing routes */
     onDailyGoal?: () => void;
     onAICoach?: () => void;
-    onScreenTime?: () => void;
 }
 
 const HomeTab: React.FC<HomeTabProps> = ({
@@ -33,7 +33,6 @@ const HomeTab: React.FC<HomeTabProps> = ({
     iconTranslateY,
     onDailyGoal,
     onAICoach,
-    onScreenTime,
 }) => {
     const router = useRouter();
     const { colors } = useAppTheme();
@@ -104,7 +103,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                         resizeMode="contain"
                     />
                 </LinearGradient>
-            </TouchableOpacity>
+                        </TouchableOpacity>
 
             <View style={styles.bottomCardsRow}>
                 <TouchableOpacity
@@ -137,9 +136,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    onPress={() =>
-                        onScreenTime ? onScreenTime() : handleNavigate('/(app)/screen-time')
-                    }
+                    onPress={() => Alert.alert('Скоро', 'Этот раздел находится в разработке и скоро будет доступен.')}
                     activeOpacity={0.8}
                     style={[styles.cardShadowProp, { flex: 1 }]}
                 >

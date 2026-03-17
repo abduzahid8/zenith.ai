@@ -22,7 +22,7 @@ if (Platform.OS !== 'web') {
 
 export default function RootLayout() {
     const [appIsReady, setAppIsReady] = useState(false);
-    const { isAuthenticated, initialize, isLoading } = useAuthStore();
+    const { isAuthenticated, initialize, isLoading, isResettingPassword } = useAuthStore();
     const { hasCompletedOnboarding } = useUserProfileStore();
     const segments = useSegments();
     const router = useRouter();
@@ -78,6 +78,12 @@ export default function RootLayout() {
         // Wait for both app ready AND auth to finish before redirecting
         if (isLoading || !appIsReady) return;
 
+        // If we are in password recovery mode, force redirect to reset-password
+        if (isResettingPassword) {
+            router.replace('/(auth)/reset-password');
+            return;
+        }
+
         const inAuthGroup = segments[0] === '(auth)';
         const inAppGroup = segments[0] === '(app)';
         const isPrivacy = segments[0] === ('privacy' as any);
@@ -97,7 +103,7 @@ export default function RootLayout() {
                 }
             }
         }
-    }, [isAuthenticated, segments, isLoading, appIsReady, hasCompletedOnboarding]);
+    }, [isAuthenticated, segments, isLoading, appIsReady, hasCompletedOnboarding, isResettingPassword]);
 
     // Show loading screen only until fonts/app are ready (NOT blocked on auth)
     if (!appIsReady) {
