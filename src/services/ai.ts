@@ -14,7 +14,22 @@ async function invokeAI<T>(action: string, payload: Record<string, unknown>): Pr
     const supabase = getSupabase();
     
     // Debug: Check if user is authenticated
-    const { data: { session } } = await supabase.auth.getSession();
+    // Ensure we have a fresh session token
+    let { data: { session } } = await supabase.auth.getSession();
+    
+    // If session is missing or expired (within a 60-second buffer), refresh it
+    const isExpired = session?.expires_at ? (session.expires_at - Math.floor(Date.now() / 1000) < 60) : true;
+    
+    if (!session || isExpired) {
+        console.log('[AI Service] Session expired or missing, refreshing...');
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+            console.error('[AI Service] Failed to refresh session:', refreshError);
+        } else {
+            session = refreshData.session;
+        }
+    }
+
     console.log('[AI Service] Session exists:', !!session);
     console.log('[AI Service] User ID:', session?.user?.id);
     
