@@ -8,7 +8,7 @@ import {
     ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { typography, borderRadius } from '../theme';
+import { borderRadius } from '../theme';
 import { scaleWidth, scaleHeight, scaleFont } from '../theme/responsive';
 import { useAppTheme } from '../theme/useAppTheme';
 
@@ -58,8 +58,8 @@ export const HobbyCard: React.FC<HobbyCardProps> = ({
 }) => {
     const hobby = HOBBIES[id as keyof typeof HOBBIES];
     const bgColor = hobby?.color || '#1a1a2e';
-    const { colors } = useAppTheme();
-    const styles = useMemo(() => createStyles(colors), [colors]);
+    const { colors, typography } = useAppTheme();
+    const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
     return (
         <TouchableOpacity
@@ -88,7 +88,7 @@ export const HobbyCard: React.FC<HobbyCardProps> = ({
     );
 };
 
-const createStyles = (colors: any) => StyleSheet.create({
+const createStyles = (colors: any, typography: any) => StyleSheet.create({
     container: {
         width: scaleWidth(160),
         height: scaleHeight(200),

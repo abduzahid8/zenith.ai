@@ -18,7 +18,7 @@ export interface SessionSummaryViewProps {
 const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ tasks, startTime, onExit }) => {
     const completedTasks = tasks.filter(t => t.completed).sort((a, b) => (a.completedAt || 0) - (b.completedAt || 0));
     const scrollX = useRef(new Animated.Value(0)).current;
-    const pagerRef = useRef<PagerView>(null);
+    const pagerRef = useRef<any>(null);
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
 

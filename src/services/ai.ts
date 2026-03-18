@@ -1,7 +1,12 @@
-// AI Service — proxied through Supabase Edge Function
-// All API keys are stored server-side; the client never sees them.
+// AI Service — now running locally via Gemini API
+// ⚠️ SECURITY NOTE: API key is in the app bundle. Consider a backend proxy for production.
+// To switch back to edge function: set USE_LOCAL_AI = false
 
 import { getSupabase } from './supabase/client';
+import { localAiService } from './gemini';
+
+// Feature flag: true = use local Gemini, false = use edge function
+const USE_LOCAL_AI = true;
 
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
@@ -12,14 +17,14 @@ export interface ChatMessage {
 
 async function invokeAI<T>(action: string, payload: Record<string, unknown>): Promise<T> {
     const supabase = getSupabase();
-    
+
     // Debug: Check if user is authenticated
     // Ensure we have a fresh session token
     let { data: { session } } = await supabase.auth.getSession();
-    
+
     // If session is missing or expired (within a 60-second buffer), refresh it
     const isExpired = session?.expires_at ? (session.expires_at - Math.floor(Date.now() / 1000) < 60) : true;
-    
+
     if (!session || isExpired) {
         console.log('[AI Service] Session expired or missing, refreshing...');
         const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
@@ -32,21 +37,41 @@ async function invokeAI<T>(action: string, payload: Record<string, unknown>): Pr
 
     console.log('[AI Service] Session exists:', !!session);
     console.log('[AI Service] User ID:', session?.user?.id);
+    console.log('[AI Service] Token length:', session?.access_token?.length || 0);
+
+    const doInvoke = async () => {
+        // Use supabase.functions.invoke - auth is handled automatically by Edge Runtime
+        return await supabase.functions.invoke('ai-proxy', {
+            body: { action, ...payload },
+        });
+    };
+
+    let { data, error } = await doInvoke();
+
+    // If 401 (Invalid JWT), try to refresh the session and retry once
+    const status = (error as any)?.context?.status ?? (error as any)?.status;
+    console.log('[AI Service] Response status:', status, 'Type:', typeof status);
     
-    // Explicitly pass authorization header to the edge function
-    const { data, error } = await supabase.functions.invoke('ai-proxy', {
-        body: { action, ...payload },
-        headers: {
-            Authorization: `Bearer ${session?.access_token || ''}`,
-        },
-    });
+    if (status == 401) {
+        console.log('[AI Service] 401 encountered, attempting forced refresh...');
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+            console.error('[AI Service] Forced refresh failed:', refreshError);
+        } else if (refreshData.session) {
+            console.log('[AI Service] Refresh successful. New token length:', refreshData.session.access_token.length);
+            console.log('[AI Service] Retrying invocation...');
+            const retryResult = await doInvoke();
+            data = retryResult.data;
+            error = retryResult.error;
+        }
+    }
 
     if (error) {
         console.error(`AI proxy error (${action}):`, error);
         if ('context' in error) {
             const context = (error as any).context;
             console.error('Error Status:', context.status);
-            
+
             // In React Native, the body might be a Blob that needs to be read
             const extractErrorBody = async () => {
                 try {
@@ -97,6 +122,9 @@ export const aiService = {
         messages: ChatMessage[],
         hobby?: string
     ): Promise<string> => {
+        if (USE_LOCAL_AI) {
+            return localAiService.sendMessage(messages, hobby);
+        }
         try {
             return await invokeAI<string>('sendMessage', { messages, hobby });
         } catch (error) {
@@ -112,6 +140,9 @@ export const aiService = {
     getHobbyRecommendations: async (
         answers: Record<number, number>
     ): Promise<string[]> => {
+        if (USE_LOCAL_AI) {
+            return localAiService.getHobbyRecommendations(answers);
+        }
         try {
             const parsed = await invokeAI<string[]>('getHobbyRecommendations', { answers });
             return Array.isArray(parsed) ? parsed : ['chess', 'video_editing', 'drawing'];
@@ -126,6 +157,9 @@ export const aiService = {
         dayOfWeek: number,
         weekNumber: number
     ): Promise<string[]> => {
+        if (USE_LOCAL_AI) {
+            return localAiService.generateDailyTasks(hobby, dayOfWeek, weekNumber);
+        }
         try {
             const parsed = await invokeAI<string[]>('generateDailyTasks', { hobby, dayOfWeek, weekNumber });
             return Array.isArray(parsed) ? parsed : ['Изучить основы', 'Практиковаться 30 минут'];
@@ -139,6 +173,9 @@ export const aiService = {
         blockedApp: string,
         userHobby: string
     ): Promise<{ type: string; message: string; action: string }> => {
+        if (USE_LOCAL_AI) {
+            return localAiService.generateSubstituteContent(blockedApp, userHobby);
+        }
         try {
             const parsed = await invokeAI<{ type?: string; message?: string; action?: string }>(
                 'generateSubstituteContent', { blockedApp, userHobby }
@@ -162,6 +199,9 @@ export const aiService = {
         userProfile: Record<string, unknown>,
         goals: string[]
     ): Promise<Array<{ title: string; category: string; reason: string }>> => {
+        if (USE_LOCAL_AI) {
+            return localAiService.getContentRecommendations(userProfile, goals);
+        }
         try {
             const parsed = await invokeAI<Array<{ title: string; category: string; reason: string }>>(
                 'getContentRecommendations', { userProfile, goals }
@@ -187,6 +227,9 @@ export const aiService = {
         match_score: number;
         reasons: string[];
     }>> => {
+        if (USE_LOCAL_AI) {
+            return localAiService.getPersonalizedEarningIdeas(userProfile, hobbies);
+        }
         try {
             type EarningIdea = {
                 title: string;
@@ -214,6 +257,9 @@ export const aiService = {
         userLevel: string,
         weekNumber: number
     ): Promise<Array<{ day: number; tasks: string[]; focus: string }>> => {
+        if (USE_LOCAL_AI) {
+            return localAiService.generateWeeklyPlan(hobby, userLevel, weekNumber);
+        }
         try {
             const parsed = await invokeAI<Array<{ day: number; tasks: string[]; focus: string }>>(
                 'generateWeeklyPlan', { hobby, userLevel, weekNumber }
@@ -239,6 +285,9 @@ export const aiService = {
         strengths: string[];
         growth_areas: string[];
     }> => {
+        if (USE_LOCAL_AI) {
+            return localAiService.analyzeUserProfile(quizAnswers, behaviorData);
+        }
         try {
             const parsed = await invokeAI<Record<string, unknown>>(
                 'analyzeUserProfile', { quizAnswers, behaviorData }

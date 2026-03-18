@@ -52,4 +52,13 @@ export const authService = {
         if (error) throw error;
         return data;
     },
+
+    resendConfirmation: async (email: string) => {
+        const supabase = getSupabase();
+        const { error } = await supabase.auth.resend({
+            type: 'signup',
+            email,
+        });
+        if (error) throw error;
+    },
 };
