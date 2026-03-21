@@ -9,6 +9,7 @@ import { useTaskStore } from '../store/taskStore';
 import { useAuthStore } from '../store/authStore';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { sessionService } from '../services/supabase/sessions';
+import { useT } from '../store/languageStore';
 
 export type TimerStatus = 'idle' | 'running' | 'paused';
 
@@ -16,17 +17,18 @@ const TOTAL_TIME = 30 * 60; // 30 minutes
 const STORAGE_KEY_PREF = 'session_stop_confirm_pref';
 const STORAGE_KEY_START_TS = 'session_timer_start_ts';
 
-const TYPE_LABEL: Record<string, string> = {
-    theory: 'Теория',
-    practice: 'Практика',
-    analysis: 'Анализ',
-    puzzles: 'Задачи',
-};
-
 export function useTimer() {
     const { dailyTasks, completeTask } = useTaskStore();
     const user = useAuthStore(s => s.user);
     const { selectedHobby } = useUserProfileStore();
+    const t = useT();
+
+    const TYPE_LABEL: Record<string, string> = {
+        theory: t('Узнай'),
+        practice: t('Сделай'),
+        analysis: t('Углуби 2'),
+        puzzles: t('Углуби 1'),
+    };
 
     // --- Timer state ---
     const [totalTime, setTotalTime] = useState(30 * 60); // Default 30 minutes
@@ -43,6 +45,9 @@ export function useTimer() {
 
     // --- Tasks derived from real store ---
     const [tasks, setTasks] = useState<SessionTask[]>([]);
+
+    // --- Locked tasks: completed BEFORE the current session started ---
+    const [lockedTaskIds, setLockedTaskIds] = useState<Set<string>>(new Set());
 
     // Sync tasks from store whenever dailyTasks changes
     useEffect(() => {
@@ -225,6 +230,8 @@ export function useTimer() {
                         text: 'Начать',
                         onPress: () => {
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                            // Lock tasks already completed before this session
+                            setLockedTaskIds(new Set(tasks.filter(t => t.completed).map(t => t.id)));
                             setTimerStatus('running');
                         },
                     },
@@ -233,6 +240,8 @@ export function useTimer() {
             return;
         }
 
+        // Lock tasks already completed before this session starts
+        setLockedTaskIds(new Set(tasks.filter(t => t.completed).map(t => t.id)));
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         setTimerStatus('running');
     }, [tasks]);
@@ -245,11 +254,15 @@ export function useTimer() {
     const handleReset = useCallback(() => {
         setTimeLeft(totalTime);
         setTimerStatus('idle');
+        setLockedTaskIds(new Set());
     }, [totalTime]);
 
     const handleToggleTask = useCallback((id: string) => {
         const selectedTask = tasks.find(task => task.id === id);
         if (!selectedTask) return;
+
+        // Tasks completed before this session started are locked — cannot be toggled
+        if (lockedTaskIds.has(id)) return;
 
         const isCurrentlyCompleted = selectedTask.completed;
 
@@ -269,16 +282,18 @@ export function useTimer() {
         );
 
         // Persist toggling to real task store and Supabase
-        if (user?.id && selectedTask.storeTaskId) {
+        // Skip if storeTaskId is a temporary ID (Supabase requires a real UUID)
+        const isRealId = selectedTask.storeTaskId && !selectedTask.storeTaskId.startsWith('temp-');
+        if (user?.id && isRealId) {
             const storeAction = isCurrentlyCompleted
-                ? useTaskStore.getState().uncompleteTask(user.id, selectedTask.storeTaskId)
-                : completeTask(user.id, selectedTask.storeTaskId);
+                ? useTaskStore.getState().uncompleteTask(user.id, selectedTask.storeTaskId!)
+                : completeTask(user.id, selectedTask.storeTaskId!);
             
             storeAction.catch(err =>
                 console.error('Failed to persist task toggle:', err)
             );
         }
-    }, [user, completeTask, tasks]);
+    }, [user, completeTask, tasks, lockedTaskIds]);
 
     const handleStopPress = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -350,6 +365,7 @@ export function useTimer() {
         // Tasks
         tasks,
         handleToggleTask,
+        lockedTaskIds,
 
         // Drawer
         isTaskListVisible,

@@ -25,6 +25,8 @@ export interface TaskDrawerProps {
     onCompleteTask: (id: string) => void;
     /** Called when the drawer should close (backdrop tap) */
     onClose: () => void;
+    /** Task IDs that were completed before this session — cannot be toggled */
+    lockedTaskIds?: Set<string>;
 }
 
 const TaskDrawer: React.FC<TaskDrawerProps> = ({
@@ -33,6 +35,7 @@ const TaskDrawer: React.FC<TaskDrawerProps> = ({
     backdropAnim,
     onCompleteTask,
     onClose,
+    lockedTaskIds = new Set(),
 }) => {
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
@@ -49,43 +52,52 @@ const TaskDrawer: React.FC<TaskDrawerProps> = ({
                 <Text style={styles.drawerTitle}>Твои задачи</Text>
 
                 <View style={styles.componentsContainer}>
-                    {tasks.map(task => (
-                        <View key={task.id} style={styles.taskCard}>
-                            <Text style={styles.taskTitle}>{task.title}</Text>
-                            <Text style={styles.taskSubtitle}>{task.subtitle}</Text>
-                            <TouchableOpacity
-                                style={[styles.addButton, task.completed && styles.completedButton]}
-                                onPress={() => onCompleteTask(task.id)}
-                            >
-                                {task.completed ? (
-                                    <Svg
-                                        width={scale(18)}
-                                        height={scale(12)}
-                                        viewBox="0 0 18 12"
-                                        fill="none"
-                                    >
-                                        <Polyline
-                                            points="2 6 6 10 16 2"
-                                            stroke="#E4FAEB"
-                                            strokeWidth="5"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
+                    {tasks.map(task => {
+                        const isLocked = lockedTaskIds.has(task.id);
+                        return (
+                            <View key={task.id} style={[styles.taskCard, isLocked && styles.taskCardLocked]}>
+                                <Text style={styles.taskTitle}>{task.title}</Text>
+                                <Text style={styles.taskSubtitle}>{task.subtitle}</Text>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.addButton,
+                                        task.completed && styles.completedButton,
+                                        isLocked && styles.lockedButton,
+                                    ]}
+                                    onPress={() => !isLocked && onCompleteTask(task.id)}
+                                    activeOpacity={isLocked ? 1 : 0.7}
+                                    disabled={isLocked}
+                                >
+                                    {task.completed ? (
+                                        <Svg
+                                            width={scale(18)}
+                                            height={scale(12)}
+                                            viewBox="0 0 18 12"
+                                            fill="none"
+                                        >
+                                            <Polyline
+                                                points="2 6 6 10 16 2"
+                                                stroke={isLocked ? 'rgba(228,250,235,0.45)' : '#E4FAEB'}
+                                                strokeWidth="7"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            />
+                                        </Svg>
+                                    ) : (
+                                        <Image
+                                            source={require('../../../icons/plus.png')}
+                                            style={{
+                                                width: scale(21),
+                                                height: scale(20),
+                                                tintColor: colors.home?.darkText || colors.text
+                                            }}
+                                            resizeMode="contain"
                                         />
-                                    </Svg>
-                                ) : (
-                                    <Image
-                                        source={require('../../../icons/plus.png')}
-                                        style={{
-                                            width: scale(21),
-                                            height: scale(20),
-                                            tintColor: colors.home?.darkText || colors.text
-                                        }}
-                                        resizeMode="contain"
-                                    />
-                                )}
-                            </TouchableOpacity>
-                        </View>
-                    ))}
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        );
+                    })}
                 </View >
             </Animated.View >
         </>
@@ -163,6 +175,12 @@ const createStyles = (colors: any) => StyleSheet.create({
     completedButton: {
         backgroundColor: colors.sessionTimer?.taskDone || colors.success,
         borderRadius: scale(20),
+    },
+    taskCardLocked: {
+        opacity: 0.6,
+    },
+    lockedButton: {
+        backgroundColor: 'rgba(60, 235, 89, 0.25)',
     },
 });
 

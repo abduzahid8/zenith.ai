@@ -78,7 +78,7 @@ export const useTaskStore = create<TaskState>()(
                 const optimisticTask: Task = {
                     id: tempId,
                     user_id: userId,
-                    title: template?.title || 'Новая задача',
+                    title: template?.title || 'New Task',
                     type,
                     status: 'pending',
                     scheduled_date: today,
@@ -125,6 +125,9 @@ export const useTaskStore = create<TaskState>()(
                     )
                 }));
 
+                // Skip Supabase call for temp IDs (task not yet persisted)
+                if (taskId.startsWith('temp-')) return;
+
                 try {
                     const updated = await taskService.completeTask(userId, taskId, feedback);
                     if (updated) {
@@ -153,6 +156,9 @@ export const useTaskStore = create<TaskState>()(
                         t.id === taskId ? { ...t, status: 'pending' } : t
                     )
                 }));
+
+                // Skip Supabase call for temp IDs (task not yet persisted)
+                if (taskId.startsWith('temp-')) return;
 
                 try {
                     const updated = await taskService.uncompleteTask(userId, taskId);

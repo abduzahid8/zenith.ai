@@ -161,7 +161,7 @@ async function callGemini(
             if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
                 return data.candidates[0].content.parts[0].text;
             }
-            return 'Извините, получен пустой ответ от сервиса.';
+            return 'Sorry, received an empty response from the service.';
         }
 
         lastErrorText = await response.text();
@@ -188,24 +188,24 @@ async function callGemini(
 
 // ── Action Handlers ──────────────────────────────────────
 
-const AI_COACH_SYSTEM_PROMPT = `Ты - ИИ-наставник в приложении zenyth.ai. Твоя задача - помогать пользователю с его хобби и личным развитием.
+const AI_COACH_SYSTEM_PROMPT = `You are an AI coach in the zenyth.ai app. Your task is to help the user with their hobbies and personal development.
 
-Твои основные функции:
-1. Давать советы по выбранному хобби пользователя
-2. Мотивировать и поддерживать прогресс
-3. Помогать с планированием занятий
-4. Отвечать на вопросы о техниках и методах обучения
+Your main functions:
+1. Give advice on the user's chosen hobby
+2. Motivate and support progress
+3. Help with activity planning
+4. Answer questions about techniques and learning methods
 
-Стиль общения:
-- Дружелюбный и поддерживающий
-- Конкретный и практичный
-- Мотивирующий, но не навязчивый
-- Отвечай на русском языке`;
+Communication style:
+- Friendly and supportive
+- Specific and practical
+- Motivating, but not intrusive
+- Always answer in English`;
 
 const HOBBY_PROMPTS: Record<string, string> = {
-    chess: `Ты специализируешься на шахматах: дебюты, тактика, стратегия, эндшпиль, анализ.`,
-    video_editing: `Ты специализируешься на видео монтаже: монтаж, цветокоррекция, звук, эффекты.`,
-    drawing: `Ты специализируешься на рисовании: перспектива, анатомия, светотень, композиция.`,
+    chess: `You specialize in chess: openings, tactics, strategy, endgame, analysis.`,
+    video_editing: `You specialize in video editing: cutting, color correction, sound, effects.`,
+    drawing: `You specialize in drawing: perspective, anatomy, light and shadow, composition.`,
 };
 
 async function handleSendMessage(body: RequestBody): Promise<string> {
@@ -217,84 +217,84 @@ async function handleSendMessage(body: RequestBody): Promise<string> {
 }
 
 async function handleHobbyRecommendations(body: RequestBody): Promise<string> {
-    const prompt = `На основе ответов пользователя на анкету, рекомендуй 3 хобби из списка: шахматы, видео монтаж, рисование.
-Ответы: ${JSON.stringify(body.answers)}
-Верни только JSON массив с ID хобби: ["chess", "drawing", "video_editing"]`;
+    const prompt = `Based on the user's quiz answers, recommend 3 hobbies from the list: chess, video_editing, drawing.
+Answers: ${JSON.stringify(body.answers)}
+Return ONLY a JSON array with hobby IDs: ["chess", "drawing", "video_editing"]`;
 
     return callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты помощник, который анализирует ответы анкеты. Отвечай только JSON массивом.',
+        'You are an assistant that analyzes quiz answers. Reply only with a JSON array.',
         0.3, 100,
     );
 }
 
 async function handleDailyTasks(body: RequestBody): Promise<string> {
-    const hobbyName = ({ chess: 'шахматы', video_editing: 'видео монтаж', drawing: 'рисование' } as Record<string, string>)[body.hobby ?? ''] ?? body.hobby;
-    const prompt = `Создай 2-3 задачи для "${hobbyName}" на ${body.dayOfWeek} день недели ${body.weekNumber}.\nВерни JSON массив строк.`;
+    const hobbyName = ({ chess: 'chess', video_editing: 'video editing', drawing: 'drawing' } as Record<string, string>)[body.hobby ?? ''] ?? body.hobby;
+    const prompt = `Create 2-3 tasks for "${hobbyName}" on day of week ${body.dayOfWeek}, week number ${body.weekNumber}.\nReturn JSON array of strings in English.`;
     return callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты генератор учебных задач. Отвечай только JSON массивом строк.',
+        'You are an educational task generator. Reply ONLY with a JSON array of strings.',
         0.7, 200,
     );
 }
 
 async function handleSubstituteContent(body: RequestBody): Promise<string> {
-    const prompt = `Пользователь собирается открыть ${body.blockedApp}. Хобби: ${body.userHobby}.
-Создай мотивирующее сообщение. Верни JSON: {"type":"reminder|challenge|insight|motivation","message":"текст","action":"действие"}`;
+    const prompt = `User is about to open ${body.blockedApp}. Hobby: ${body.userHobby}.
+Create a motivating message in English. Return JSON: {"type":"reminder|challenge|insight|motivation","message":"text","action":"action_text"}`;
     return callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты помощник, который мягко мотивирует. Отвечай только JSON.',
+        'You are an assistant that gently motivates. Reply ONLY with JSON.',
         0.8, 200,
     );
 }
 
 async function handleScreenTimeAnalysis(body: RequestBody): Promise<string> {
-    const prompt = `Проанализируй экранное время: ${JSON.stringify(body.weeklyData)}
-Верни JSON: {"insights":["инсайт1"],"suggestions":["совет1"]}`;
+    const prompt = `Analyze screen time: ${JSON.stringify(body.weeklyData)}
+Return JSON in English: {"insights":["insight1"],"suggestions":["suggestion1"]}`;
     return callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты аналитик поведения. Отвечай только JSON.',
+        'You are a behavior analyst. Reply ONLY with JSON.',
         0.6, 300,
     );
 }
 
 async function handleContentRecommendations(body: RequestBody): Promise<string> {
-    const prompt = `Профиль: ${JSON.stringify(body.userProfile)}\nЦели: ${(body.goals ?? []).join(', ')}
-Рекомендуй 3-5 типов контента. Верни JSON массив: [{"title":"","category":"","reason":""}]`;
+    const prompt = `Profile: ${JSON.stringify(body.userProfile)}\nGoals: ${(body.goals ?? []).join(', ')}
+Recommend 3-5 types of content. Return JSON array in English: [{"title":"","category":"","reason":""}]`;
     return callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты рекомендательная система контента. Отвечай только JSON.',
+        'You are a content recommendation engine. Reply ONLY with JSON.',
         0.7, 400,
     );
 }
 
 async function handleEarningIdeas(body: RequestBody): Promise<string> {
-    const prompt = `Профиль: ${JSON.stringify(body.userProfile)}\nХобби: ${(body.hobbies ?? []).join(', ')}
-Предложи 3-5 способов заработка. Верни JSON массив.`;
+    const prompt = `Profile: ${JSON.stringify(body.userProfile)}\nHobbies: ${(body.hobbies ?? []).join(', ')}
+Suggest 3-5 ways to earn money. Return a JSON array in English.`;
     return callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты карьерный консультант. Отвечай только JSON.',
+        'You are a career consultant. Reply ONLY with JSON.',
         0.7, 600,
     );
 }
 
 async function handleWeeklyPlan(body: RequestBody): Promise<string> {
-    const hobbyName = ({ chess: 'шахматы', video_editing: 'видео монтаж', drawing: 'рисование' } as Record<string, string>)[body.hobby ?? ''] ?? body.hobby;
-    const prompt = `Создай недельный план для "${hobbyName}". Уровень: ${body.userLevel}. Неделя: ${body.weekNumber}.
-Верни JSON: [{"day":1,"tasks":["задача"],"focus":"тема"}]`;
+    const hobbyName = ({ chess: 'chess', video_editing: 'video editing', drawing: 'drawing' } as Record<string, string>)[body.hobby ?? ''] ?? body.hobby;
+    const prompt = `Create a weekly plan for "${hobbyName}". Level: ${body.userLevel}. Week: ${body.weekNumber}.
+Return JSON in English: [{"day":1,"tasks":["task"],"focus":"topic"}]`;
     return callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты составитель учебных планов. Отвечай только JSON.',
+        'You are a study planner. Reply ONLY with JSON.',
         0.7, 500,
     );
 }
 
 async function handleProfileAnalysis(body: RequestBody): Promise<string> {
-    const prompt = `Ответы: ${JSON.stringify(body.quizAnswers)}\nПоведение: ${JSON.stringify(body.behaviorData ?? {})}
-Проанализируй и верни JSON: {"personality_type":"","temperament":"","motivation_style":"","strengths":[],"growth_areas":[]}`;
+    const prompt = `Answers: ${JSON.stringify(body.quizAnswers)}\nBehavior: ${JSON.stringify(body.behaviorData ?? {})}
+Analyze and return JSON in English: {"personality_type":"","temperament":"","motivation_style":"","strengths":[],"growth_areas":[]}`;
     return callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты психолог-аналитик. Отвечай только JSON.',
+        'You are a psychoanalyst. Reply ONLY with JSON.',
         0.5, 300,
     );
 }

@@ -27,8 +27,8 @@ export default function AuthScreen() {
         try {
             await signInWithGoogle();
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : 'Не удалось войти через Google';
-            Alert.alert('Ошибка', msg);
+            const msg = error instanceof Error ? error.message : 'Failed to sign in with Google';
+            Alert.alert('Error', msg);
         }
     };
 
@@ -36,8 +36,8 @@ export default function AuthScreen() {
         try {
             await signInWithApple();
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : 'Не удалось войти через Apple';
-            Alert.alert('Ошибка', msg);
+            const msg = error instanceof Error ? error.message : 'Failed to sign in with Apple';
+            Alert.alert('Error', msg);
         }
     };
 
@@ -56,13 +56,13 @@ export default function AuthScreen() {
             {/* Header with Star Logo - LEFT aligned */}
             <View style={styles.headerContainer}>
                 <LogoNew variant="icon" width={32} height={32} />
-                <Text style={styles.headerTitle}>Давайте начнем</Text>
+                <Text style={styles.headerTitle}>Let's get started</Text>
             </View>
 
             {/* Subtitle - LEFT aligned */}
             <View style={styles.subtitleContainer}>
                 <Text style={styles.subtitleText}>
-                    Поможем тебе перестать залипать и начать заниматься тем, что реально развивает
+                    Help you stop doom-scrolling and start doing what actually grows you
                 </Text>
             </View>
 
@@ -73,12 +73,12 @@ export default function AuthScreen() {
             {/* Main Action Buttons */}
             <View style={styles.actionContainer}>
                 <Button
-                    title="Войти"
+                    title="Sign In"
                     onPress={handleEmailSignIn}
                     variant="primary"
                 />
                 <Button
-                    title="Зарегистрироваться"
+                    title="Sign Up"
                     onPress={handleEmailSignUp}
                     variant="primary"
                 />
@@ -90,7 +90,7 @@ export default function AuthScreen() {
             {/* Divider */}
             <View style={styles.dividerContainer}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>Или</Text>
+                <Text style={styles.dividerText}>Or</Text>
                 <View style={styles.dividerLine} />
             </View>
 
@@ -105,7 +105,7 @@ export default function AuthScreen() {
                         style={styles.socialIcon}
                         resizeMode="contain"
                     />
-                    <Text style={styles.socialButtonText}>Войти с Google</Text>
+                    <Text style={styles.socialButtonText}>Sign in with Google</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -113,7 +113,7 @@ export default function AuthScreen() {
                     onPress={handleAppleSignIn}
                 >
                     <FontAwesome name="apple" size={24} color="black" />
-                    <Text style={styles.socialButtonText}>Войти с Apple</Text>
+                    <Text style={styles.socialButtonText}>Sign in with Apple</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>

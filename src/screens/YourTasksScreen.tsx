@@ -14,29 +14,29 @@ import { useAppTheme } from '../theme/useAppTheme';
 const categories: { type: TaskType; label: string; icon: any; bg: string; subtitle: string }[] = [
     {
         type: 'theory',
-        label: 'Теория',
-        subtitle: 'Изучить что-то новое',
+        label: 'Theory',
+        subtitle: 'Learn something new',
         icon: require('../../icons/book.png'),
         bg: '#9CE4FD'
     },
     {
         type: 'practice',
-        label: 'Практика',
-        subtitle: 'Отработать навыки',
+        label: 'Practice',
+        subtitle: 'Train your skills',
         icon: require('../../icons/dumbbell.png'),
         bg: '#7CB9FF'
     },
     {
         type: 'analysis',
-        label: 'Анализ',
-        subtitle: 'Работать над ошибками',
+        label: 'Analysis',
+        subtitle: 'Work on mistakes',
         icon: require('../../icons/magnifier.png'),
         bg: '#F4C0FD'
     },
     {
         type: 'puzzles',
-        label: 'Задачи',
-        subtitle: 'Решать головоломки',
+        label: 'Tasks',
+        subtitle: 'Solve puzzles',
         icon: require('../../icons/puzzle.png'),
         bg: '#FCB5FD'
     },
@@ -70,14 +70,14 @@ export const YourTasksScreen = () => {
                         size={scale(24)}
                         color={colors.text}
                     />
-                    <Text style={styles.backText}>Назад</Text>
+                    <Text style={styles.backText}>Back</Text>
                 </TouchableOpacity>
-                <Text style={styles.title}>Твои задачи</Text>
+                <Text style={styles.title}>Your Tasks</Text>
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
                 <Text style={styles.subtitle}>
-                    Выберите категорию задачи, которую хотите добавить в свой план на сегодня.
+                    Select a task category to add to your plan for today.
                 </Text>
 
                 <View style={styles.cardsContainer}>
@@ -106,7 +106,7 @@ export const YourTasksScreen = () => {
                         onPress={() => router.push('/subscription')}
                     >
                         <Text style={styles.upgradeText}>
-                            Достигнут лимит задач. Перейдите на Premium, чтобы добавить больше.
+                            Task limit reached. Upgrade to Premium to add more.
                         </Text>
                     </TouchableOpacity>
                 )}

@@ -17,7 +17,6 @@ export const sessionService = {
                 duration_seconds: durationSeconds,
                 focus_score: options?.focusScore,
                 notes: options?.notes,
-                tasks_completed: options?.tasksCompleted
             })
             .select()
             .single();

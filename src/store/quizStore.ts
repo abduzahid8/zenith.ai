@@ -6,92 +6,92 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const QUIZ_QUESTIONS = [
     {
         id: 1,
-        question: 'Как ты обычно решаешь сложные задачи?',
+        question: 'How do you usually approach difficult problems?',
         options: [
-            'Думаю логически, строю план',       // A
-            'Читаю и разбираюсь в теме',         // B
-            'Просто пробую и смотрю что выйдет', // C
+            'I think logically and build a plan',          // A
+            'I read and research the topic',               // B
+            'I just try and see what happens',             // C
         ],
     },
     {
         id: 2,
-        question: 'Что тебе легче запомнить?',
+        question: 'What is easier for you to remember?',
         options: [
-            'Правило или алгоритм',              // A
-            'Слово, фразу или историю',          // B
-            'Действие которое сам повторил',     // C
+            'A rule or algorithm',                         // A
+            'A word, phrase or story',                     // B
+            'An action I repeated myself',                 // C
         ],
     },
     {
         id: 3,
-        question: 'Видишь незнакомую тему — первая реакция?',
+        question: 'You see an unfamiliar topic — first reaction?',
         options: [
-            'Хочу понять как это устроено',      // A
-            'Хочу понять зачем это нужно',       // B
-            'Хочу сразу попробовать',            // C
+            'I want to understand how it works',           // A
+            'I want to understand why it matters',         // B
+            'I want to try it right away',                 // C
         ],
     },
     {
         id: 4,
-        question: 'Есть свободный час — что выберешь?',
+        question: 'You have a free hour — what do you choose?',
         options: [
-            'Что-то стратегическое или логическое', // A
-            'Почитать или выучить что-то новое',    // B
-            'Сделать что-то руками',                // C
+            'Something strategic or logical',              // A
+            'Read or learn something new',                 // B
+            'Make something with my hands',                // C
         ],
     },
     {
         id: 5,
-        question: 'Как ты учишь новое?',
+        question: 'How do you learn new things?',
         options: [
-            'Строю схему — логика и структура',  // A
-            'Запоминаю через смысл',             // B
-            'Пробую и смотрю что получится',     // C
+            'I build a scheme — logic and structure',      // A
+            'I memorize through meaning',                  // B
+            'I try and see what comes out',                // C
         ],
     },
     {
         id: 6,
-        question: 'Что тебе интереснее?',
+        question: 'What interests you more?',
         options: [
-            'Найти правильный ответ',            // A
-            'Понять почему именно так',          // B
-            'Сделать что-то рабочее',            // C
+            'Finding the correct answer',                  // A
+            'Understanding why it is that way',            // B
+            'Making something that works',                 // C
         ],
     },
     {
         id: 7,
-        question: 'Зачем тебе хобби?',
+        question: 'Why do you want a hobby?',
         options: [
-            'Хочу навык для карьеры',                    // A
-            'Хочу лучше концентрироваться',              // B
-            'Хочу заменить соцсети чем-то полезным',     // C
+            'I want a skill useful for my career',         // A
+            'I want to improve my focus',                  // B
+            'I want to replace social media with something useful', // C
         ],
     },
     {
         id: 8,
-        question: 'Что хочешь прокачать прямо сейчас?',
+        question: 'What do you want to improve right now?',
         options: [
-            'Программирование или логику',       // A
-            'Язык',                              // B
-            'Концентрацию и мышление',           // C
+            'Coding or logic',                             // A
+            'Language skills',                             // B
+            'Focus and thinking',                          // C
         ],
     },
     {
         id: 9,
-        question: 'Сложная задача — что делаешь?',
+        question: 'Tough task — what do you do?',
         options: [
-            'Разбиваю на шаги',                  // A
-            'Ищу объяснение',                    // B
-            'Пробую разные варианты',            // C
+            'I break it into steps',                       // A
+            'I look for an explanation',                   // B
+            'I try different approaches',                  // C
         ],
     },
     {
         id: 10,
-        question: 'Что тебе проще запомнить?',
+        question: 'What is easier for you to retain?',
         options: [
-            'Алгоритм или правило',              // A
-            'Слово или историю',                 // B
-            'То что сам сделал руками',          // C
+            'An algorithm or rule',                        // A
+            'A word or story',                             // B
+            'Something I did with my own hands',           // C
         ],
     },
 ];

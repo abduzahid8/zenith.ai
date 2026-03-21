@@ -101,15 +101,15 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
     const getTitleForType = (type: TaskType) => {
         switch (type) {
             case 'theory':
-                return 'Узнай';
+                return t('Узнай');
             case 'practice':
-                return 'Сделай';
+                return t('Сделай');
             case 'analysis':
-                return 'Углуби 2';
+                return t('Углуби 2');
             case 'puzzles':
-                return 'Углуби 1';
+                return t('Углуби 1');
             default:
-                return 'Задача';
+                return t('Задача');
         }
     };
 

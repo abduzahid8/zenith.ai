@@ -32,7 +32,7 @@ export const CategoryTasksScreen = () => {
             router.back();
             router.back();
         } catch (e: any) {
-            Alert.alert('Ошибка', e.message || 'Не удалось добавить задачу');
+            Alert.alert('Error', e.message || 'Failed to add task');
         }
     };
 
@@ -46,14 +46,14 @@ export const CategoryTasksScreen = () => {
                         size={scale(24)}
                         color={colors.text}
                     />
-                    <Text style={styles.backText}>Назад</Text>
+                    <Text style={styles.backText}>Back</Text>
                 </TouchableOpacity>
                 <Text style={styles.title}>{categoryLabel}</Text>
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
                 <Text style={styles.subtitle}>
-                    Выберите задачу, которую хотите добавить:
+                    Select a task you want to add:
                 </Text>
 
                 <View style={styles.listContainer}>
@@ -69,7 +69,7 @@ export const CategoryTasksScreen = () => {
                             >
                                 <View style={styles.textContainer}>
                                     <Text style={styles.taskTitle}>{template.title}</Text>
-                                    <Text style={styles.taskDuration}>{template.duration} мин</Text>
+                                    <Text style={styles.taskDuration}>{template.duration} min</Text>
                                 </View>
                                 {isAdded ? (
                                     <Image source={require('../../icons/checkbox-checked.png')} style={styles.checkIcon} />

@@ -38,10 +38,10 @@ export default function EmailConfirmationScreen() {
             if (supported) {
                 Linking.openURL(mailUrl);
             } else {
-                Alert.alert('Почта', 'Не удалось открыть почтовое приложение. Вы можете зайти в почту через браузер.');
+                Alert.alert('Email', "Couldn't open mail app. You can access your email through a browser.");
             }
         }).catch(() => {
-            Alert.alert('Ошибка', 'Произошла ошибка при открытии почтового приложения.');
+            Alert.alert('Error', 'An error occurred while opening the mail app.');
         });
     }, []);
 
@@ -50,10 +50,10 @@ export default function EmailConfirmationScreen() {
         setIsResending(true);
         try {
             await authService.resendConfirmation(email);
-            Alert.alert('Отправлено', 'Письмо с подтверждением отправлено повторно.');
+            Alert.alert('Sent', 'Confirmation email resent successfully.');
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : 'Не удалось отправить письмо';
-            Alert.alert('Ошибка', msg);
+            const msg = error instanceof Error ? error.message : 'Failed to send email';
+            Alert.alert('Error', msg);
         } finally {
             setIsResending(false);
         }
@@ -70,7 +70,7 @@ export default function EmailConfirmationScreen() {
             {/* Header */}
             <View style={styles.headerContainer}>
                 <LogoNew variant="icon" width={36} height={36} color={colors.text} />
-                <Text style={styles.headerTitle}>Подтвердите почту</Text>
+                <Text style={styles.headerTitle}>Confirm Your Email</Text>
             </View>
 
             {/* Content */}
@@ -80,19 +80,19 @@ export default function EmailConfirmationScreen() {
                     <MailSentIcon />
                 </View>
 
-                <Text style={styles.messageTitle}>Письмо отправлено!</Text>
+                <Text style={styles.messageTitle}>Email sent!</Text>
                 <Text style={styles.messageBody}>
-                    Мы отправили письмо с подтверждением на{' '}
-                    <Text style={styles.emailHighlight}>{email || 'вашу почту'}</Text>.
+                    We sent a confirmation email to{' '}
+                    <Text style={styles.emailHighlight}>{email || 'your inbox'}</Text>.
                     {'\n\n'}
-                    Перейдите по ссылке в письме, чтобы завершить регистрацию.
+                    Click the link in the email to complete your registration.
                 </Text>
             </View>
 
             {/* Actions */}
             <View style={styles.actionsContainer}>
                 <Button
-                    title="Открыть почту"
+                    title="Open Mail"
                     onPress={handleOpenMail}
                     variant="primary"
                     size="large"
@@ -106,12 +106,12 @@ export default function EmailConfirmationScreen() {
                     style={styles.resendButton}
                 >
                     <Text style={[styles.resendText, isResending && styles.resendTextDisabled]}>
-                        {isResending ? 'Отправляем...' : 'Отправить ещё раз'}
+                        {isResending ? 'Sending...' : 'Resend email'}
                     </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={handleBackToLogin} style={styles.backButton}>
-                    <Text style={styles.backText}>Назад к входу</Text>
+                    <Text style={styles.backText}>Back to Sign In</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>

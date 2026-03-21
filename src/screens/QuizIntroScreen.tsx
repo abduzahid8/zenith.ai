@@ -35,18 +35,18 @@ export default function QuizIntroScreen() {
 
             {/* Content */}
             <View style={styles.contentContainer}>
-                <Text style={styles.titleText}>Найди своё дело</Text>
+                <Text style={styles.titleText}>Find your thing</Text>
                 <Text style={styles.subtitleText}>
-                    Ответь на несколько вопросов{'\n'}
-                    и мы подберём занятие, которое{'\n'}
-                    подойдёт именно тебе.
+                    Answer a few questions{'\n'}
+                    and we'll find an activity{'\n'}
+                    that suits you perfectly.
                 </Text>
             </View>
 
             {/* Bottom button */}
             <View style={styles.buttonContainer}>
                 <Button
-                    title="Приступим"
+                    title="Let's go"
                     onPress={handleStart}
                 />
             </View>

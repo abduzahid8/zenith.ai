@@ -84,11 +84,11 @@ export default function RegistrationSuccessScreen() {
                 </Animated.View>
 
                 <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-                    <Text style={styles.title}>Поздравляем!</Text>
+                    <Text style={styles.title}>Congratulations!</Text>
                     <Text style={styles.subtitle}>
-                        Ваш аккаунт успешно создан.{'\n'}
-                        Проверьте почту для подтверждения,{'\n'}
-                        затем войдите в приложение.
+                        Your account has been created.{'\n'}
+                        Check your email for confirmation,{'\n'}
+                        then sign in to the app.
                     </Text>
                 </Animated.View>
             </View>
@@ -96,7 +96,7 @@ export default function RegistrationSuccessScreen() {
             {/* Action */}
             <View style={styles.actionsContainer}>
                 <Button
-                    title="Перейти к входу"
+                    title="Go to Sign In"
                     onPress={handleContinue}
                     variant="primary"
                     size="large"

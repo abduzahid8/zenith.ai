@@ -6,7 +6,7 @@ import { getSupabase } from './supabase/client';
 import { localAiService } from './gemini';
 
 // Feature flag: true = use local Gemini, false = use edge function
-const USE_LOCAL_AI = true;
+const USE_LOCAL_AI = false;
 
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
@@ -130,9 +130,9 @@ export const aiService = {
         } catch (error) {
             const status = (error as any)?.context?.status ?? (error as any)?.status;
             if (status === 429) {
-                return 'Слишком много запросов к ИИ. Подождите 10–20 секунд и попробуйте снова.';
+                return 'Too many requests. Please wait 10-20 seconds and try again.';
             }
-            return 'Извините, сейчас я не могу ответить. Проверьте соединение или попробуйте позже.';
+            return 'Sorry, I cannot answer right now. Check your connection or try again later.';
         }
     },
 
@@ -162,9 +162,9 @@ export const aiService = {
         }
         try {
             const parsed = await invokeAI<string[]>('generateDailyTasks', { hobby, dayOfWeek, weekNumber });
-            return Array.isArray(parsed) ? parsed : ['Изучить основы', 'Практиковаться 30 минут'];
+            return Array.isArray(parsed) ? parsed : ['Learn basics', 'Practice 30 mins'];
         } catch {
-            return ['Изучить основы', 'Практиковаться 30 минут'];
+            return ['Learn basics', 'Practice 30 mins'];
         }
     },
 
@@ -182,14 +182,14 @@ export const aiService = {
             );
             return {
                 type: parsed.type || 'reminder',
-                message: parsed.message || 'Хочешь заняться чем-то полезным?',
-                action: parsed.action || 'Открой приложение и начни сессию',
+                message: parsed.message || 'Want to do something useful?',
+                action: parsed.action || 'Open the app and start session',
             };
         } catch {
             return {
                 type: 'reminder',
-                message: 'Есть минутка? Может, практика вместо скроллинга? 🎯',
-                action: 'Начать 15-минутную сессию',
+                message: 'Have a minute? Maybe practice instead of scrolling? 🎯',
+                action: 'Start 15-min session',
             };
         }
     },
@@ -293,19 +293,19 @@ export const aiService = {
                 'analyzeUserProfile', { quizAnswers, behaviorData }
             );
             return {
-                personality_type: (parsed.personality_type as string) || 'аналитик',
-                temperament: (parsed.temperament as string) || 'сбалансированный',
-                motivation_style: (parsed.motivation_style as string) || 'soft',
-                strengths: (parsed.strengths as string[]) || ['Целеустремлённость'],
-                growth_areas: (parsed.growth_areas as string[]) || ['Регулярность практики'],
+                personality_type: (parsed.personality_type as string) || 'Analyst',
+                temperament: (parsed.temperament as string) || 'Balanced',
+                motivation_style: (parsed.motivation_style as string) || 'Soft',
+                strengths: (parsed.strengths as string[]) || ['Determination'],
+                growth_areas: (parsed.growth_areas as string[]) || ['Regular practice'],
             };
         } catch {
             return {
-                personality_type: 'аналитик',
-                temperament: 'сбалансированный',
-                motivation_style: 'soft',
-                strengths: ['Целеустремлённость'],
-                growth_areas: ['Регулярность практики'],
+                personality_type: 'Analyst',
+                temperament: 'Balanced',
+                motivation_style: 'Soft',
+                strengths: ['Determination'],
+                growth_areas: ['Regular practice'],
             };
         }
     },

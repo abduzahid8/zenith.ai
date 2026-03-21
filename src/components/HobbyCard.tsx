@@ -26,23 +26,23 @@ interface HobbyCardProps {
 export const HOBBIES = {
     chess: {
         id: 'chess',
-        title: 'Шахматы',
+        title: 'Chess',
         emoji: '♟',
-        description: 'Развивай стратегическое мышление',
+        description: 'Develop strategic thinking',
         color: '#1a1a2e',
     },
     video_editing: {
         id: 'video_editing',
-        title: 'Видео Монтаж',
+        title: 'Video Editing',
         emoji: '📹',
-        description: 'Создавай впечатляющие ролики',
+        description: 'Create impressive videos',
         color: '#16213e',
     },
     drawing: {
         id: 'drawing',
-        title: 'Рисование',
+        title: 'Drawing',
         emoji: '🎨',
-        description: 'Выражай себя через искусство',
+        description: 'Express yourself through art',
         color: '#1f4068',
     },
 } as const;

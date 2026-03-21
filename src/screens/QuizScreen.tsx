@@ -49,8 +49,8 @@ export default function QuizScreen() {
                 } catch (e: unknown) {
                     setSaving(false);
                     Alert.alert(
-                        'Ошибка',
-                        e instanceof Error ? e.message : 'Не удалось сохранить ответы. Проверьте интернет и попробуйте снова.',
+                        'Error',
+                        e instanceof Error ? e.message : 'Failed to save answers. Check your internet and try again.',
                         [{ text: 'OK' }]
                     );
                     return;
@@ -145,7 +145,7 @@ export default function QuizScreen() {
                     {/* Next button */}
                     <View style={styles.nextButtonContainer}>
                         <Button
-                            title={isLastQuestion ? 'Завершить' : 'Далее'}
+                            title={isLastQuestion ? 'Finish' : 'Next'}
                             onPress={handleNext}
                             disabled={!canProceed || saving}
                         />

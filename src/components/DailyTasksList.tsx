@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ImageSourcePropType } from 'react-native';
+import Svg, { Polyline } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { useTaskStore } from '../store/taskStore';
 import { useAuthStore } from '../store/authStore';
@@ -34,11 +35,11 @@ const TaskCard = ({ task, onPress, colors }: { task: Task, onPress: (task: Task)
 
     const getTaskTypeLabel = (type: TaskType) => {
         switch (type) {
-            case 'theory': return 'Узнай';
-            case 'practice': return 'Сделай';
-            case 'analysis': return 'Углуби 2';
-            case 'puzzles': return 'Углуби 1';
-            default: return 'Задача';
+            case 'theory': return t('Узнай');
+            case 'practice': return t('Сделай');
+            case 'analysis': return t('Углуби 2');
+            case 'puzzles': return t('Углуби 1');
+            default: return t('Задача');
         }
     };
 
@@ -63,8 +64,6 @@ const TaskCard = ({ task, onPress, colors }: { task: Task, onPress: (task: Task)
             iconStyle = { marginRight: scale(4) };
             break;
     }
-    if (isCompleted) iconSource = require('../../icons/checkbox-checked.png');
-
     return (
         <TouchableOpacity
             style={[
@@ -83,11 +82,28 @@ const TaskCard = ({ task, onPress, colors }: { task: Task, onPress: (task: Task)
                     </Text>
                 </View>
                 <View style={[styles.iconContainer, { backgroundColor: 'transparent' }]}>
-                    <Image
-                        source={iconSource}
-                        style={[{ width: scale(24), height: scale(24), tintColor: isCompleted ? '#FFFFFF' : '#000' }, iconStyle]}
-                        resizeMode="contain"
-                    />
+                    {isCompleted ? (
+                        <Svg
+                            width={scale(24)}
+                            height={scale(24)}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                        >
+                            <Polyline
+                                points="4 12 9 17 20 6"
+                                stroke="#FFFFFF"
+                                strokeWidth="5.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            />
+                        </Svg>
+                    ) : (
+                        <Image
+                            source={iconSource}
+                            style={[{ width: scale(24), height: scale(24), tintColor: '#000' }, iconStyle]}
+                            resizeMode="contain"
+                        />
+                    )}
                 </View>
             </View>
         </TouchableOpacity>
@@ -136,11 +152,11 @@ export const DailyTasksList = () => {
 
     const getTaskTypeLabel = (type: TaskType) => {
         switch (type) {
-            case 'theory': return 'Узнай';
-            case 'practice': return 'Сделай';
-            case 'analysis': return 'Углуби 2';
-            case 'puzzles': return 'Углуби 1';
-            default: return 'Задача';
+            case 'theory': return t('Узнай');
+            case 'practice': return t('Сделай');
+            case 'analysis': return t('Углуби 2');
+            case 'puzzles': return t('Углуби 1');
+            default: return t('Задача');
         }
     };
 

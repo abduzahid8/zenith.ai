@@ -9,24 +9,24 @@ const GEMINI_MODEL = 'gemini-2.5-flash';
 
 // ── System Prompts (mirrored from edge function) ─────────
 
-const AI_COACH_SYSTEM_PROMPT = `Ты - ИИ-наставник в приложении zenyth.ai. Твоя задача - помогать пользователю с его хобби и личным развитием.
+const AI_COACH_SYSTEM_PROMPT = `You are an AI coach in the zenyth.ai app. Your task is to help the user with their hobbies and personal development.
 
-Твои основные функции:
-1. Давать советы по выбранному хобби пользователя
-2. Мотивировать и поддерживать прогресс
-3. Помогать с планированием занятий
-4. Отвечать на вопросы о техниках и методах обучения
+Your main functions:
+1. Give advice on the user's chosen hobby
+2. Motivate and support progress
+3. Help with activity planning
+4. Answer questions about techniques and learning methods
 
-Стиль общения:
-- Дружелюбный и поддерживающий
-- Конкретный и практичный
-- Мотивирующий, но не навязчивый
-- Отвечай на русском языке`;
+Communication style:
+- Friendly and supportive
+- Specific and practical
+- Motivating, but not intrusive
+- Always answer in English`;
 
 const HOBBY_PROMPTS: Record<string, string> = {
-    chess: `Ты специализируешься на шахматах: дебюты, тактика, стратегия, эндшпиль, анализ.`,
-    video_editing: `Ты специализируешься на видео монтаже: монтаж, цветокоррекция, звук, эффекты.`,
-    drawing: `Ты специализируешься на рисовании: перспектива, анатомия, светотень, композиция.`,
+    chess: `You specialize in chess: openings, tactics, strategy, endgame, analysis.`,
+    video_editing: `You specialize in video editing: cutting, color correction, sound, effects.`,
+    drawing: `You specialize in drawing: perspective, anatomy, light and shadow, composition.`,
 };
 
 // ── Core Gemini API Call ─────────────────────────────────
@@ -38,9 +38,11 @@ async function callGemini(
     maxTokens = 500,
 ): Promise<string> {
     console.log('[Gemini] Starting call, API key exists:', !!GEMINI_API_KEY);
+    console.log('[Gemini] API key value:', GEMINI_API_KEY ? `${GEMINI_API_KEY.substring(0, 10)}...` : 'undefined');
     
-    if (!GEMINI_API_KEY) {
-        throw new Error('GEMINI_API_KEY not configured. Add EXPO_PUBLIC_GEMINI_API_KEY to your .env file.');
+    if (!GEMINI_API_KEY || GEMINI_API_KEY === 'undefined' || GEMINI_API_KEY.trim() === '') {
+        console.error('[Gemini] API key is missing or invalid');
+        return 'Sorry, AI service is temporarily unavailable. Please try again later.';
     }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
@@ -85,7 +87,7 @@ async function callGemini(
                 if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
                     return data.candidates[0].content.parts[0].text;
                 }
-                return 'Извините, получен пустой ответ от сервиса.';
+                return 'Sorry, received an empty response from the service.';
             }
 
             lastErrorText = await response.text();
@@ -137,13 +139,13 @@ async function handleSendMessage(messages: ChatMessage[], hobby?: string): Promi
 }
 
 async function handleHobbyRecommendations(answers: Record<number, number>): Promise<string[]> {
-    const prompt = `На основе ответов пользователя на анкету, рекомендуй 3 хобби из списка: шахматы, видео монтаж, рисование.
-Ответы: ${JSON.stringify(answers)}
-Верни только JSON массив с ID хобби: ["chess", "drawing", "video_editing"]`;
+    const prompt = `Based on the user's quiz answers, recommend 3 hobbies from the list: chess, video_editing, drawing.
+Answers: ${JSON.stringify(answers)}
+Return ONLY a JSON array with hobby IDs: ["chess", "drawing", "video_editing"]`;
 
     const result = await callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты помощник, который анализирует ответы анкеты. Отвечай только JSON массивом.',
+        'You are an assistant that analyzes quiz answers. Reply only with a JSON array.',
         0.3, 100,
     );
 
@@ -159,20 +161,20 @@ async function handleDailyTasks(
     dayOfWeek: number,
     weekNumber: number,
 ): Promise<string[]> {
-    const hobbyName = ({ chess: 'шахматы', video_editing: 'видео монтаж', drawing: 'рисование' } as Record<string, string>)[hobby] ?? hobby;
-    const prompt = `Создай 2-3 задачи для "${hobbyName}" на ${dayOfWeek} день недели ${weekNumber}.
-Верни JSON массив строк.`;
+    const hobbyName = ({ chess: 'chess', video_editing: 'video editing', drawing: 'drawing' } as Record<string, string>)[hobby] ?? hobby;
+    const prompt = `Create 2-3 tasks for "${hobbyName}" on day of week ${dayOfWeek}, week number ${weekNumber}.
+Return a JSON array of strings in English.`;
 
     const result = await callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты генератор учебных задач. Отвечай только JSON массивом строк.',
+        'You are an educational task generator. Reply ONLY with a JSON array of strings.',
         0.7, 200,
     );
 
     try {
         return JSON.parse(result.replace(/```json|```/g, '').trim());
     } catch {
-        return ['Изучить основы', 'Практиковаться 30 минут'];
+        return ['Learn basics', 'Practice 30 minutes'];
     }
 }
 
@@ -180,12 +182,12 @@ async function handleSubstituteContent(
     blockedApp: string,
     userHobby: string,
 ): Promise<{ type: string; message: string; action: string }> {
-    const prompt = `Пользователь собирается открыть ${blockedApp}. Хобби: ${userHobby}.
-Создай мотивирующее сообщение. Верни JSON: {"type":"reminder|challenge|insight|motivation","message":"текст","action":"действие"}`;
+    const prompt = `User is about to open ${blockedApp}. Hobby: ${userHobby}.
+Create a motivating message in English. Return JSON: {"type":"reminder|challenge|insight|motivation","message":"text","action":"action_text"}`;
 
     const result = await callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты помощник, который мягко мотивирует. Отвечай только JSON.',
+        'You are an assistant that gently motivates. Reply ONLY with JSON.',
         0.8, 200,
     );
 
@@ -194,8 +196,8 @@ async function handleSubstituteContent(
     } catch {
         return {
             type: 'reminder',
-            message: 'Есть минутка? Может, практика вместо скроллинга? 🎯',
-            action: 'Начать 15-минутную сессию',
+            message: 'Have a minute? Maybe practice instead of scrolling? 🎯',
+            action: 'Start a 15-minute session',
         };
     }
 }
@@ -203,12 +205,12 @@ async function handleSubstituteContent(
 async function handleScreenTimeAnalysis(
     weeklyData: Array<{ app: string; category: string; minutes: number }>,
 ): Promise<{ insights: string[]; suggestions: string[] }> {
-    const prompt = `Проанализируй экранное время: ${JSON.stringify(weeklyData)}
-Верни JSON: {"insights":["инсайт1"],"suggestions":["совет1"]}`;
+    const prompt = `Analyze screen time: ${JSON.stringify(weeklyData)}
+Return JSON in English: {"insights":["insight1"],"suggestions":["suggestion1"]}`;
 
     const result = await callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты аналитик поведения. Отвечай только JSON.',
+        'You are a behavior analyst. Reply ONLY with JSON.',
         0.6, 300,
     );
 
@@ -223,12 +225,12 @@ async function handleContentRecommendations(
     userProfile: Record<string, unknown>,
     goals: string[],
 ): Promise<Array<{ title: string; category: string; reason: string }>> {
-    const prompt = `Профиль: ${JSON.stringify(userProfile)}\nЦели: ${goals.join(', ')}
-Рекомендуй 3-5 типов контента. Верни JSON массив: [{"title":"","category":"","reason":""}]`;
+    const prompt = `Profile: ${JSON.stringify(userProfile)}\nGoals: ${goals.join(', ')}
+Recommend 3-5 types of content. Return JSON array in English: [{"title":"","category":"","reason":""}]`;
 
     const result = await callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты рекомендательная система контента. Отвечай только JSON.',
+        'You are a content recommendation engine. Reply ONLY with JSON.',
         0.7, 400,
     );
 
@@ -253,12 +255,12 @@ async function handleEarningIdeas(
     match_score: number;
     reasons: string[];
 }>> {
-    const prompt = `Профиль: ${JSON.stringify(userProfile)}\nХобби: ${hobbies.join(', ')}
-Предложи 3-5 способов заработка. Верни JSON массив.`;
+    const prompt = `Profile: ${JSON.stringify(userProfile)}\nHobbies: ${hobbies.join(', ')}
+Suggest 3-5 ways to earn money. Return a JSON array in English.`;
 
     const result = await callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты карьерный консультант. Отвечай только JSON.',
+        'You are a career consultant. Reply ONLY with JSON.',
         0.7, 600,
     );
 
@@ -274,13 +276,13 @@ async function handleWeeklyPlan(
     userLevel: string,
     weekNumber: number,
 ): Promise<Array<{ day: number; tasks: string[]; focus: string }>> {
-    const hobbyName = ({ chess: 'шахматы', video_editing: 'видео монтаж', drawing: 'рисование' } as Record<string, string>)[hobby] ?? hobby;
-    const prompt = `Создай недельный план для "${hobbyName}". Уровень: ${userLevel}. Неделя: ${weekNumber}.
-Верни JSON: [{"day":1,"tasks":["задача"],"focus":"тема"}]`;
+    const hobbyName = ({ chess: 'chess', video_editing: 'video editing', drawing: 'drawing' } as Record<string, string>)[hobby] ?? hobby;
+    const prompt = `Create a weekly plan for "${hobbyName}". Level: ${userLevel}. Week: ${weekNumber}.
+Return JSON in English: [{"day":1,"tasks":["task"],"focus":"topic"}]`;
 
     const result = await callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты составитель учебных планов. Отвечай только JSON.',
+        'You are a study planner. Reply ONLY with JSON.',
         0.7, 500,
     );
 
@@ -305,31 +307,31 @@ async function handleProfileAnalysis(
     strengths: string[];
     growth_areas: string[];
 }> {
-    const prompt = `Ответы: ${JSON.stringify(quizAnswers)}\nПоведение: ${JSON.stringify(behaviorData ?? {})}
-Проанализируй и верни JSON: {"personality_type":"","temperament":"","motivation_style":"","strengths":[],"growth_areas":[]}`;
+    const prompt = `Answers: ${JSON.stringify(quizAnswers)}\nBehavior: ${JSON.stringify(behaviorData ?? {})}
+Analyze and return JSON in English: {"personality_type":"","temperament":"","motivation_style":"","strengths":[],"growth_areas":[]}`;
 
     const result = await callGemini(
         [{ role: 'user', content: prompt }],
-        'Ты психолог-аналитик. Отвечай только JSON.',
+        'You are a psychoanalyst. Reply ONLY with JSON.',
         0.5, 300,
     );
 
     try {
         const parsed = JSON.parse(result.replace(/```json|```/g, '').trim());
         return {
-            personality_type: parsed.personality_type || 'аналитик',
-            temperament: parsed.temperament || 'сбалансированный',
-            motivation_style: parsed.motivation_style || 'soft',
-            strengths: parsed.strengths || ['Целеустремлённость'],
-            growth_areas: parsed.growth_areas || ['Регулярность практики'],
+            personality_type: parsed.personality_type || 'Analyst',
+            temperament: parsed.temperament || 'Balanced',
+            motivation_style: parsed.motivation_style || 'Soft',
+            strengths: parsed.strengths || ['Determination'],
+            growth_areas: parsed.growth_areas || ['Regular Practice'],
         };
     } catch {
         return {
-            personality_type: 'аналитик',
-            temperament: 'сбалансированный',
-            motivation_style: 'soft',
-            strengths: ['Целеустремлённость'],
-            growth_areas: ['Регулярность практики'],
+            personality_type: 'Analyst',
+            temperament: 'Balanced',
+            motivation_style: 'Soft',
+            strengths: ['Determination'],
+            growth_areas: ['Regular Practice'],
         };
     }
 }

@@ -29,23 +29,23 @@ export default function ResetPasswordScreen() {
 
     const handleUpdatePassword = async () => {
         if (!password || !confirmPassword) {
-            Alert.alert('Ошибка', 'Заполните все поля');
+            Alert.alert('Error', 'Please fill in all fields');
             return;
         }
 
         if (password !== confirmPassword) {
-            Alert.alert('Ошибка', 'Пароли не совпадают');
+            Alert.alert('Error', 'Passwords do not match');
             return;
         }
 
         if (password.length < 6) {
-            Alert.alert('Ошибка', 'Пароль должен быть не менее 6 символов');
+            Alert.alert('Error', 'Password must be at least 6 characters');
             return;
         }
 
         try {
             await updatePassword(password);
-            Alert.alert('Успех', 'Пароль успешно изменен', [
+            Alert.alert('Success', 'Password updated successfully', [
                 {
                     text: 'OK',
                     onPress: () => {
@@ -55,8 +55,8 @@ export default function ResetPasswordScreen() {
                 },
             ]);
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : 'Произошла ошибка';
-            Alert.alert('Ошибка', msg);
+            const msg = error instanceof Error ? error.message : 'An error occurred';
+            Alert.alert('Error', msg);
         }
     };
 
@@ -67,17 +67,17 @@ export default function ResetPasswordScreen() {
             {/* Header */}
             <View style={styles.headerContainer}>
                 <LogoNew variant="icon" width={36} height={36} color={colors.text} />
-                <Text style={styles.headerTitle}>Новый пароль</Text>
+                <Text style={styles.headerTitle}>New Password</Text>
             </View>
 
             {/* Form */}
             <View style={styles.formContainer}>
                 <Text style={styles.description}>
-                    Пожалуйста, введите ваш новый пароль ниже.
+                    Please enter your new password below.
                 </Text>
 
                 {/* Password */}
-                <Text style={styles.inputLabel}>Новый пароль</Text>
+                <Text style={styles.inputLabel}>New password</Text>
                 <View style={styles.inputContainer}>
                     <Ionicons name="lock-closed-outline" size={20} color={colors.textLight} style={styles.inputIcon} />
                     <TextInput
@@ -94,7 +94,7 @@ export default function ResetPasswordScreen() {
                 </View>
 
                 {/* Confirm Password */}
-                <Text style={styles.inputLabel}>Подтвердите пароль</Text>
+                <Text style={styles.inputLabel}>Confirm password</Text>
                 <View style={styles.inputContainer}>
                     <Ionicons name="lock-closed-outline" size={20} color={colors.textLight} style={styles.inputIcon} />
                     <TextInput
@@ -109,7 +109,7 @@ export default function ResetPasswordScreen() {
 
                 {/* Reset Button */}
                 <Button
-                    title="Обновить пароль"
+                    title="Update Password"
                     onPress={handleUpdatePassword}
                     variant="primary"
                     size="large"
@@ -124,7 +124,7 @@ export default function ResetPasswordScreen() {
                     }}
                     style={styles.cancelButton}
                 >
-                    <Text style={styles.cancelText}>Отмена</Text>
+                    <Text style={styles.cancelText}>Cancel</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>

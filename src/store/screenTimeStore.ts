@@ -87,7 +87,7 @@ export const useScreenTimeStore = create<ScreenTimeState>()(
 
                 } catch (error) {
                     console.error('Screen time init error:', error);
-                    set({ error: 'Не удалось загрузить данные экранного времени', isLoading: false });
+                    set({ error: 'Failed to load screen time data', isLoading: false });
                 }
             },
 
@@ -98,7 +98,7 @@ export const useScreenTimeStore = create<ScreenTimeState>()(
                     await get().refreshTodayData(userId);
                 } catch (error) {
                     console.error('Log usage error:', error);
-                    set({ error: 'Не удалось записать использование' });
+                    set({ error: 'Failed to record usage' });
                 }
             },
 
@@ -141,7 +141,7 @@ export const useScreenTimeStore = create<ScreenTimeState>()(
                     set({ limits: newLimits.map(v => v.limit) });
                 } catch (error) {
                     console.error('Set limit error:', error);
-                    set({ error: 'Не удалось установить лимит' });
+                    set({ error: 'Failed to set limit' });
                 }
             },
 

@@ -1,131 +1,131 @@
 /**
- * Russian locale — all UI strings in one place.
+ * Default locale strings — all UI strings in English.
  * This is the foundation for future i18n support.
- * To add a new language, duplicate this file as e.g. en.ts and translate all values.
+ * To add a new language, duplicate this file as e.g. ru.ts and translate all values.
  */
 
 const ru = {
     // Common
     common: {
-        loading: 'Загрузка...',
-        cancel: 'Отмена',
-        confirm: 'Подтвердить',
-        save: 'Сохранить',
-        back: 'Назад',
-        continue: 'Продолжить',
-        start: 'Начать',
-        error: 'Ошибка',
-        retry: 'Повторить',
+        loading: 'Loading...',
+        cancel: 'Cancel',
+        confirm: 'Confirm',
+        save: 'Save',
+        back: 'Back',
+        continue: 'Continue',
+        start: 'Start',
+        error: 'Error',
+        retry: 'Retry',
     },
 
     // Auth
     auth: {
-        login: 'Войти',
-        register: 'Зарегистрироваться',
+        login: 'Sign In',
+        register: 'Sign Up',
         email: 'Email',
-        password: 'Пароль',
-        forgotPassword: 'Забыли пароль?',
-        noAccount: 'Нет аккаунта?',
-        hasAccount: 'Уже есть аккаунт?',
-        invalidCredentials: 'Неверный email или пароль.',
-        emailNotConfirmed: 'Email не подтвержден. Проверьте почту.',
-        continueWithApple: 'Войти через Apple',
-        continueWithGoogle: 'Войти через Google',
-        or: 'или',
+        password: 'Password',
+        forgotPassword: 'Forgot password?',
+        noAccount: 'No account?',
+        hasAccount: 'Already have an account?',
+        invalidCredentials: 'Incorrect email or password.',
+        emailNotConfirmed: 'Email not confirmed. Please check your inbox.',
+        continueWithApple: 'Sign in with Apple',
+        continueWithGoogle: 'Sign in with Google',
+        or: 'or',
     },
 
     // Welcome
     welcome: {
-        title: 'Добро пожаловать !',
-        subtitle: 'Достигни своего\nзенита',
-        start: 'Начать',
+        title: 'Welcome!',
+        subtitle: 'Reach your\nzenith',
+        start: 'Start',
     },
 
     // Quiz Intro
     quizIntro: {
-        title: 'Найди своё дело',
-        subtitle: 'Ответь на несколько вопросов\nи мы подберём занятие, которое\nподойдёт именно тебе.',
-        start: 'Приступим',
+        title: 'Find your thing',
+        subtitle: 'Answer a few questions\nand we\'ll find an activity\nthat suits you perfectly.',
+        start: "Let's go",
     },
 
     // Quiz
     quiz: {
-        next: 'Далее',
-        finish: 'Завершить',
+        next: 'Next',
+        finish: 'Finish',
     },
 
     // Hobby Selection
     hobbySelection: {
-        title: 'Выбери хобби',
-        subtitle: 'Мы подобрали для тебя несколько вариантов',
-        confirm: 'Подтвердить выбор',
+        title: 'Choose a hobby',
+        subtitle: 'We picked a few options for you',
+        confirm: 'Confirm selection',
     },
 
     // Subscription
     subscription: {
-        title: 'Выбери формат, который подходит тебе',
+        title: 'Choose the plan that works for you',
         free: 'Free',
         premium: 'Premium',
-        perMonth: '/месяц',
-        getPremium: 'Оформить Premium',
-        continueFree: 'Продолжить с Free',
+        perMonth: '/month',
+        getPremium: 'Get Premium',
+        continueFree: 'Continue with Free',
         freeFeatures: [
-            'Подбор хобби по характеру (анкета + AI)',
-            'Выбор 1 хобби',
-            'Ежедневная цель по хобби',
-            'Прогресс в процентах',
-            'AI-наставник — 2 диалога в день',
+            'Hobby matching by personality (quiz + AI)',
+            'Choose 1 hobby',
+            'Daily hobby goal',
+            'Progress in percentages',
+            'AI Coach — 2 chats per day',
         ],
         premiumFeatures: [
-            'Всё из Free',
-            'Глубокий AI-наставник (без ограничений)',
-            'Персональный план развития',
-            'План на неделю',
-            'Анализ прогресса и объяснения',
-            'Объяснение прогресса',
-            'Недельный AI-отчёт',
+            'Everything in Free',
+            'Deep AI Coach (unlimited)',
+            'Personalized growth plan',
+            'Weekly plan',
+            'Progress analysis & explanations',
+            'Progress breakdown',
+            'Weekly AI report',
         ],
     },
 
     // Home
     home: {
         greeting: {
-            morning: 'Доброе утро',
-            afternoon: 'Добрый день',
-            evening: 'Добрый вечер',
-            night: 'Доброй ночи',
+            morning: 'Good morning',
+            afternoon: 'Good afternoon',
+            evening: 'Good evening',
+            night: 'Good night',
         },
-        screenTime: 'Экранное время',
-        dailyTasks: 'Ежедневные задания',
-        startSession: 'Начать сессию',
+        screenTime: 'Screen Time',
+        dailyTasks: 'Daily Tasks',
+        startSession: 'Start session',
     },
 
     // Session Timer
     sessionTimer: {
-        start: 'Старт',
-        pause: 'Пауза',
-        resume: 'Продолжить',
-        stop: 'Стоп',
-        reset: 'Сброс',
-        sessionComplete: 'Сессия завершена!',
+        start: 'Start',
+        pause: 'Pause',
+        resume: 'Resume',
+        stop: 'Stop',
+        reset: 'Reset',
+        sessionComplete: 'Session complete!',
     },
 
     // Statistics
     statistics: {
-        title: 'Статистика',
-        hobbyTime: 'Время на хобби',
-        weeklyOverview: 'Обзор за неделю',
+        title: 'Statistics',
+        hobbyTime: 'Hobby time',
+        weeklyOverview: 'Weekly overview',
     },
 
     // AI Coach
     aiCoach: {
-        title: 'AI-наставник',
-        placeholder: 'Задай вопрос...',
+        title: 'AI Coach',
+        placeholder: 'Ask a question...',
     },
 
     // Weekly Plan
     weeklyPlan: {
-        title: 'План на неделю',
+        title: 'Weekly Plan',
     },
 
     // Phone Analysis
@@ -147,15 +147,15 @@ const ru = {
 
     // Warning Modal
     warningModal: {
-        confirm: 'Подтвердить',
-        cancel: 'Отмена',
+        confirm: 'Confirm',
+        cancel: 'Cancel',
     },
 
     // Error Boundary
     errorBoundary: {
-        title: 'Что-то пошло не так',
-        message: 'В приложении произошла ошибка.',
-        retry: 'Попробовать ещё',
+        title: 'Something went wrong',
+        message: 'An error occurred in the app.',
+        retry: 'Try again',
     },
 } as const;
 

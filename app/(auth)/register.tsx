@@ -33,12 +33,12 @@ export default function RegisterScreen() {
 
     const handleRegister = async () => {
         if (!email || !password) {
-            Alert.alert('Ошибка', 'Заполните все поля');
+            Alert.alert('Error', 'Please fill in all fields');
             return;
         }
 
         if (!agreedToTerms) {
-            Alert.alert('Ошибка', 'Необходимо согласиться с условиями пользования');
+            Alert.alert('Error', 'You must agree to the terms of use');
             return;
         }
 
@@ -50,8 +50,8 @@ export default function RegisterScreen() {
                 router.replace('/(auth)/registration-success');
             }
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : 'Произошла ошибка';
-            Alert.alert('Ошибка регистрации', msg);
+            const msg = error instanceof Error ? error.message : 'An error occurred';
+            Alert.alert('Registration Error', msg);
         }
     };
 
@@ -61,8 +61,9 @@ export default function RegisterScreen() {
         try {
             await signInWithGoogle();
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : 'Не удалось войти через Google';
-            Alert.alert('Ошибка', msg);
+            const msg = error instanceof Error ? error.message : 'Failed to sign in with Google';
+            if (msg.includes('cancelled')) return;
+            Alert.alert('Error', msg);
         }
     };
 
@@ -70,8 +71,8 @@ export default function RegisterScreen() {
         try {
             await signInWithApple();
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : 'Не удалось войти через Apple';
-            Alert.alert('Ошибка', msg);
+            const msg = error instanceof Error ? error.message : 'Failed to sign in with Apple';
+            Alert.alert('Error', msg);
         }
     };
 
@@ -82,13 +83,13 @@ export default function RegisterScreen() {
             {/* Header */}
             <View style={styles.headerContainer}>
                 <LogoNew variant="icon" width={36} height={36} color={colors.text} />
-                <Text style={styles.headerTitle}>Регистрация</Text>
+                <Text style={styles.headerTitle}>Sign Up</Text>
             </View>
 
             {/* Form */}
             <View style={styles.formContainer}>
                 {/* Email */}
-                <Text style={styles.inputLabel}>Почта</Text>
+                <Text style={styles.inputLabel}>Email</Text>
                 <View style={styles.inputContainer}>
                     <MaterialCommunityIcons name="email-outline" size={20} color={colors.textLight} style={styles.inputIcon} />
                     <TextInput
@@ -103,7 +104,7 @@ export default function RegisterScreen() {
                 </View>
 
                 {/* Password */}
-                <Text style={styles.inputLabel}>Пароль</Text>
+                <Text style={styles.inputLabel}>Password</Text>
                 <View style={styles.inputContainer}>
                     <Ionicons name="lock-closed-outline" size={20} color={colors.textLight} style={styles.inputIcon} />
                     <TextInput
@@ -124,7 +125,7 @@ export default function RegisterScreen() {
 
                 {/* Register Button */}
                 <Button
-                    title="Зарегистрироваться"
+                    title="Sign Up"
                     onPress={handleRegister}
                     variant="primary"
                     size="large"
@@ -140,14 +141,14 @@ export default function RegisterScreen() {
                     <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
                         {agreedToTerms && <Ionicons name="checkmark" size={14} color={colors.white} />}
                     </View>
-                    <Text style={styles.termsText}>Я согласен с условиями пользования</Text>
+                    <Text style={styles.termsText}>I agree to the terms of use</Text>
                 </TouchableOpacity>
             </View>
 
             {/* Divider */}
             <View style={styles.dividerContainer}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>Или</Text>
+                <Text style={styles.dividerText}>Or</Text>
                 <View style={styles.dividerLine} />
             </View>
 
@@ -159,12 +160,12 @@ export default function RegisterScreen() {
                         style={styles.socialIcon}
                         resizeMode="contain"
                     />
-                    <Text style={styles.socialButtonText}>Войти с Google</Text>
+                    <Text style={styles.socialButtonText}>Sign in with Google</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.socialButton} onPress={handleAppleSignIn}>
                     <FontAwesome name="apple" size={24} color={colors.text} />
-                    <Text style={styles.socialButtonText}>Войти с Apple</Text>
+                    <Text style={styles.socialButtonText}>Sign in with Apple</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>

@@ -34,30 +34,30 @@ export default function LoginScreen() {
 
     const handleLogin = async () => {
         if (!email || !password) {
-            Alert.alert('Ошибка', 'Заполните все поля');
+            Alert.alert('Error', 'Please fill in all fields');
             return;
         }
 
         try {
             await signIn(email.trim(), password);
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : 'Произошла ошибка';
-            Alert.alert('Ошибка входа', msg);
+            const msg = error instanceof Error ? error.message : 'An error occurred';
+            Alert.alert('Sign In Error', msg);
         }
     };
 
     const handleForgotPassword = async () => {
         const trimmed = email.trim();
         if (!trimmed) {
-            Alert.alert('Восстановление пароля', 'Введите email в поле выше, затем нажмите «Забыли пароль?»');
+            Alert.alert('Password Recovery', 'Enter your email above, then tap "Forgot password?"');
             return;
         }
         try {
             await authService.forgotPassword(trimmed);
-            Alert.alert('Письмо отправлено', `Инструкции по сбросу пароля отправлены на ${trimmed}`);
+            Alert.alert('Email sent', `Password reset instructions sent to ${trimmed}`);
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : 'Не удалось отправить письмо';
-            Alert.alert('Ошибка', msg);
+            const msg = error instanceof Error ? error.message : 'Failed to send email';
+            Alert.alert('Error', msg);
         }
     };
 
@@ -67,8 +67,9 @@ export default function LoginScreen() {
         try {
             await signInWithGoogle();
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : 'Не удалось войти через Google';
-            Alert.alert('Ошибка', msg);
+            const msg = error instanceof Error ? error.message : 'Failed to sign in with Google';
+            if (msg.includes('cancelled')) return;
+            Alert.alert('Error', msg);
         }
     };
 
@@ -76,8 +77,8 @@ export default function LoginScreen() {
         try {
             await signInWithApple();
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : 'Не удалось войти через Apple';
-            Alert.alert('Ошибка', msg);
+            const msg = error instanceof Error ? error.message : 'Failed to sign in with Apple';
+            Alert.alert('Error', msg);
         }
     };
 
@@ -88,13 +89,13 @@ export default function LoginScreen() {
             {/* Header */}
             <View style={styles.headerContainer}>
                 <LogoNew variant="icon" width={36} height={36} color={colors.text} />
-                <Text style={styles.headerTitle}>Вход</Text>
+                <Text style={styles.headerTitle}>Sign In</Text>
             </View>
 
             {/* Form */}
             <View style={styles.formContainer}>
                 {/* Email */}
-                <Text style={styles.inputLabel}>Почта</Text>
+                <Text style={styles.inputLabel}>Email</Text>
                 <View style={styles.inputContainer}>
                     <MaterialCommunityIcons name="email-outline" size={20} color={colors.textLight} style={styles.inputIcon} />
                     <TextInput
@@ -109,7 +110,7 @@ export default function LoginScreen() {
                 </View>
 
                 {/* Password */}
-                <Text style={styles.inputLabel}>Пароль</Text>
+                <Text style={styles.inputLabel}>Password</Text>
                 <View style={styles.inputContainer}>
                     <Ionicons name="lock-closed-outline" size={20} color={colors.textLight} style={styles.inputIcon} />
                     <TextInput
@@ -134,17 +135,17 @@ export default function LoginScreen() {
                         <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
                             {rememberMe && <Ionicons name="checkmark" size={14} color={colors.white} />}
                         </View>
-                        <Text style={styles.checkboxLabel}>Запомнить меня</Text>
+                        <Text style={styles.checkboxLabel}>Remember me</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={handleForgotPassword}>
-                        <Text style={styles.forgotPassword}>Забыли пароль?</Text>
+                        <Text style={styles.forgotPassword}>Forgot password?</Text>
                     </TouchableOpacity>
                 </View>
 
                 {/* Login Button */}
                 <Button
-                    title="Войти"
+                    title="Sign In"
                     onPress={handleLogin}
                     variant="primary"
                     size="large"
@@ -156,7 +157,7 @@ export default function LoginScreen() {
             {/* Divider */}
             <View style={styles.dividerContainer}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>Или</Text>
+                <Text style={styles.dividerText}>Or</Text>
                 <View style={styles.dividerLine} />
             </View>
 
@@ -168,12 +169,12 @@ export default function LoginScreen() {
                         style={styles.socialIcon}
                         resizeMode="contain"
                     />
-                    <Text style={styles.socialButtonText}>Войти с Google</Text>
+                    <Text style={styles.socialButtonText}>Sign in with Google</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.socialButton} onPress={handleAppleSignIn}>
                     <FontAwesome name="apple" size={24} color={colors.text} />
-                    <Text style={styles.socialButtonText}>Войти с Apple</Text>
+                    <Text style={styles.socialButtonText}>Sign in with Apple</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>

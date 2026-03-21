@@ -143,7 +143,7 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
                     set({
                         isAuthorized: false,
                         isChecking: false,
-                        error: 'Нативный модуль Screen Time недоступен. Используйте dev/prod build вместо Expo Go.',
+                        error: 'Screen Time module unavailable. Use a dev/prod build instead of Expo Go.',
                     });
                     return false;
                 }
@@ -154,8 +154,8 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
                     const status = Platform.OS === 'ios' ? getAuthorizationStatus() : null;
                     const deniedError = !authorized
                         ? (Platform.OS === 'ios' && status === 'denied'
-                            ? 'Доступ к Screen Time отключен. Включите его в Настройки > Экранное время.'
-                            : 'Нет доступа к данным устройства. Разрешите доступ, чтобы видеть полную аналитику.')
+                            ? 'Screen Time access is disabled. Enable it in Settings > Screen Time.'
+                            : 'No device data access. Grant permission to see full analytics.')
                         : null;
 
                     set({ isAuthorized: authorized, isChecking: false, error: deniedError });
@@ -172,7 +172,7 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
                     set({
                         isAuthorized: false,
                         isChecking: false,
-                        error: 'Нативный модуль Screen Time недоступен. Соберите приложение через EAS/dev build.',
+                        error: 'Screen Time module unavailable. Build the app via EAS/dev build.',
                     });
                     return false;
                 }
@@ -186,7 +186,7 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
                         isChecking: false,
                         error: granted
                             ? null
-                            : 'Доступ не предоставлен. Используем серверную аналитику, если данные доступны.',
+                            : 'Access not granted. Using server-side analytics if data is available.',
                     });
 
                     if (granted) {
@@ -420,15 +420,15 @@ export const formatScreenTime = (seconds: number): string => {
     const minutes = Math.floor((seconds % 3600) / 60);
 
     if (hours > 0) {
-        return `${hours}ч ${minutes}м`;
+        return `${hours}h ${minutes}m`;
     }
-    return `${minutes}м`;
+    return `${minutes}m`;
 };
 
 // Helper function to format seconds to hours with decimal
 export const formatScreenTimeHours = (seconds: number): string => {
     const hours = seconds / 3600;
-    return `${hours.toFixed(1)}ч`;
+    return `${hours.toFixed(1)}h`;
 };
 
 export default useDeviceScreenTimeStore;

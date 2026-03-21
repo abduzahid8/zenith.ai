@@ -33,16 +33,16 @@ export default function WelcomeScreen() {
 
             {/* Center content */}
             <View style={styles.contentContainer}>
-                <Text style={styles.welcomeText}>Добро пожаловать !</Text>
+                <Text style={styles.welcomeText}>Welcome!</Text>
                 <Text style={styles.subtitleText}>
-                    Достигни своего{'\n'}зенита
+                    Reach your{'\n'}zenith
                 </Text>
             </View>
 
             {/* Bottom button */}
             <View style={styles.buttonContainer}>
                 <Button
-                    title="Начать"
+                    title="Start"
                     onPress={handleStart}
                 />
             </View>

@@ -56,6 +56,7 @@ const translations: Record<string, Record<Language, string>> = {
     },
     'Удалить': { ru: 'Удалить', en: 'Delete' },
     'Отмена': { ru: 'Отмена', en: 'Cancel' },
+    'Управление подпиской': { ru: 'Управление подпиской', en: 'Manage Subscription' },
 
     // Tasks
     'Твой день': { ru: 'Твой день', en: 'Your Day' },
@@ -65,6 +66,10 @@ const translations: Record<string, Record<Language, string>> = {
     'Задачи': { ru: 'Задачи', en: 'Tasks' },
     'Задача': { ru: 'Задача', en: 'Task' },
     'Твои задачи': { ru: 'Твои задачи', en: 'Your Tasks' },
+    'Узнай': { ru: 'Узнай', en: 'Learn' },
+    'Сделай': { ru: 'Сделай', en: 'Practice' },
+    'Углуби 1': { ru: 'Углуби 1', en: 'Deepen 1' },
+    'Углуби 2': { ru: 'Углуби 2', en: 'Deepen 2' },
 
     // Session Timer
     'Завершить': { ru: 'Завершить', en: 'Finish' },
@@ -118,7 +123,16 @@ const translations: Record<string, Record<Language, string>> = {
         ru: 'Ты выполнил все задачи на сегодня! Продолжай в том же духе — каждый день делает тебя лучше.',
         en: 'You completed all tasks for today! Keep it up — every day makes you better.',
     },
+    'Достигни\nсвоего зенита!': { ru: 'Достигни\nсвоего зенита!', en: 'Reach\nyour zenith!' },
+    'Как быстрее прогрессировать?': { ru: 'Как быстрее прогрессировать?', en: 'How to progress faster?' },
+    'Объясни мой прогресс': { ru: 'Объясни мой прогресс', en: 'Explain my progress' },
+    'Что сделать сегодня?': { ru: 'Что сделать сегодня?', en: 'What should I do today?' },
+    'Чем я могу помочь?': { ru: 'Чем я могу помочь?', en: 'How can I help?' },
     'Не удалось удалить аккаунт': { ru: 'Не удалось удалить аккаунт', en: 'Failed to delete account' },
+
+    // AI Coach
+    'Думаю...': { ru: 'Думаю...', en: 'Thinking...' },
+    'Извините, произошла ошибка. Попробуйте еще раз.': { ru: 'Извините, произошла ошибка. Попробуйте еще раз.', en: 'Sorry, an error occurred. Please try again.' },
 
     // Congratulations page
     'Перейти к входу': { ru: 'Перейти к входу', en: 'Go to Login' },

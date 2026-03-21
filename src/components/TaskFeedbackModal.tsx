@@ -29,11 +29,11 @@ const StarRating = ({ rating, onRate, maxStars = 5, label, colors }: { rating: n
                 ))}
             </View>
             <Text style={styles.ratingText}>
-                {rating === 1 ? 'Очень легко' :
-                    rating === 2 ? 'Легко' :
-                        rating === 3 ? 'Нормально' :
-                            rating === 4 ? 'Сложно' :
-                                rating === 5 ? 'Очень сложно' : ' '}
+                {rating === 1 ? 'Very easy' :
+                    rating === 2 ? 'Easy' :
+                        rating === 3 ? 'Normal' :
+                            rating === 4 ? 'Hard' :
+                                rating === 5 ? 'Very hard' : ' '}
             </Text>
         </View>
     );
@@ -79,28 +79,28 @@ export const TaskFeedbackModal = ({ visible, onClose, onSubmit, taskTitle }: Tas
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
             <View style={dynamicStyles.overlay}>
                 <View style={dynamicStyles.container}>
-                    <Text style={dynamicStyles.title}>Задача выполнена!</Text>
+                    <Text style={dynamicStyles.title}>Task completed!</Text>
                     <Text style={dynamicStyles.subtitle}>{taskTitle}</Text>
 
                     <StarRating
-                        label="Как сложно было?"
+                        label="How difficult was it?"
                         rating={difficulty}
                         onRate={setDifficulty}
                         colors={colors}
                     />
 
                     <EmojiRating
-                        label="Как тебе задача?"
+                        label="How did you like the task?"
                         rating={engagement}
                         onRate={setEngagement}
                         colors={colors}
                     />
 
                     <View style={styles.inputContainer}>
-                        <Text style={[styles.label, { color: colors.textSecondary }]}>Заметки (необязательно)</Text>
+                        <Text style={[styles.label, { color: colors.textSecondary }]}>Notes (optional)</Text>
                         <TextInput
                             style={[dynamicStyles.input, { color: colors.text }]}
-                            placeholder="Что можно улучшить?"
+                            placeholder="What could be improved?"
                             placeholderTextColor={colors.textLight}
                             multiline
                             value={notes}
@@ -110,10 +110,10 @@ export const TaskFeedbackModal = ({ visible, onClose, onSubmit, taskTitle }: Tas
 
                     <View style={styles.buttonsRow}>
                         <TouchableOpacity style={styles.skipButton} onPress={onClose}>
-                            <Text style={styles.skipText}>Пропустить</Text>
+                            <Text style={styles.skipText}>Skip</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={dynamicStyles.submitButton} onPress={handleSubmit}>
-                            <Text style={dynamicStyles.submitText}>Готово</Text>
+                            <Text style={dynamicStyles.submitText}>Done</Text>
                         </TouchableOpacity>
                     </View>
                 </View>

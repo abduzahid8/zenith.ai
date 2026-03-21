@@ -16,7 +16,9 @@ import { scale } from '../../constants';
 import { fonts } from '../../theme';
 import { aiService, ChatMessage } from '../../services/ai';
 import { useUserProfileStore } from '../../store/userProfileStore';
+import { useLanguageStore } from '../../store/languageStore';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { useT } from '../../store/languageStore';
 
 interface DisplayMessage {
     id: string;
@@ -42,6 +44,7 @@ const AICoachTab: React.FC = () => {
 
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
+    const t = useT();
 
     const handleSend = async () => {
         if (!inputText.trim() || isLoading) return;
@@ -78,7 +81,7 @@ const AICoachTab: React.FC = () => {
             const errorMessage: DisplayMessage = {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
-                content: 'Извините, произошла ошибка. Попробуйте еще раз.',
+                content: t('Извините, произошла ошибка. Попробуйте еще раз.'),
             };
             setMessages(prev => [...prev, errorMessage]);
         } finally {
@@ -102,35 +105,35 @@ const AICoachTab: React.FC = () => {
             {messages.length === 0 && (
                 <>
                     <View style={styles.aiTitleContainer}>
-                        <Text style={styles.aiTitle}>Достигни{'\n'}своего зенита!</Text>
+                        <Text style={styles.aiTitle}>{t('Достигни\nсвоего зенита!')}</Text>
                     </View>
                     <View style={styles.suggestionsContainer}>
                         <View style={styles.suggestionRowLeft}>
                             <TouchableOpacity
                                 style={styles.suggestionButton}
                                 activeOpacity={0.8}
-                                onPress={() => handleSuggestionPress('Как быстрее прогрессировать?')}
+                                onPress={() => handleSuggestionPress(t('Как быстрее прогрессировать?'))}
                             >
                                 <BlurView intensity={80} tint={'light'} style={styles.glassBackground} />
-                                <Text style={styles.suggestionText}>Как быстрее прогрессировать?</Text>
+                                <Text style={styles.suggestionText}>{t('Как быстрее прогрессировать?')}</Text>
                             </TouchableOpacity>
                         </View>
                         <View style={styles.suggestionRowLeft}>
                             <TouchableOpacity
                                 style={styles.suggestionButton}
                                 activeOpacity={0.8}
-                                onPress={() => handleSuggestionPress('Объясни мой прогресс')}
+                                onPress={() => handleSuggestionPress(t('Объясни мой прогресс'))}
                             >
                                 <BlurView intensity={80} tint={'light'} style={styles.glassBackground} />
-                                <Text style={styles.suggestionText}>Объясни мой прогресс</Text>
+                                <Text style={styles.suggestionText}>{t('Объясни мой прогресс')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.suggestionButton, { marginLeft: scale(10) }]}
                                 activeOpacity={0.8}
-                                onPress={() => handleSuggestionPress('Что сделать сегодня?')}
+                                onPress={() => handleSuggestionPress(t('Что сделать сегодня?'))}
                             >
                                 <BlurView intensity={80} tint={'light'} style={styles.glassBackground} />
-                                <Text style={styles.suggestionText}>Что сделать сегодня?</Text>
+                                <Text style={styles.suggestionText}>{t('Что сделать сегодня?')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -163,7 +166,7 @@ const AICoachTab: React.FC = () => {
             {isLoading && (
                 <View style={styles.aiLoadingContainer}>
                     <ActivityIndicator size="small" color={colors.aiCoach.darkText} />
-                    <Text style={styles.aiLoadingText}>Думаю...</Text>
+                    <Text style={styles.aiLoadingText}>{t('Думаю...')}</Text>
                 </View>
             )}
 
@@ -172,7 +175,7 @@ const AICoachTab: React.FC = () => {
                     <BlurView intensity={80} tint={'light'} style={styles.glassBackground} />
                     <TextInput
                         style={styles.aiInput}
-                        placeholder="Чем я могу помочь?"
+                        placeholder={t('Чем я могу помочь?')}
                         placeholderTextColor={colors.aiCoach.text}
                         value={inputText}
                         onChangeText={setInputText}

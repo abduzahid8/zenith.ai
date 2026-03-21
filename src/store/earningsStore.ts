@@ -95,7 +95,7 @@ export const useEarningsStore = create<EarningsState>()(
 
                 } catch (error) {
                     console.error('Earnings store init error:', error);
-                    set({ error: 'Не удалось загрузить данные о заработке', isLoading: false });
+                    set({ error: 'Failed to load earnings data', isLoading: false });
                 }
             },
 
@@ -154,7 +154,7 @@ export const useEarningsStore = create<EarningsState>()(
                     }));
                 } catch (error) {
                     console.error('Start path error:', error);
-                    set({ error: 'Не удалось начать путь' });
+                    set({ error: 'Failed to start path' });
                 }
             },
 
@@ -174,7 +174,7 @@ export const useEarningsStore = create<EarningsState>()(
                     await get().loadActivePaths(userId);
                 } catch (error) {
                     console.error('Update progress error:', error);
-                    set({ error: 'Не удалось обновить прогресс' });
+                    set({ error: 'Failed to update progress' });
                 }
             },
 
@@ -190,7 +190,7 @@ export const useEarningsStore = create<EarningsState>()(
                     await get().loadActivePaths(userId);
                 } catch (error) {
                     console.error('Record earning error:', error);
-                    set({ error: 'Не удалось записать заработок' });
+                    set({ error: 'Failed to record earnings' });
                 }
             },
 

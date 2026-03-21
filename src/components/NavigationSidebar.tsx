@@ -31,13 +31,13 @@ const SIDEBAR_WIDTH = scale(180);
 interface NavigationSidebarProps {
     visible: boolean;
     onClose: () => void;
-    activeItem?: 'основное' | 'развитие' | 'управление' | 'о продукте';
+    activeItem?: 'main' | 'growth' | 'settings' | 'about';
 }
 
 export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
     visible,
     onClose,
-    activeItem = 'основное',
+    activeItem = 'main',
 }) => {
     const router = useRouter();
     const { signOut, deleteAccount } = useAuthStore();
@@ -46,7 +46,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
     const styles = useMemo(() => createStyles(colors), [colors]);
 
     // Get display values
-    const displayName = userName || 'Пользователь';
+    const displayName = userName || 'User';
     const displaySubscription = getSubscriptionDisplayText(subscriptionLevel);
     const slideAnim = useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -96,11 +96,11 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
         };
     }, [visible, slideAnim, fadeAnim]);
 
-    const [expandedSection, setExpandedSection] = React.useState<string | null>('основное');
+    const [expandedSection, setExpandedSection] = React.useState<string | null>('main');
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         onClose();
-        signOut();
+        await signOut();
         setTimeout(() => {
             router.replace('/');
         }, 300);
@@ -172,7 +172,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
 
     const navigationItems: NavigationItem[] = [
         {
-            key: 'основное',
+            key: 'main',
             label: t('Основное'),
             subItems: [
                 { label: t('Главная'), route: '/(app)/' },
@@ -181,7 +181,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             ],
         },
         {
-            key: 'развитие',
+            key: 'growth',
             label: t('Развитие'),
             subItems: [
                 { label: t('Подборка контента') },
@@ -189,7 +189,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             ],
         },
         {
-            key: 'управление',
+            key: 'settings',
             label: t('Управление'),
             subItems: [
                 { key: 'manage-subscription', label: t('Управление подпиской') },
@@ -199,7 +199,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             ],
         },
         {
-            key: 'о продукте',
+            key: 'about',
             label: t('О продукте'),
             subItems: [
                 { key: 'how-it-works', label: t('Как это работает') },
@@ -262,7 +262,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                     {/* Language Toggle - Moved up */}
                     <View style={styles.languageSection}>
                         <Text style={styles.languageSectionTitle}>
-                            {language === 'ru' ? 'Язык' : 'Language'}
+                            {'Language'}
                         </Text>
                         <View style={styles.languageButtons}>
                             <TouchableOpacity
@@ -338,14 +338,14 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             <InfoModal
                 visible={howItWorksVisible}
                 onClose={() => setHowItWorksVisible(false)}
-                title="Как это работает"
-                content="Zenyth AI — это твой персональный ассистент для развития хобби. Мы помогаем тебе планировать занятия, отслеживать прогресс и общаться с умным AI-наставником, который всегда готов помочь советом или мотивацией."
+                title="How It Works"
+                content="Zenyth AI is your personal assistant for hobby development. We help you plan sessions, track your progress, and chat with a smart AI Coach that's always ready to offer advice or motivation."
             />
 
             <InfoModal
                 visible={shareVisible}
                 onClose={() => setShareVisible(false)}
-                title="Поделиться с другом"
+                title="Share with a Friend"
                 type="share"
                 shareLink="https://zenyth.ai/download"
             />
@@ -353,8 +353,8 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             <InfoModal
                 visible={feedbackVisible}
                 onClose={() => setFeedbackVisible(false)}
-                title="Обратная связь"
-                content="Мы всегда рады вашим вопросам и предложениям! Напишите нам на info@zenyth.ai"
+                title="Feedback"
+                content="We always welcome your questions and suggestions! Write to us at info@zenyth.ai"
             />
         </Modal>
     );

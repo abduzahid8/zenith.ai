@@ -42,7 +42,7 @@ export const SessionTimerScreen: React.FC = () => {
         timerStatus, timeLeft, progress, formatTime,
         handlePlay, handlePause, handleReset, handleStopPress,
         // Tasks
-        tasks, handleToggleTask,
+        tasks, handleToggleTask, lockedTaskIds,
         // Drawer
         isTaskListVisible, setIsTaskListVisible,
         // Summary
@@ -273,6 +273,7 @@ export const SessionTimerScreen: React.FC = () => {
                 backdropAnim={backdropAnim}
                 onCompleteTask={handleToggleTask}
                 onClose={() => setIsTaskListVisible(false)}
+                lockedTaskIds={lockedTaskIds}
             />
 
             {/* Stop Confirmation Modal */}

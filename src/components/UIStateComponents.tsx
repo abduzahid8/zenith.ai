@@ -88,11 +88,11 @@ export const HomeScreenSkeleton: React.FC = () => {
 export const StatisticsEmptyState: React.FC<{ type: 'screenTime' | 'hobby' }> = ({ type }) => {
     const emoji = type === 'screenTime' ? '📊' : '🎯';
     const title = type === 'screenTime'
-        ? 'Нет данных об экранном времени'
-        : 'Нет данных о хобби';
+        ? 'No screen time data'
+        : 'No hobby data';
     const subtitle = type === 'screenTime'
-        ? 'Данные появятся после первого дня использования'
-        : 'Начните сессию, чтобы отслеживать прогресс';
+        ? 'Data will appear after your first day of use'
+        : 'Start a session to track your progress';
 
     const { colors } = useAppTheme();
     const skeletonStyles = useMemo(() => createStyles(colors), [colors]);

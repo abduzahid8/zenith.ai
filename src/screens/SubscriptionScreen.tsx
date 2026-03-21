@@ -32,22 +32,22 @@ function getDisplayPrice(product: any): string {
 // ── Free plan features ──────────────────────────────────
 
 const FREE_FEATURES = [
-    'Подбор хобби по характеру (анкета + AI)',
-    'Выбор 1 хобби',
-    'Ежедневная цель по хобби',
-    'Трекер экранного времени (базовый)',
-    'Прогресс в процентах',
-    'AI-наставник — 2 диалога в день',
+    'Hobby matching by personality (quiz + AI)',
+    'Choose 1 hobby',
+    'Daily hobby goal',
+    'Basic screen time tracker',
+    'Progress in percentages',
+    'AI Coach — 2 chats per day',
 ];
 
 const PREMIUM_FEATURES = [
-    'Всё из Free',
-    'Глубокий AI-наставник (без ограничений)',
-    'Персональный план развития',
-    'План на неделю',
-    'Анализ прогресса и объяснения',
-    'Объяснение прогресса',
-    'Недельный AI-отчёт',
+    'Everything in Free',
+    'Deep AI Coach (unlimited)',
+    'Personalized growth plan',
+    'Weekly plan',
+    'Progress analysis & explanations',
+    'Progress breakdown',
+    'Weekly AI report',
 ];
 
 // ── Component ───────────────────────────────────────────
@@ -121,7 +121,7 @@ export const SubscriptionScreen: React.FC = () => {
             {/* Title */}
             <View style={styles.titleContainer}>
                 <Text style={styles.titleText}>
-                    Выбери формат, который подходит тебе
+                    Choose the plan that works for you
                 </Text>
             </View>
 
@@ -142,12 +142,12 @@ export const SubscriptionScreen: React.FC = () => {
                     disabled={isBusy}
                 >
                     <View style={styles.planHeader}>
-                        <Text style={[styles.planTitle, styles.planTitleDark]}>Месячная</Text>
+                        <Text style={[styles.planTitle, styles.planTitleDark]}>Monthly</Text>
                         <View style={styles.priceContainer}>
                             <Text style={[styles.planPrice, styles.planPriceDark]}>
                                 {monthlyProduct ? getDisplayPrice(monthlyProduct) : '—'}
                             </Text>
-                            <Text style={styles.planPeriod}>/мес</Text>
+                            <Text style={styles.planPeriod}>/mo</Text>
                         </View>
                     </View>
                     <View style={styles.featuresContainer}>
@@ -172,12 +172,12 @@ export const SubscriptionScreen: React.FC = () => {
                     disabled={isBusy}
                 >
                     <View style={styles.planHeader}>
-                        <Text style={[styles.planTitle, styles.premiumTitle]}>Годовая</Text>
+                        <Text style={[styles.planTitle, styles.premiumTitle]}>Annual</Text>
                         <View style={styles.priceContainer}>
                             <Text style={[styles.planPrice, styles.premiumPrice]}>
                                 {annualProduct ? getDisplayPrice(annualProduct) : '—'}
                             </Text>
-                            <Text style={styles.planPeriodLight}>/год</Text>
+                            <Text style={styles.planPeriodLight}>/yr</Text>
                         </View>
                     </View>
                     <View style={styles.featuresContainer}>
@@ -193,13 +193,13 @@ export const SubscriptionScreen: React.FC = () => {
                 {/* Subscription Disclosure (Guideline 3.1.2) */}
                 <View style={styles.disclosureContainer}>
                     <Text style={styles.disclosureText}>
-                        Подписка продлевается автоматически, если автопродление не отключено
-                        минимум за 24 часа до окончания текущего периода. Оплата взимается через
-                        учетную запись App Store. Управление подпиской и отключение автопродления
-                        доступно в настройках учетной записи App Store после покупки.
+                        Subscription renews automatically unless auto-renewal is disabled
+                        at least 24 hours before the end of the current period. Payment is charged
+                        through your App Store account. Manage your subscription and disable
+                        auto-renewal in your App Store account settings after purchase.
                     </Text>
                     <TouchableOpacity onPress={() => router.push('/privacy' as any)}>
-                        <Text style={styles.disclosureLink}>Политика конфиденциальности</Text>
+                        <Text style={styles.disclosureLink}>Privacy Policy</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>
@@ -215,10 +215,10 @@ export const SubscriptionScreen: React.FC = () => {
                 <Button
                     title={
                         isPurchasing
-                            ? 'Обработка...'
+                            ? 'Processing...'
                             : isLoading
-                                ? 'Загрузка...'
-                                : 'Оформить Premium'
+                                ? 'Loading...'
+                                : 'Get Premium'
                     }
                     onPress={handlePurchase}
                     variant="primary"
@@ -237,7 +237,7 @@ export const SubscriptionScreen: React.FC = () => {
                     {isRestoring ? (
                         <ActivityIndicator size="small" color={colors.textSecondary} />
                     ) : (
-                        <Text style={styles.restoreLinkText}>Восстановить покупки</Text>
+                        <Text style={styles.restoreLinkText}>Restore purchases</Text>
                     )}
                 </TouchableOpacity>
 
@@ -248,7 +248,7 @@ export const SubscriptionScreen: React.FC = () => {
                     activeOpacity={0.7}
                     disabled={isBusy}
                 >
-                    <Text style={styles.freeLinkText}>Продолжить с Free</Text>
+                    <Text style={styles.freeLinkText}>Continue with Free</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>

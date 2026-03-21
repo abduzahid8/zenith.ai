@@ -21,7 +21,7 @@ import { useAppTheme } from '../theme/useAppTheme';
 
 const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24) }} resizeMode="contain" />;
 
-const WEEK_DAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export const ScreenTimeScreen: React.FC = () => {
     const { streakDays } = useUserProfileStore();
@@ -116,12 +116,12 @@ export const ScreenTimeScreen: React.FC = () => {
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                <Text style={styles.screenTitle}>Экранное время</Text>
+                <Text style={styles.screenTitle}>Screen Time</Text>
                 {!hasAnalyticsData ? (
                     <View style={styles.permissionCard}>
-                        <Text style={styles.permissionTitle}>Нет доступа к данным</Text>
+                        <Text style={styles.permissionTitle}>No data access</Text>
                         <Text style={styles.permissionText}>
-                            Разрешите доступ к Screen Time/Usage Access, чтобы увидеть недельную аналитику.
+                            Grant access to Screen Time/Usage Access to see weekly analytics.
                         </Text>
                         <TouchableOpacity
                             style={styles.permissionButton}
@@ -132,7 +132,7 @@ export const ScreenTimeScreen: React.FC = () => {
                             {isChecking ? (
                                 <ActivityIndicator color={colors.white} />
                             ) : (
-                                <Text style={styles.permissionButtonText}>Открыть доступ</Text>
+                                <Text style={styles.permissionButtonText}>Grant Access</Text>
                             )}
                         </TouchableOpacity>
                     </View>
@@ -141,7 +141,7 @@ export const ScreenTimeScreen: React.FC = () => {
                         {!isAuthorized && (
                             <View style={styles.fallbackInfo}>
                                 <Text style={styles.fallbackInfoText}>
-                                    Нет прямого доступа к данным устройства. Показана серверная аналитика приложения.
+                                    No direct device data access. Showing server-side app analytics.
                                 </Text>
                                 <TouchableOpacity
                                     style={styles.fallbackButton}
@@ -152,7 +152,7 @@ export const ScreenTimeScreen: React.FC = () => {
                                     {isChecking ? (
                                         <ActivityIndicator color={colors.white} />
                                     ) : (
-                                        <Text style={styles.fallbackButtonText}>Открыть доступ к устройству</Text>
+                                        <Text style={styles.fallbackButtonText}>Grant Device Access</Text>
                                     )}
                                 </TouchableOpacity>
                             </View>
@@ -164,18 +164,18 @@ export const ScreenTimeScreen: React.FC = () => {
                             <Text style={styles.statCardBigText}>
                                 {changeFromLastWeek >= 0 ? '+' : ''}{changeFromLastWeek}%
                             </Text>
-                            <Text style={styles.lastWeekText}>За последнюю неделю</Text>
+                            <Text style={styles.lastWeekText}>This past week</Text>
                         </View>
 
                         <View style={styles.statCardDarkBlue}>
                             <Text style={styles.statCardBigText}>{totalDurationFormatted}</Text>
-                            <Text style={styles.screenTimeText}>Экранное время{'\n'}за неделю</Text>
+                            <Text style={styles.screenTimeText}>Screen time{'\n'}this week</Text>
                         </View>
 
                         {(isLoading || isChecking) && (
                             <View style={styles.loadingRow}>
                                 <ActivityIndicator color={colors.text} />
-                                <Text style={styles.loadingText}>Обновляем данные...</Text>
+                                <Text style={styles.loadingText}>Updating data...</Text>
                             </View>
                         )}
 
@@ -184,7 +184,7 @@ export const ScreenTimeScreen: React.FC = () => {
                         )}
 
                         {dataSource === 'supabase' && (
-                            <Text style={styles.sourceText}>Источник данных: серверные логи приложения</Text>
+                            <Text style={styles.sourceText}>Data source: server-side app logs</Text>
                         )}
                     </>
                 )}
