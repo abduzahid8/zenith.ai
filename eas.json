@@ -18,6 +18,10 @@
     "appVersionSource": "remote"
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6759964271"
+      }
+    }
   }
 }
