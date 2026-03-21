@@ -1,0 +1,77 @@
+{
+  "identifier" : "F4A2B8C1",
+  "non_renewing_subscriptions" : [],
+  "products" : [],
+  "settings" : {
+    "_askToBuyEnabled" : false,
+    "_billingGracePeriodEnabled" : false,
+    "_billingGracePeriodISODuration" : "P3D",
+    "_billingIssuesEnabled" : false,
+    "_defaultLocale" : "en_US",
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : []
+  },
+  "subscription_groups" : [
+    {
+      "id" : "3E91A2B7",
+      "localizations" : [
+        {
+          "customAppName" : "Zenyth",
+          "locale" : "en_US",
+          "name" : "Zenyth Premium"
+        }
+      ],
+      "name" : "Zenyth Premium",
+      "subscriptions" : [
+        {
+          "ad_hoc_offers" : [],
+          "code_offers" : [],
+          "display_price" : "4.99",
+          "family_shareable" : false,
+          "group_number" : 1,
+          "internal_id" : "AA001",
+          "introductory_offers" : [],
+          "localizations" : [
+            {
+              "description" : "Full access to Zenyth AI features, billed monthly.",
+              "displayName" : "Monthly Premium",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.zenyth.premium.monthly",
+          "recurring_subscription_period" : "P1M",
+          "reference_name" : "Monthly",
+          "subscription_group_display_name" : "Zenyth Premium",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "ad_hoc_offers" : [],
+          "code_offers" : [],
+          "display_price" : "39.99",
+          "family_shareable" : false,
+          "group_number" : 1,
+          "internal_id" : "AA002",
+          "introductory_offers" : [],
+          "localizations" : [
+            {
+              "description" : "Full access to Zenyth AI features, billed annually. Save 33%.",
+              "displayName" : "Annual Premium",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.zenyth.premium.annual",
+          "recurring_subscription_period" : "P1Y",
+          "reference_name" : "Annual",
+          "subscription_group_display_name" : "Zenyth Premium",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 2,
+    "minor" : 0
+  }
+}
