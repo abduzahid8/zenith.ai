@@ -67,15 +67,8 @@ export const metricService = {
             };
 
             if (timezone) payload.timezone = timezone;
-            // Only update averages if we have data, otherwise keep existing or null? 
-            // Actually, for daily stats, we should overwrite with current calculation.
-            payload.avg_difficulty_rating = avgDifficulty; // Assuming column exists or we add it to context? 
-            // Wait, schema in migration 003 didn't have avg_difficulty_rating column explicitly, 
-            // it had avg_session_minutes. Let's check schema.
-            // Schema has: completion_rate, avg_session_minutes, tasks_completed, context.
-            // We can store ratings in 'context' or 'tasks_completed'.
 
-            // Let's put averages in context for now as extended metrics
+            // Store average ratings in the context JSONB field (not as top-level columns)
             payload.context = {
                 avg_difficulty: avgDifficulty,
                 avg_engagement: avgEngagement

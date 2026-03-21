@@ -6,6 +6,7 @@ import {
     StatusBar,
     TouchableOpacity,
     Image,
+    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -14,18 +15,30 @@ import { fonts } from '../theme';
 import { Button } from '../components/Button';
 import { LogoNew } from '../components/Logo';
 import { useAppTheme } from '../theme/useAppTheme';
+import { useAuthStore } from '../store/authStore';
 
 export default function AuthScreen() {
     const router = useRouter();
-    const { colors } = useAppTheme();
+    const { colors, isDark } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
+    const { signInWithGoogle, signInWithApple } = useAuthStore();
 
-    const handleGoogleSignIn = () => {
-        router.push('/quiz-intro');
+    const handleGoogleSignIn = async () => {
+        try {
+            await signInWithGoogle();
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : 'Не удалось войти через Google';
+            Alert.alert('Ошибка', msg);
+        }
     };
 
-    const handleAppleSignIn = () => {
-        router.push('/quiz-intro');
+    const handleAppleSignIn = async () => {
+        try {
+            await signInWithApple();
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : 'Не удалось войти через Apple';
+            Alert.alert('Ошибка', msg);
+        }
     };
 
     const handleEmailSignIn = () => {

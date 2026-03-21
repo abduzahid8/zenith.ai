@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { t } from './languageStore';
 
 // Subscription level type for dynamic text display
 export type SubscriptionLevel = 'free' | 'trial' | 'premium';
@@ -24,13 +25,13 @@ export const getGreeting = (userName?: string): string => {
     let greeting = '';
 
     if (hour < 6) {
-        greeting = 'Доброй ночи';
+        greeting = t('Доброй ночи');
     } else if (hour < 12) {
-        greeting = 'Доброе утро';
+        greeting = t('Доброе утро');
     } else if (hour < 18) {
-        greeting = 'Добрый день';
+        greeting = t('Добрый день');
     } else {
-        greeting = 'Добрый вечер';
+        greeting = t('Добрый вечер');
     }
 
     if (userName) {

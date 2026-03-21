@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Animated, Easing, AppState, AppStateStatus } from 'react-native';
+import { Animated, Easing, AppState, AppStateStatus, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { scale } from '../constants';
@@ -199,7 +199,7 @@ export function useTimer() {
             .filter((id): id is string => !!id);
         sessionService.saveSession(user.id, selectedHobby, durationSeconds, {
             tasksCompleted: completedTaskIds,
-        }).catch(err => console.error('Failed to save session:', err));
+        }).catch(err => console.error('Failed to save session:', JSON.stringify(err, null, 2)));
     }, [user, selectedHobby, tasks]);
 
     // --- Actions ---
@@ -210,9 +210,32 @@ export function useTimer() {
     }, []);
 
     const handlePlay = useCallback(() => {
+        // Check if all tasks are completed before starting
+        const nonSkippedTasks = tasks.filter(t => !t.completed || t.completed);
+        const allCompleted = nonSkippedTasks.length > 0 && nonSkippedTasks.every(t => t.completed);
+
+        if (allCompleted) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            Alert.alert(
+                'Все задачи выполнены! 🎉',
+                'Вы выполнили все задачи на сегодня. Отличная работа! Вы можете начать сессию для дополнительной практики.',
+                [
+                    { text: 'Закрыть', style: 'cancel' },
+                    {
+                        text: 'Начать',
+                        onPress: () => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                            setTimerStatus('running');
+                        },
+                    },
+                ]
+            );
+            return;
+        }
+
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         setTimerStatus('running');
-    }, []);
+    }, [tasks]);
 
     const handlePause = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

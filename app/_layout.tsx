@@ -6,6 +6,8 @@ import { StyleSheet, View, Text, ActivityIndicator, AppState, Platform } from 'r
 import { useAuthStore } from '../src/store/authStore';
 import { useTaskStore } from '../src/store/taskStore';
 import { useUserProfileStore } from '../src/store/userProfileStore';
+import { useSubscriptionStore } from '../src/store/subscriptionStore';
+import { iapService } from '../src/services/iapService';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { useAppTheme } from '../src/theme/useAppTheme';
 import { ROUTES } from '../src/config/routes';
@@ -43,6 +45,14 @@ export default function RootLayout() {
 
     useEffect(() => {
         initialize();
+    }, []);
+
+    // Initialize IAP subscription system
+    useEffect(() => {
+        useSubscriptionStore.getState().initialize();
+        return () => {
+            iapService.teardown();
+        };
     }, []);
 
     useEffect(() => {

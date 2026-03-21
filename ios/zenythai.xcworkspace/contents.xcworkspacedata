@@ -2,6 +2,9 @@
 <Workspace
    version = "1.0">
    <FileRef
+      location = "group:Zenyth.storekit">
+   </FileRef>
+   <FileRef
       location = "group:zenythai.xcodeproj">
    </FileRef>
    <FileRef

@@ -23,8 +23,6 @@ public class AppDelegate: ExpoAppDelegate {
 
 #if os(iOS) || os(tvOS)
     window = UIWindow(frame: UIScreen.main.bounds)
-    // Force dark appearance globally
-    window?.overrideUserInterfaceStyle = .dark
     factory.startReactNative(
       withModuleName: "main",
       in: window,

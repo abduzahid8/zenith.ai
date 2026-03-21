@@ -61,12 +61,24 @@ export default function LoginScreen() {
         }
     };
 
-    const handleGoogleSignIn = () => {
-        Alert.alert('Скоро', 'Вход через Google будет доступен в следующем обновлении.');
+    const { signInWithGoogle, signInWithApple } = useAuthStore();
+
+    const handleGoogleSignIn = async () => {
+        try {
+            await signInWithGoogle();
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : 'Не удалось войти через Google';
+            Alert.alert('Ошибка', msg);
+        }
     };
 
-    const handleAppleSignIn = () => {
-        Alert.alert('Скоро', 'Вход через Apple будет доступен в следующем обновлении.');
+    const handleAppleSignIn = async () => {
+        try {
+            await signInWithApple();
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : 'Не удалось войти через Apple';
+            Alert.alert('Ошибка', msg);
+        }
     };
 
     return (
@@ -160,7 +172,7 @@ export default function LoginScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.socialButton} onPress={handleAppleSignIn}>
-                    <FontAwesome name="apple" size={24} color={isDark ? colors.white : colors.black} />
+                    <FontAwesome name="apple" size={24} color={colors.text} />
                     <Text style={styles.socialButtonText}>Войти с Apple</Text>
                 </TouchableOpacity>
             </View>
@@ -284,7 +296,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         borderRadius: 28,
         borderWidth: 1,
         borderColor: colors.border,
-        backgroundColor: colors.surfaceLight,
+        backgroundColor: colors.background,
         gap: 12,
     },
     socialIcon: {

@@ -47,10 +47,7 @@ export default function RegisterScreen() {
             // Check if session was created. If not, email confirmation is required.
             const session = useAuthStore.getState().session;
             if (!session) {
-                router.replace({
-                    pathname: '/(auth)/email-confirmation',
-                    params: { email: email.trim() }
-                });
+                router.replace('/(auth)/registration-success');
             }
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : 'Произошла ошибка';
@@ -58,12 +55,24 @@ export default function RegisterScreen() {
         }
     };
 
-    const handleGoogleSignIn = () => {
-        Alert.alert('Скоро', 'Регистрация через Google будет доступна в следующем обновлении.');
+    const { signInWithGoogle, signInWithApple } = useAuthStore();
+
+    const handleGoogleSignIn = async () => {
+        try {
+            await signInWithGoogle();
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : 'Не удалось войти через Google';
+            Alert.alert('Ошибка', msg);
+        }
     };
 
-    const handleAppleSignIn = () => {
-        Alert.alert('Скоро', 'Регистрация через Apple будет доступна в следующем обновлении.');
+    const handleAppleSignIn = async () => {
+        try {
+            await signInWithApple();
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : 'Не удалось войти через Apple';
+            Alert.alert('Ошибка', msg);
+        }
     };
 
     return (
@@ -154,7 +163,7 @@ export default function RegisterScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.socialButton} onPress={handleAppleSignIn}>
-                    <FontAwesome name="apple" size={24} color={isDark ? colors.white : colors.black} />
+                    <FontAwesome name="apple" size={24} color={colors.text} />
                     <Text style={styles.socialButtonText}>Войти с Apple</Text>
                 </TouchableOpacity>
             </View>
@@ -268,7 +277,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         borderRadius: 28,
         borderWidth: 1,
         borderColor: colors.border,
-        backgroundColor: colors.surfaceLight,
+        backgroundColor: colors.background,
         gap: 12,
     },
     socialIcon: {

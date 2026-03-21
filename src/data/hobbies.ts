@@ -33,9 +33,57 @@ export interface Hobby {
     profile: HobbyProfile;
 }
 
-// 25 Hobbies with Full Profiles
+// Hobbies Database
 export const HOBBIES_DATABASE: Hobby[] = [
-    // 🧠 Intellectual / Cognitive Development
+    // 🧠 Quiz-matched hobbies (Python, English, Reading, Chess, Chinese)
+    {
+        id: 'python',
+        title: 'Python Programming',
+        titleRu: 'Программирование (Python)',
+        emoji: '💻',
+        category: 'technology',
+        description: 'Научись писать код на самом популярном языке',
+        whyFitsYou: [
+            'Высокооплачиваемый навык',
+            'Логика + практика с первого дня',
+            'Видимый результат в коде'
+        ],
+        timePerDay: '1-2 часа',
+        thirtyDayResult: 'Первое работающее приложение',
+        profile: { mental: 9, creative: 4, physical: 1, structure: 8, freedom: 4, individual: 8, social: 3, quick: 4, long: 9 }
+    },
+    {
+        id: 'english',
+        title: 'English Language',
+        titleRu: 'Английский язык',
+        emoji: '🇬🇧',
+        category: 'intellectual',
+        description: 'Изучай язык международного общения',
+        whyFitsYou: [
+            'Открывает новые возможности',
+            'Чёткий прогресс по уровням',
+            'Полезно для карьеры'
+        ],
+        timePerDay: '30-60 минут',
+        thirtyDayResult: 'Освоение 500+ новых слов',
+        profile: { mental: 6, creative: 3, physical: 1, structure: 6, freedom: 5, individual: 6, social: 6, quick: 4, long: 7 }
+    },
+    {
+        id: 'reading',
+        title: 'Reading',
+        titleRu: 'Чтение книг',
+        emoji: '📚',
+        category: 'intellectual',
+        description: 'Нон-фикшн, саморазвитие, классика',
+        whyFitsYou: [
+            'Развивает мышление и словарный запас',
+            'Снижает стресс',
+            'Знания на всю жизнь'
+        ],
+        timePerDay: '30-60 минут',
+        thirtyDayResult: '4+ прочитанных книги',
+        profile: { mental: 7, creative: 4, physical: 1, structure: 5, freedom: 6, individual: 9, social: 1, quick: 4, long: 7 }
+    },
     {
         id: 'chess',
         title: 'Chess',
@@ -53,20 +101,20 @@ export const HOBBIES_DATABASE: Hobby[] = [
         profile: { mental: 9, creative: 2, physical: 1, structure: 7, freedom: 4, individual: 8, social: 3, quick: 4, long: 8 }
     },
     {
-        id: 'english',
-        title: 'English Language',
-        titleRu: 'Английский язык',
-        emoji: '🇬🇧',
+        id: 'chinese',
+        title: 'Chinese Language',
+        titleRu: 'Китайский язык',
+        emoji: '��',
         category: 'intellectual',
-        description: 'Изучай язык международного общения',
+        description: 'Изучай язык 1.4 миллиарда людей',
         whyFitsYou: [
-            'Открывает новые возможности',
-            'Чёткий прогресс по уровням',
-            'Полезно для карьеры'
+            'Один из самых востребованных языков',
+            'Тренирует память и внимание',
+            'Открывает огромный рынок возможностей'
         ],
         timePerDay: '30-60 минут',
-        thirtyDayResult: 'Освоение 500+ новых слов',
-        profile: { mental: 6, creative: 3, physical: 1, structure: 6, freedom: 5, individual: 6, social: 6, quick: 4, long: 7 }
+        thirtyDayResult: 'Базовые разговорные фразы и иероглифы',
+        profile: { mental: 7, creative: 3, physical: 1, structure: 7, freedom: 4, individual: 6, social: 6, quick: 3, long: 9 }
     },
     {
         id: 'languages',

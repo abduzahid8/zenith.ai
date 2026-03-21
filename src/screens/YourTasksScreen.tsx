@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTaskStore } from '../store/taskStore';
 import { useUserProfileStore } from '../store/userProfileStore';
@@ -63,10 +65,10 @@ export const YourTasksScreen = () => {
             <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Image
-                        source={require('../../icons/back.png')}
-                        style={styles.backIcon}
-                        resizeMode="contain"
+                    <Ionicons
+                        name="chevron-back"
+                        size={scale(24)}
+                        color={colors.text}
                     />
                     <Text style={styles.backText}>Назад</Text>
                 </TouchableOpacity>

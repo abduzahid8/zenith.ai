@@ -15,7 +15,6 @@ export const sessionService = {
                 user_id: userId,
                 hobby_id: hobbyId,
                 duration_seconds: durationSeconds,
-                quality_rating: options?.qualityRating,
                 focus_score: options?.focusScore,
                 notes: options?.notes,
                 tasks_completed: options?.tasksCompleted

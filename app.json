@@ -15,16 +15,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "3",
+      "buildNumber": "6",
       "bundleIdentifier": "com.zenyth.ai",
       "usesAppleSignIn": true,
-      "entitlements": {
-        "com.apple.developer.family-controls": true
-      },
+      "entitlements": {},
       "infoPlist": {
-        "NSHealthShareUsageDescription": "We need access to track your screen time",
-        "NSHealthUpdateUsageDescription": "We use this to help you manage your screen time",
-        "NSFamilyControlsUsageDescription": "We need access to manage screen time limits",
+        "NSHealthShareUsageDescription": "Zenyth reads your daily Screen Time data to show weekly usage trends and help you track your digital wellness goals.",
+        "NSHealthUpdateUsageDescription": "Zenyth records your hobby session activity to help you measure productivity progress alongside screen time data.",
+        "NSFamilyControlsUsageDescription": "Zenyth uses Family Controls to help you set and manage app usage limits as part of your productivity plan.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -55,7 +53,8 @@
             "deploymentTarget": "16.0"
           }
         }
-      ]
+      ],
+      "expo-iap"
     ],
     "experiments": {
       "typedRoutes": true

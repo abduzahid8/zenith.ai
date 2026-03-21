@@ -41,7 +41,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>3</string>
+    <string>4</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>LSMinimumSystemVersion</key>
@@ -56,11 +56,11 @@
       <true/>
     </dict>
     <key>NSFamilyControlsUsageDescription</key>
-    <string>We need access to manage screen time limits</string>
+    <string>Zenyth uses Family Controls to help you set and manage app usage limits as part of your productivity plan.</string>
     <key>NSHealthShareUsageDescription</key>
-    <string>We need access to track your screen time</string>
+    <string>Zenyth reads your daily Screen Time data to show weekly usage trends and help you track your digital wellness goals.</string>
     <key>NSHealthUpdateUsageDescription</key>
-    <string>We use this to help you manage your screen time</string>
+    <string>Zenyth records your hobby session activity to help you measure productivity progress alongside screen time data.</string>
     <key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>

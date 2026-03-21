@@ -8,7 +8,9 @@ import { TaskType } from '../services/supabase/types';
 import { fonts } from '../theme';
 import { scale } from '../constants';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/useAppTheme';
+
 
 export const CategoryTasksScreen = () => {
     const router = useRouter();
@@ -39,10 +41,10 @@ export const CategoryTasksScreen = () => {
             <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Image
-                        source={require('../../icons/back.png')}
-                        style={styles.backIcon}
-                        resizeMode="contain"
+                    <Ionicons
+                        name="chevron-back"
+                        size={scale(24)}
+                        color={colors.text}
                     />
                     <Text style={styles.backText}>Назад</Text>
                 </TouchableOpacity>

@@ -9,6 +9,7 @@ import { fonts } from '../theme';
 import { scale } from '../constants';
 import { TaskFeedbackModal } from './TaskFeedbackModal';
 import { useAppTheme } from '../theme/useAppTheme';
+import { useT } from '../store/languageStore';
 
 const getTaskColors = (type: TaskType, colors: any) => {
     switch (type) {
@@ -29,6 +30,17 @@ const TaskCard = ({ task, onPress, colors }: { task: Task, onPress: (task: Task)
     const theme = getTaskColors(task.type, colors);
     const isCompleted = task.status === 'completed';
     const styles = useMemo(() => createStyles(colors), [colors]);
+    const t = useT();
+
+    const getTaskTypeLabel = (type: TaskType) => {
+        switch (type) {
+            case 'theory': return 'Узнай';
+            case 'practice': return 'Сделай';
+            case 'analysis': return 'Углуби 2';
+            case 'puzzles': return 'Углуби 1';
+            default: return 'Задача';
+        }
+    };
 
     // Map icon source
     let iconSource: ImageSourcePropType = require('../../icons/book.png');
@@ -120,6 +132,17 @@ export const DailyTasksList = () => {
     const [selectedTask, setSelectedTask] = React.useState<Task | null>(null);
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
+    const t = useT();
+
+    const getTaskTypeLabel = (type: TaskType) => {
+        switch (type) {
+            case 'theory': return 'Узнай';
+            case 'practice': return 'Сделай';
+            case 'analysis': return 'Углуби 2';
+            case 'puzzles': return 'Углуби 1';
+            default: return 'Задача';
+        }
+    };
 
     useEffect(() => {
         if (userId) {
@@ -178,7 +201,7 @@ export const DailyTasksList = () => {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.headerTitle}>Твой день</Text>
+            <Text style={styles.headerTitle}>{t('Твой день')}</Text>
             <View style={styles.listContainer}>
                 {engineTasks.map((task, index) => (
                     <TaskCard
@@ -204,15 +227,6 @@ export const DailyTasksList = () => {
     );
 };
 
-const getTaskTypeLabel = (type: TaskType) => {
-    switch (type) {
-        case 'theory': return 'Теория';
-        case 'practice': return 'Практика';
-        case 'analysis': return 'Анализ';
-        case 'puzzles': return 'Задачи';
-        default: return 'Задача';
-    }
-};
 
 const createStyles = (colors: any) => StyleSheet.create({
     container: {

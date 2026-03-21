@@ -9,6 +9,7 @@ import {
     Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { scale, SCREEN_WIDTH } from '../../constants';
 import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
@@ -16,6 +17,7 @@ import { useTaskStore } from '../../store/taskStore';
 import { useAuthStore } from '../../store/authStore';
 import { useUserProfileStore } from '../../store/userProfileStore';
 import { Task, TaskType } from '../../services/supabase/types';
+import { useT } from '../../store/languageStore';
 
 interface WeeklyPlanTabProps {
     isPremium: boolean;
@@ -29,9 +31,10 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
     const { isPremium: profilePremium, setWeeklyTasks } = useUserProfileStore();
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
+    const t = useT();
 
     const ENGINE_TYPES: TaskType[] = ['theory', 'practice', 'analysis', 'puzzles'];
-    const allEngineTasks = dailyTasks.filter(t => ENGINE_TYPES.includes(t.type as TaskType));
+    const allEngineTasks = dailyTasks.filter(task => ENGINE_TYPES.includes(task.type as TaskType));
     
     // Enforce display limit based on subscription
     const maxTasks = (isPremium || profilePremium) ? 4 : 3;
@@ -46,7 +49,7 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
     // Sync task titles into weeklyTasks whenever dailyTasks change
     useEffect(() => {
         if (engineTasks.length > 0) {
-            setWeeklyTasks(engineTasks.map(t => ({ text: t.title, completed: t.status === 'completed' })));
+            setWeeklyTasks(engineTasks.map(task => ({ text: task.title, completed: task.status === 'completed' })));
         }
     }, [dailyTasks]);
 
@@ -98,13 +101,13 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
     const getTitleForType = (type: TaskType) => {
         switch (type) {
             case 'theory':
-                return 'Теория';
+                return 'Узнай';
             case 'practice':
-                return 'Практика';
+                return 'Сделай';
             case 'analysis':
-                return 'Анализ';
+                return 'Углуби 2';
             case 'puzzles':
-                return 'Задачи';
+                return 'Углуби 1';
             default:
                 return 'Задача';
         }
@@ -112,7 +115,7 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
 
     // Fixed visual order: 1) Теория, 2) Практика, 3) Анализ, 4) Задачи
     const orderedTasks: Task[] = ENGINE_TYPES
-        .flatMap(type => engineTasks.filter(t => t.type === type));
+        .flatMap(type => engineTasks.filter(task => task.type === type));
 
     if (error && engineTasks.length === 0) {
         return (
@@ -143,7 +146,7 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
             contentContainerStyle={{ paddingBottom: scale(100) }}
             showsVerticalScrollIndicator={false}
         >
-            <Text style={styles.yourDayTitle}>Твой день</Text>
+            <Text style={styles.yourDayTitle}>{t('Твой день')}</Text>
 
             {engineTasks.length === 0 && (
                 <View style={styles.emptyState}>
@@ -158,6 +161,7 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
             )}
 
             {orderedTasks.map((task) => {
+                const isCompleted = task.status === 'completed';
                 const cardStyle = getCardStyleForTask(task);
                 const title = getTitleForType(task.type);
 
@@ -199,7 +203,11 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                             : styles.taskCardTitle;
 
                 return (
-                    <TouchableOpacity key={task.id || task.title} style={cardStyle} activeOpacity={0.8}>
+                    <TouchableOpacity
+                        key={task.id || task.title}
+                        style={[cardStyle, isCompleted && styles.completedCard]}
+                        activeOpacity={0.8}
+                    >
                         <View style={styles.taskCardContent}>
                             <View style={styles.taskCardTextContainer}>
                                 <Text style={titleStyle}>{title}</Text>
@@ -208,7 +216,15 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                                 </Text>
                             </View>
                             <View style={iconContainerStyle}>
-                                <Image source={iconSource} style={iconStyle} resizeMode="contain" />
+                                {isCompleted ? (
+                                    <Ionicons name="checkmark" size={scale(40)} color="#FFFFFF" />
+                                ) : (
+                                    <Image
+                                        source={iconSource}
+                                        style={iconStyle}
+                                        resizeMode="contain"
+                                    />
+                                )}
                             </View>
                         </View>
                     </TouchableOpacity>
@@ -459,6 +475,10 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontFamily: fonts.heading.bold,
         fontSize: scale(15),
         color: colors.white,
+    },
+    completedCard: {
+        backgroundColor: '#3CEB59',
+        borderWidth: 0,
     },
 });
 

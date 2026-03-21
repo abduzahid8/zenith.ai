@@ -63,7 +63,11 @@ export const tasksDbService = {
             .maybeSingle();
 
         if (error) throw error;
-        return data;
+        if (!data) return null;
+        return {
+            ...data,
+            type: mapDbTypeToEngine(data.type as string),
+        };
     },
 
     // Get tasks within a date range (for weekly stats or history)

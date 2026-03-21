@@ -6,6 +6,7 @@ export interface HobbyMatch {
     matchReasons: string[];
 }
 
+// Legacy type kept for test compatibility
 export interface UserProfile {
     mental: number;
     creative: number;
@@ -18,252 +19,208 @@ export interface UserProfile {
     long: number;
 }
 
-type ProfileAxis = keyof UserProfile;
-
-const BASE_PROFILE: UserProfile = {
-    mental: 5,
-    creative: 5,
-    physical: 5,
-    structure: 5,
-    freedom: 5,
-    individual: 5,
-    social: 5,
-    quick: 5,
-    long: 5,
+// Scoring table from algorithm file.
+// Outer key = hobby id, inner array = 10 questions × [scoreA, scoreB, scoreC]
+// A=index 0, B=index 1, C=index 2
+const HOBBY_SCORE_TABLE: Record<string, [number, number, number][]> = {
+    python: [
+        [3, 0, 2], // Q1
+        [3, 0, 2], // Q2
+        [3, 0, 2], // Q3
+        [1, 0, 3], // Q4
+        [3, 0, 2], // Q5
+        [2, 0, 3], // Q6
+        [3, 1, 1], // Q7
+        [3, 0, 1], // Q8
+        [3, 0, 2], // Q9
+        [3, 0, 2], // Q10
+    ],
+    english: [
+        [0, 3, 1], // Q1
+        [1, 3, 1], // Q2
+        [0, 3, 1], // Q3
+        [0, 3, 1], // Q4
+        [0, 3, 1], // Q5
+        [1, 3, 0], // Q6
+        [2, 1, 2], // Q7
+        [0, 3, 0], // Q8
+        [0, 3, 1], // Q9
+        [0, 3, 1], // Q10
+    ],
+    reading: [
+        [0, 3, 0], // Q1
+        [0, 3, 1], // Q2
+        [0, 3, 0], // Q3
+        [0, 3, 0], // Q4
+        [0, 3, 0], // Q5
+        [0, 3, 0], // Q6
+        [1, 2, 2], // Q7
+        [0, 1, 2], // Q8
+        [0, 3, 0], // Q9
+        [0, 3, 0], // Q10
+    ],
+    chess: [
+        [3, 0, 1], // Q1
+        [3, 0, 1], // Q2
+        [3, 0, 1], // Q3
+        [3, 0, 1], // Q4
+        [3, 0, 1], // Q5
+        [3, 1, 0], // Q6
+        [1, 3, 1], // Q7
+        [1, 0, 3], // Q8
+        [3, 0, 1], // Q9
+        [3, 0, 1], // Q10
+    ],
+    chinese: [
+        [0, 3, 1], // Q1
+        [1, 3, 1], // Q2
+        [0, 3, 1], // Q3
+        [0, 3, 1], // Q4
+        [0, 3, 1], // Q5
+        [1, 3, 0], // Q6
+        [2, 1, 2], // Q7
+        [0, 3, 0], // Q8
+        [0, 3, 1], // Q9
+        [0, 3, 1], // Q10
+    ],
 };
 
-const AXIS_WEIGHTS: Record<ProfileAxis, number> = {
-    mental: 1.4,
-    creative: 1.4,
-    physical: 1.4,
-    structure: 1.0,
-    freedom: 1.0,
-    individual: 1.0,
-    social: 1.0,
-    quick: 0.8,
-    long: 0.8,
-};
+const MAX_SCORE_PER_HOBBY = 30; // 10 questions × max 3 pts each
 
-const AXIS_REASON: Record<ProfileAxis, string> = {
-    mental: 'Подходит под ваш аналитический стиль',
-    creative: 'Соответствует вашему творческому вектору',
-    physical: 'Совпадает с вашей потребностью в активности',
-    structure: 'Дает понятную и структурированную практику',
-    freedom: 'Оставляет пространство для экспериментов',
-    individual: 'Комфортно для самостоятельного формата',
-    social: 'Хорошо раскрывается в общении с людьми',
-    quick: 'Дает быстрые и заметные результаты',
-    long: 'Подходит для долгосрочного развития навыка',
-};
+function getRawScore(hobbyId: string, answers: Record<number, number>): number {
+    const table = HOBBY_SCORE_TABLE[hobbyId];
+    if (!table) return 0;
 
-function clampScore(value: number): number {
-    return Math.max(1, Math.min(10, value));
-}
-
-function add(profile: UserProfile, axis: ProfileAxis, delta: number): void {
-    profile[axis] = clampScore(profile[axis] + delta);
-}
-
-// Converts quiz answers into profile axes used by the matcher.
-export function quizAnswersToProfile(answers: Record<number, number>): UserProfile {
-    const profile: UserProfile = { ...BASE_PROFILE };
-
-    const applyQuestion = (question: number, option: number | undefined) => {
-        if (option === undefined) return;
-
-        switch (question) {
-            case 1:
-                if (option === 0) {
-                    add(profile, 'mental', 2);
-                    add(profile, 'structure', 1);
-                    add(profile, 'long', 1);
-                } else if (option === 1) {
-                    add(profile, 'mental', 1);
-                    add(profile, 'creative', 1);
-                    add(profile, 'structure', 1);
-                } else {
-                    add(profile, 'physical', 1);
-                    add(profile, 'freedom', 1);
-                    add(profile, 'quick', 1);
-                }
-                break;
-            case 2:
-                if (option === 0) {
-                    add(profile, 'mental', 1);
-                    add(profile, 'structure', 1);
-                } else if (option === 1) {
-                    add(profile, 'mental', 1);
-                    add(profile, 'creative', 1);
-                } else {
-                    add(profile, 'physical', 1);
-                    add(profile, 'quick', 1);
-                }
-                break;
-            case 3:
-                if (option === 0) {
-                    add(profile, 'mental', 3);
-                } else if (option === 1) {
-                    add(profile, 'creative', 3);
-                } else {
-                    add(profile, 'physical', 3);
-                }
-                break;
-            case 4:
-                if (option === 0) {
-                    add(profile, 'individual', 3);
-                } else if (option === 2) {
-                    add(profile, 'social', 3);
-                }
-                break;
-            case 5:
-                if (option === 0) {
-                    add(profile, 'structure', 2);
-                    add(profile, 'mental', 1);
-                } else if (option === 1) {
-                    add(profile, 'mental', 1);
-                    add(profile, 'long', 1);
-                } else {
-                    add(profile, 'freedom', 1);
-                    add(profile, 'physical', 1);
-                    add(profile, 'quick', 1);
-                }
-                break;
-            case 6:
-                if (option === 0) {
-                    add(profile, 'mental', 2);
-                    add(profile, 'structure', 1);
-                } else if (option === 1) {
-                    add(profile, 'mental', 1);
-                    add(profile, 'long', 1);
-                } else {
-                    add(profile, 'physical', 1);
-                    add(profile, 'quick', 1);
-                    add(profile, 'freedom', 1);
-                }
-                break;
-            case 7:
-                if (option === 0) {
-                    add(profile, 'mental', 1);
-                    add(profile, 'structure', 1);
-                    add(profile, 'long', 1);
-                } else if (option === 1) {
-                    add(profile, 'mental', 1);
-                    add(profile, 'individual', 1);
-                } else {
-                    add(profile, 'quick', 1);
-                    add(profile, 'physical', 1);
-                }
-                break;
-            case 8:
-                if (option === 0) {
-                    add(profile, 'mental', 2);
-                    add(profile, 'structure', 1);
-                } else if (option === 1) {
-                    add(profile, 'creative', 1);
-                    add(profile, 'social', 1);
-                } else {
-                    add(profile, 'quick', 1);
-                    add(profile, 'individual', 1);
-                }
-                break;
-            case 9:
-                if (option === 0) {
-                    add(profile, 'mental', 1);
-                    add(profile, 'structure', 2);
-                } else if (option === 1) {
-                    add(profile, 'mental', 1);
-                    add(profile, 'long', 1);
-                } else {
-                    add(profile, 'freedom', 2);
-                    add(profile, 'quick', 1);
-                    add(profile, 'creative', 1);
-                }
-                break;
-            case 10:
-                if (option === 0) {
-                    add(profile, 'mental', 1);
-                    add(profile, 'structure', 1);
-                } else if (option === 1) {
-                    add(profile, 'creative', 1);
-                    add(profile, 'social', 1);
-                } else {
-                    add(profile, 'physical', 1);
-                    add(profile, 'quick', 1);
-                }
-                break;
+    let total = 0;
+    for (let q = 1; q <= 10; q++) {
+        const option = answers[q];
+        if (option !== undefined && option >= 0 && option <= 2) {
+            total += table[q - 1][option];
         }
+    }
+    return total;
+}
+
+function toPercent(raw: number): number {
+    return Math.round((raw / MAX_SCORE_PER_HOBBY) * 100);
+}
+
+export function matchHobbies(answers: Record<number, number>, count: number = 3): HobbyMatch[] {
+    const scoredHobbies = HOBBIES_DATABASE
+        .filter((hobby) => HOBBY_SCORE_TABLE[hobby.id] !== undefined)
+        .map((hobby) => {
+            const raw = getRawScore(hobby.id, answers);
+            return {
+                hobby,
+                matchScore: toPercent(raw),
+                matchReasons: hobby.whyFitsYou.slice(0, 3),
+            };
+        })
+        .sort((a, b) => b.matchScore - a.matchScore);
+
+    const safeCount = Math.max(1, Math.min(count, scoredHobbies.length));
+    return scoredHobbies.slice(0, safeCount);
+}
+
+// Legacy export kept for backward compatibility with existing tests
+export function quizAnswersToProfile(answers: Record<number, number>): UserProfile {
+    const base = 5;
+    const get = (q: number) => answers[q];
+
+    const mental =
+        base +
+        (get(1) === 0 ? 2 : get(1) === 1 ? 1 : 0) +
+        (get(2) === 0 ? 1 : get(2) === 1 ? 1 : 0) +
+        (get(3) === 0 ? 3 : 0) +
+        (get(5) === 0 ? 1 : get(5) === 1 ? 1 : 0) +
+        (get(6) === 0 ? 2 : get(6) === 1 ? 1 : 0) +
+        (get(7) === 0 ? 1 : get(7) === 1 ? 1 : 0) +
+        (get(8) === 0 ? 2 : 0) +
+        (get(9) === 0 ? 1 : get(9) === 1 ? 1 : 0) +
+        (get(10) === 0 ? 1 : 0);
+
+    const creative =
+        base +
+        (get(1) === 1 ? 1 : 0) +
+        (get(2) === 1 ? 1 : 0) +
+        (get(3) === 1 ? 3 : 0) +
+        (get(8) === 1 ? 1 : 0) +
+        (get(9) === 2 ? 1 : 0) +
+        (get(10) === 1 ? 1 : 0);
+
+    const physical =
+        base +
+        (get(1) === 2 ? 1 : 0) +
+        (get(2) === 2 ? 1 : 0) +
+        (get(3) === 2 ? 3 : 0) +
+        (get(5) === 2 ? 1 : 0) +
+        (get(6) === 2 ? 1 : 0) +
+        (get(7) === 2 ? 1 : 0) +
+        (get(10) === 2 ? 1 : 0);
+
+    const structure =
+        base +
+        (get(1) === 0 ? 1 : 0) +
+        (get(1) === 1 ? 1 : 0) +
+        (get(2) === 0 ? 1 : 0) +
+        (get(5) === 0 ? 2 : 0) +
+        (get(6) === 0 ? 1 : 0) +
+        (get(7) === 0 ? 1 : 0) +
+        (get(8) === 0 ? 1 : 0) +
+        (get(9) === 0 ? 2 : 0) +
+        (get(10) === 0 ? 1 : 0);
+
+    const freedom =
+        base +
+        (get(1) === 2 ? 1 : 0) +
+        (get(5) === 2 ? 1 : 0) +
+        (get(6) === 2 ? 1 : 0) +
+        (get(9) === 2 ? 2 : 0);
+
+    const individual =
+        base +
+        (get(4) === 0 ? 3 : 0) +
+        (get(7) === 1 ? 1 : 0) +
+        (get(8) === 2 ? 1 : 0);
+
+    const social =
+        base +
+        (get(4) === 2 ? 3 : 0) +
+        (get(8) === 1 ? 1 : 0) +
+        (get(10) === 1 ? 1 : 0);
+
+    const quick =
+        base +
+        (get(1) === 2 ? 1 : 0) +
+        (get(2) === 2 ? 1 : 0) +
+        (get(5) === 2 ? 1 : 0) +
+        (get(6) === 2 ? 1 : 0) +
+        (get(7) === 2 ? 1 : 0) +
+        (get(8) === 2 ? 1 : 0) +
+        (get(9) === 2 ? 1 : 0) +
+        (get(10) === 2 ? 1 : 0);
+
+    const long =
+        base +
+        (get(1) === 0 ? 1 : 0) +
+        (get(5) === 1 ? 1 : 0) +
+        (get(6) === 1 ? 1 : 0) +
+        (get(7) === 0 ? 1 : 0) +
+        (get(9) === 1 ? 1 : 0);
+
+    const clamp = (v: number) => Math.max(1, Math.min(10, v));
+
+    return {
+        mental: clamp(mental),
+        creative: clamp(creative),
+        physical: clamp(physical),
+        structure: clamp(structure),
+        freedom: clamp(freedom),
+        individual: clamp(individual),
+        social: clamp(social),
+        quick: clamp(quick),
+        long: clamp(long),
     };
-
-    for (let question = 1; question <= 10; question += 1) {
-        applyQuestion(question, answers[question]);
-    }
-
-    return profile;
-}
-
-function isUserProfile(value: unknown): value is UserProfile {
-    if (!value || typeof value !== 'object') return false;
-    const candidate = value as Record<string, unknown>;
-    return (
-        typeof candidate.mental === 'number' &&
-        typeof candidate.creative === 'number' &&
-        typeof candidate.physical === 'number' &&
-        typeof candidate.structure === 'number' &&
-        typeof candidate.freedom === 'number' &&
-        typeof candidate.individual === 'number' &&
-        typeof candidate.social === 'number' &&
-        typeof candidate.quick === 'number' &&
-        typeof candidate.long === 'number'
-    );
-}
-
-function getMatchScore(userProfile: UserProfile, hobby: Hobby): number {
-    const axes = Object.keys(AXIS_WEIGHTS) as ProfileAxis[];
-    const maxDistance = axes.reduce((acc, axis) => acc + 9 * AXIS_WEIGHTS[axis], 0);
-    const distance = axes.reduce(
-        (acc, axis) => acc + Math.abs(userProfile[axis] - hobby.profile[axis]) * AXIS_WEIGHTS[axis],
-        0,
-    );
-
-    return Math.max(0, Math.min(100, Math.round(((maxDistance - distance) / maxDistance) * 100)));
-}
-
-function getMatchReasons(userProfile: UserProfile, hobby: Hobby): string[] {
-    const axes = (Object.keys(AXIS_WEIGHTS) as ProfileAxis[])
-        .map((axis) => ({
-            axis,
-            diff: Math.abs(userProfile[axis] - hobby.profile[axis]),
-        }))
-        .sort((a, b) => a.diff - b.diff);
-
-    const reasons: string[] = [];
-
-    for (const { axis } of axes) {
-        if (reasons.length >= 2) break;
-        reasons.push(AXIS_REASON[axis]);
-    }
-
-    for (const baseReason of hobby.whyFitsYou) {
-        if (reasons.length >= 3) break;
-        reasons.push(baseReason);
-    }
-
-    return reasons.slice(0, 3);
-}
-
-export function matchHobbies(answersOrProfile: Record<number, number> | UserProfile, count: number = 3): HobbyMatch[] {
-    const profile = isUserProfile(answersOrProfile)
-        ? answersOrProfile
-        : quizAnswersToProfile(answersOrProfile || {});
-
-    const matches = HOBBIES_DATABASE.map((hobby) => ({
-        hobby,
-        matchScore: getMatchScore(profile, hobby),
-        matchReasons: getMatchReasons(profile, hobby),
-    })).sort((a, b) => b.matchScore - a.matchScore);
-
-    const safeCount = Math.max(1, Math.min(count, matches.length));
-    return matches.slice(0, safeCount);
 }
 
 export default matchHobbies;

@@ -9,6 +9,8 @@ import {
     TouchableWithoutFeedback,
     Image,
     Alert,
+    Easing,
+    Dimensions,
 } from 'react-native';
 import {
     Ionicons
@@ -21,6 +23,8 @@ import { fonts } from '../theme';
 import { useAppTheme } from '../theme/useAppTheme';
 import { InfoModal } from './ui/InfoModal';
 import * as Linking from 'expo-linking';
+import { useLanguageStore, useT } from '../store/languageStore';
+import { openManageSubscriptions } from '../store/subscriptionStore';
 
 const SIDEBAR_WIDTH = scale(180);
 
@@ -36,7 +40,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
     activeItem = 'основное',
 }) => {
     const router = useRouter();
-    const { signOut } = useAuthStore();
+    const { signOut, deleteAccount } = useAuthStore();
     const { userName, subscriptionLevel } = useUserProfileStore();
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
@@ -51,32 +55,38 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
     const [shareVisible, setShareVisible] = React.useState(false);
     const [feedbackVisible, setFeedbackVisible] = React.useState(false);
 
+    const { language, setLanguage } = useLanguageStore();
+    const t = useT();
+
     useEffect(() => {
         if (visible) {
             Animated.parallel([
-                Animated.spring(slideAnim, {
+                Animated.timing(slideAnim, {
                     toValue: 0,
+                    duration: 350,
                     useNativeDriver: true,
-                    speed: 45,
-                    bounciness: 15,
+                    easing: Easing.out(Easing.exp),
                 }),
                 Animated.timing(fadeAnim, {
                     toValue: 1,
                     duration: 300,
                     useNativeDriver: true,
+                    easing: Easing.out(Easing.quad),
                 }),
             ]).start();
         } else {
             Animated.parallel([
                 Animated.timing(slideAnim, {
                     toValue: SIDEBAR_WIDTH,
-                    duration: 250,
+                    duration: 300,
                     useNativeDriver: true,
+                    easing: Easing.in(Easing.exp),
                 }),
                 Animated.timing(fadeAnim, {
                     toValue: 0,
                     duration: 250,
                     useNativeDriver: true,
+                    easing: Easing.in(Easing.quad),
                 }),
             ]).start();
         }
@@ -96,6 +106,29 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
         }, 300);
     };
 
+    const handleDeleteAccount = () => {
+        Alert.alert(
+            t('Вы уверены?'),
+            t('Это действие необратимо. Все ваши данные будут удалены.'),
+            [
+                { text: t('Отмена'), style: 'cancel' },
+                {
+                    text: t('Удалить'),
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            onClose();
+                            await deleteAccount();
+                            router.replace('/');
+                        } catch (error) {
+                            Alert.alert(t('Ошибка'), t('Не удалось удалить аккаунт'));
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const handleNavItemPress = (item: string) => {
         if (expandedSection === item) {
             setExpandedSection(null);
@@ -104,7 +137,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
         }
     };
 
-    const handleSubItemPress = (item: { label: string; route?: string }) => {
+    const handleSubItemPress = (item: { key?: string; label: string; route?: string }) => {
         if (item.route) {
             onClose();
             setTimeout(() => {
@@ -113,57 +146,65 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             return;
         }
 
-        switch (item.label) {
-            case 'Как это работает':
+        switch (item.key) {
+            case 'how-it-works':
                 setHowItWorksVisible(true);
                 break;
-            case 'Обратная связь':
+            case 'feedback':
                 setFeedbackVisible(true);
                 break;
-            case 'Поделиться с другом':
+            case 'share':
                 setShareVisible(true);
                 break;
+            case 'manage-subscription':
+                openManageSubscriptions();
+                break;
+            case 'delete-account':
+                handleDeleteAccount();
+                break;
             default:
-                Alert.alert('Скоро', 'Этот раздел находится в разработке и скоро будет доступен.');
+                Alert.alert(t('Скоро'), t('Этот раздел находится в разработке и скоро будет доступен.'));
         }
     };
 
-    type SubItem = { label: string; route?: string };
+    type SubItem = { key?: string; label: string; route?: string };
     type NavigationItem = { key: string; label: string; subItems: SubItem[] };
 
     const navigationItems: NavigationItem[] = [
         {
             key: 'основное',
-            label: 'Основное',
+            label: t('Основное'),
             subItems: [
-                { label: 'Главная', route: '/(app)/' },
-                { label: 'Хобби и план', route: '/(app)/weekly-plan' },
-                { label: 'AI-наставник', route: '/(app)/ai-coach' },
+                { label: t('Главная'), route: '/(app)/' },
+                { label: t('Хобби и план'), route: '/(app)/weekly-plan' },
+                { label: t('AI-наставник'), route: '/(app)/ai-coach' },
             ],
         },
         {
             key: 'развитие',
-            label: 'Развитие',
+            label: t('Развитие'),
             subItems: [
-                { label: 'Подборка контента' },
-                { label: 'Достижения и бейджи' },
+                { label: t('Подборка контента') },
+                { label: t('Достижения и бейджи') },
             ],
         },
         {
             key: 'управление',
-            label: 'Управление',
+            label: t('Управление'),
             subItems: [
-                { label: 'Настройки' },
-                { label: 'Уведомления' },
+                { key: 'manage-subscription', label: t('Управление подпиской') },
+                { label: t('Настройки') },
+                { label: t('Уведомления') },
+                { key: 'delete-account', label: t('Удалить аккаунт') },
             ],
         },
         {
             key: 'о продукте',
-            label: 'О продукте',
+            label: t('О продукте'),
             subItems: [
-                { label: 'Как это работает' },
-                { label: 'Обратная связь' },
-                { label: 'Поделиться с другом' },
+                { key: 'how-it-works', label: t('Как это работает') },
+                { key: 'feedback', label: t('Обратная связь') },
+                { key: 'share', label: t('Поделиться с другом') },
             ],
         },
     ];
@@ -204,17 +245,40 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                 <Ionicons name="person" size={22} color={colors.buttonTextPrimary} />
                             </View>
                             <View style={styles.userInfo}>
-                                <Text style={styles.userName}>{displayName}</Text>
+                                <Text style={styles.userName} numberOfLines={1} ellipsizeMode="tail">{displayName}</Text>
                                 <Text style={styles.subscriptionLevel}>{displaySubscription}</Text>
                                 <TouchableOpacity
                                     style={styles.logoutButton}
                                     onPress={handleLogout}
                                     activeOpacity={0.7}
                                 >
-                                    <Image source={require('../../icons/back.png')} style={{ width: scale(12), height: scale(12), tintColor: colors.text }} resizeMode="contain" />
-                                    <Text style={styles.logoutText}>Выйти</Text>
+                                    <Ionicons name="arrow-back-outline" size={scale(16)} color={colors.text} />
+                                    <Text style={styles.logoutText}>{t('Выйти')}</Text>
                                 </TouchableOpacity>
                             </View>
+                        </View>
+                    </View>
+
+                    {/* Language Toggle - Moved up */}
+                    <View style={styles.languageSection}>
+                        <Text style={styles.languageSectionTitle}>
+                            {language === 'ru' ? 'Язык' : 'Language'}
+                        </Text>
+                        <View style={styles.languageButtons}>
+                            <TouchableOpacity
+                                style={[styles.langButton, language === 'ru' && styles.langButtonActive]}
+                                onPress={() => setLanguage('ru')}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[styles.langButtonText, language === 'ru' && styles.langButtonTextActive]}>RU</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.langButton, language === 'en' && styles.langButtonActive]}
+                                onPress={() => setLanguage('en')}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[styles.langButtonText, language === 'en' && styles.langButtonTextActive]}>EN</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
 
@@ -238,7 +302,12 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                                 onPress={() => handleSubItemPress(subItem)}
                                                 activeOpacity={0.7}
                                             >
-                                                <Text style={styles.subItemText}>{subItem.label}</Text>
+                                                <Text style={[
+                                                    styles.subItemText,
+                                                    subItem.label === t('Удалить аккаунт') && { color: colors.error }
+                                                ]}>
+                                                    {subItem.label}
+                                                </Text>
                                             </TouchableOpacity>
                                         ))}
                                     </View>
@@ -249,15 +318,16 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
 
                     {renderThemeSwitcher()}
 
+
                     <View style={styles.footerSection}>
                         <View style={styles.footerContent}>
-                            <TouchableOpacity activeOpacity={0.7} onPress={() => handleSubItemPress({ label: 'FAQ' })}>
-                                <Text style={styles.faqText}>FAQ</Text>
+                            <TouchableOpacity activeOpacity={0.7} onPress={() => handleSubItemPress({ key: 'faq', label: 'FAQ' })}>
+                                <Text style={styles.faqText}>{t('FAQ')}</Text>
                             </TouchableOpacity>
                             <View style={styles.footerDivider} />
-                            <TouchableOpacity activeOpacity={0.7} onPress={() => handleSubItemPress({ label: 'Privacy' })}>
+                            <TouchableOpacity activeOpacity={0.7} onPress={() => handleSubItemPress({ key: 'privacy', label: t('Политика\nКонфиденциальности') })}>
                                 <Text style={styles.privacyText}>
-                                    Политика{'\n'}Конфиденциальности
+                                    {t('Политика\nКонфиденциальности')}
                                 </Text>
                             </TouchableOpacity>
                         </View>
@@ -335,6 +405,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     userInfo: {
         marginLeft: scale(10),
         marginTop: 10,
+        flex: 1,
+        maxWidth: SIDEBAR_WIDTH - scale(70),
     },
     userName: {
         color: colors.text,
@@ -342,6 +414,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontSize: 14,
         fontWeight: '700',
         lineHeight: 16,
+        maxWidth: SIDEBAR_WIDTH - scale(80),
     },
     subscriptionLevel: {
         alignSelf: 'stretch',
@@ -426,6 +499,43 @@ const createStyles = (colors: any) => StyleSheet.create({
     themeButtonActive: {
         backgroundColor: colors.buttonPrimary,
         borderColor: colors.buttonPrimary,
+    },
+    languageSection: {
+        marginTop: scale(16),
+        paddingTop: scale(16),
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+
+    },
+    languageSectionTitle: {
+        color: colors.text,
+        fontFamily: fonts.heading.bold,
+        fontSize: 14,
+        marginBottom: scale(10),
+    },
+    languageButtons: {
+        flexDirection: 'row',
+        gap: scale(10),
+    },
+    langButton: {
+        paddingHorizontal: scale(16),
+        paddingVertical: scale(8),
+        borderRadius: scale(20),
+        backgroundColor: colors.background,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    langButtonActive: {
+        backgroundColor: colors.buttonPrimary,
+        borderColor: colors.buttonPrimary,
+    },
+    langButtonText: {
+        fontFamily: fonts.heading.bold,
+        fontSize: 13,
+        color: colors.text,
+    },
+    langButtonTextActive: {
+        color: colors.buttonTextPrimary,
     },
     footerSection: {
         marginTop: 'auto',

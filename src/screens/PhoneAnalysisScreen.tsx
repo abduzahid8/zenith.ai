@@ -7,6 +7,7 @@ import { requestSmsPermission, getAllSms } from 'sms-reader';
 import { Ionicons } from '@expo/vector-icons';
 import { scale } from '../constants';
 import { useAppTheme } from '../theme/useAppTheme';
+import { fonts } from '../theme';
 
 interface UsageStat {
     packageName: string;
@@ -325,13 +326,14 @@ const createStyles = (colors: any) => StyleSheet.create({
         color: colors.text,
     },
     input: {
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 16,
-        backgroundColor: colors.surfaceLight || '#FFF',
+        backgroundColor: colors.surfaceLight,
+        borderRadius: scale(22),
+        paddingHorizontal: scale(16),
+        paddingVertical: scale(12),
+        fontFamily: fonts.body.regular,
+        fontSize: scale(16),
         color: colors.text,
+        borderWidth: 0,
     },
     centerContent: {
         flex: 1,

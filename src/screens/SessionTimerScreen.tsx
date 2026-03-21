@@ -260,11 +260,8 @@ export const SessionTimerScreen: React.FC = () => {
                 <BottomTabBar
                     activeTab={0}
                     onTabPress={(index) => {
-                        if (index === 0) {
-                            router.dismissAll();
-                        } else {
-                            router.replace({ pathname: '/(app)', params: { initialTab: index } });
-                        }
+                        const routes = ['/(app)/', '/(app)/weekly-plan', '/(app)/ai-coach'] as const;
+                        router.replace(routes[index] as any);
                     }}
                 />
             </Animated.View>

@@ -72,19 +72,41 @@ export const useTaskStore = create<TaskState>()(
                     return;
                 }
 
-                set({ loading: true, error: null });
-                try {
-                    const today = getTodayDateString();
-                    const newTask = await taskService.createManualTask(userId, type, today, template);
-                    set(state => ({
-                        dailyTasks: [...state.dailyTasks, newTask],
-                        loading: false
-                    }));
-                } catch (e: unknown) {
-                    const appError = toAppError(e, 'Failed to add task');
-                    console.error('Failed to add task:', e);
-                    set({ error: appError.message, loading: false });
-                }
+                const today = getTodayDateString();
+                const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+                const optimisticTask: Task = {
+                    id: tempId,
+                    user_id: userId,
+                    title: template?.title || 'Новая задача',
+                    type,
+                    status: 'pending',
+                    scheduled_date: today,
+                    duration_minutes: template?.duration || 15,
+                    is_manual: true,
+                };
+
+                set(state => ({
+                    dailyTasks: [...state.dailyTasks, optimisticTask],
+                    error: null
+                }));
+
+                taskService.createManualTask(userId, type, today, template)
+                    .then(newTask => {
+                        set(state => ({
+                            dailyTasks: state.dailyTasks.map(t => t.id === tempId ? newTask : t),
+                        }));
+                    })
+                    .catch(e => {
+                        const appError = toAppError(e, 'Failed to add task');
+                        console.error('Failed to add task:', JSON.stringify(e, null, 2));
+                        set(state => ({
+                            dailyTasks: state.dailyTasks.filter(t => t.id !== tempId),
+                            error: appError.message
+                        }));
+                    });
+
+                return Promise.resolve();
             },
 
             completeTask: async (userId: string, taskId: string, feedback?: {
@@ -113,7 +135,8 @@ export const useTaskStore = create<TaskState>()(
                         }));
                     }
                 } catch (e: unknown) {
-                    console.error('Failed to complete task:', e);
+                    const errMsg = e instanceof Error ? e.message : (typeof e === 'object' && e !== null && 'message' in e) ? (e as any).message : String(e);
+                    console.error('Failed to complete task:', errMsg, e);
                     set((state) => ({
                         dailyTasks: state.dailyTasks.map((t) =>
                             t.id === taskId ? { ...t, status: 'pending' } : t
@@ -141,7 +164,8 @@ export const useTaskStore = create<TaskState>()(
                         }));
                     }
                 } catch (e: unknown) {
-                    console.error('Failed to uncomplete task:', e);
+                    const errMsg = e instanceof Error ? e.message : (typeof e === 'object' && e !== null && 'message' in e) ? (e as any).message : String(e);
+                    console.error('Failed to uncomplete task:', errMsg, e);
                     set((state) => ({
                         dailyTasks: state.dailyTasks.map((t) =>
                             t.id === taskId ? { ...t, status: 'completed' } : t

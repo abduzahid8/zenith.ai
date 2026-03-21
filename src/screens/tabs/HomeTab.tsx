@@ -14,11 +14,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { scale } from '../../constants';
 import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { useT } from '../../store/languageStore';
+import { useTaskStore } from '../../store/taskStore';
+import { TaskType } from '../../services/supabase/types';
 
 const booksImage = require('../../../assets/images/home-books.png');
 const targetImage = require('../../../assets/images/home-target.png');
 const lightbulbImage = require('../../../assets/images/home-lightbulb.png');
 const chartImage = require('../../../assets/images/home-chart.png');
+
+const ENGINE_TYPES: TaskType[] = ['theory', 'practice', 'analysis', 'puzzles'];
 
 interface HomeTabProps {
     fadeAnim: Animated.Value;
@@ -37,9 +42,31 @@ const HomeTab: React.FC<HomeTabProps> = ({
     const router = useRouter();
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
+    const t = useT();
+    const { dailyTasks } = useTaskStore();
 
     const handleNavigate = (route: string) => {
         router.push(route as any);
+    };
+
+    const handleStartLesson = () => {
+        const engineTasks = dailyTasks.filter(t => ENGINE_TYPES.includes(t.type as TaskType));
+        const allCompleted = engineTasks.length >= 4 && engineTasks.every(t => t.status === 'completed');
+
+        if (allCompleted) {
+            Alert.alert(
+                '🎉 ' + t('Отличная работа!'),
+                t('Ты выполнил все задачи на сегодня! Продолжай в том же духе — каждый день делает тебя лучше.'),
+                [
+                    {
+                        text: t('Начать занятие'),
+                        onPress: () => handleNavigate('/session-timer'),
+                    },
+                ],
+            );
+        } else {
+            handleNavigate('/session-timer');
+        }
     };
 
     return (
@@ -49,7 +76,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
             showsVerticalScrollIndicator={false}
         >
             <TouchableOpacity
-                onPress={() => handleNavigate('/session-timer')}
+                onPress={handleStartLesson}
                 activeOpacity={0.8}
                 style={styles.cardShadowProp}
             >
@@ -60,7 +87,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                     locations={[0.0258, 0.6253, 1.0]}
                     style={styles.startSessionCard}
                 >
-                    <Text style={styles.cardTitle}>Начать{'\n'}занятие</Text>
+                    <Text style={styles.cardTitle}>{t('Начать занятие')}</Text>
                     <Animated.Image
                         source={booksImage}
                         style={[
@@ -90,7 +117,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                     locations={[0.0125, 1.0]}
                     style={styles.dailyGoalButton}
                 >
-                    <Text style={styles.cardTitle}>Цель дня</Text>
+                    <Text style={styles.cardTitle}>{t('Цель дня')}</Text>
                     <Animated.Image
                         source={targetImage}
                         style={[
@@ -119,7 +146,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                         style={styles.aiCoachCard}
                     >
                         <View style={{ zIndex: 1 }}>
-                            <Text style={styles.smallCardTitle}>Личный{'\n'}наставник</Text>
+                            <Text style={styles.smallCardTitle}>{t('Личный наставник')}</Text>
                         </View>
                         <Animated.Image
                             source={lightbulbImage}
@@ -136,7 +163,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    onPress={() => Alert.alert('Скоро', 'Этот раздел находится в разработке и скоро будет доступен.')}
+                    onPress={() => Alert.alert(t('Скоро'), t('Этот раздел находится в разработке и скоро будет доступен.'))}
                     activeOpacity={0.8}
                     style={[styles.cardShadowProp, { flex: 1 }]}
                 >
@@ -147,7 +174,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                         style={styles.screenTimeCard}
                     >
                         <View style={{ zIndex: 1 }}>
-                            <Text style={styles.smallCardTitle}>Экранное{'\n'}время</Text>
+                            <Text style={styles.smallCardTitle}>{t('Экранное время')}</Text>
                         </View>
                         <Animated.Image
                             source={chartImage}
