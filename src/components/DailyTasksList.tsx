@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ImageSourcePropType } from 'react-native';
-import Svg, { Polyline } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { useTaskStore } from '../store/taskStore';
 import { useAuthStore } from '../store/authStore';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { Task, TaskType } from '../services/supabase/types';
+import { getMaxTasksPerDay } from '../domain/tasks/rules';
 import { fonts } from '../theme';
 import { scale } from '../constants';
 import { TaskFeedbackModal } from './TaskFeedbackModal';
@@ -37,8 +37,8 @@ const TaskCard = ({ task, onPress, colors }: { task: Task, onPress: (task: Task)
         switch (type) {
             case 'theory': return t('Узнай');
             case 'practice': return t('Сделай');
-            case 'analysis': return t('Углуби 2');
-            case 'puzzles': return t('Углуби 1');
+            case 'analysis': return t('Углуби 1');
+            case 'puzzles': return t('Углуби 2');
             default: return t('Задача');
         }
     };
@@ -78,25 +78,15 @@ const TaskCard = ({ task, onPress, colors }: { task: Task, onPress: (task: Task)
                 <View style={styles.textContent}>
                     <Text style={[styles.cardTitle, isCompleted && styles.completedCardTitle]}>{getTaskTypeLabel(task.type)}</Text>
                     <Text style={[styles.cardSubtitle, isCompleted && styles.completedCardSubtitle]} numberOfLines={2}>
-                        {task.title}
+                        {t(task.title)}
                     </Text>
                 </View>
                 <View style={[styles.iconContainer, { backgroundColor: 'transparent' }]}>
                     {isCompleted ? (
-                        <Svg
-                            width={scale(24)}
-                            height={scale(24)}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                        >
-                            <Polyline
-                                points="4 12 9 17 20 6"
-                                stroke="#FFFFFF"
-                                strokeWidth="5.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            />
-                        </Svg>
+                        <Image
+                            source={require('../../icons/Vector.png')}
+                            resizeMode="contain"
+                        />
                     ) : (
                         <Image
                             source={iconSource}
@@ -154,8 +144,8 @@ export const DailyTasksList = () => {
         switch (type) {
             case 'theory': return t('Узнай');
             case 'practice': return t('Сделай');
-            case 'analysis': return t('Углуби 2');
-            case 'puzzles': return t('Углуби 1');
+            case 'analysis': return t('Углуби 1');
+            case 'puzzles': return t('Углуби 2');
             default: return t('Задача');
         }
     };
@@ -164,7 +154,7 @@ export const DailyTasksList = () => {
         if (userId) {
             fetchDailyPlan(userId);
         }
-    }, [userId]);
+    }, [userId, fetchDailyPlan]);
 
     const handleTaskPress = (task: Task) => {
         if (task.status === 'completed') return;
@@ -175,7 +165,7 @@ export const DailyTasksList = () => {
     const handleAddPress = () => {
         const ENGINE_TYPES: TaskType[] = ['theory', 'practice', 'analysis', 'puzzles'];
         const engineTasks = dailyTasks.filter(t => ENGINE_TYPES.includes(t.type as TaskType));
-        const canAddMore = isPremium ? engineTasks.length < 4 : engineTasks.length < 3;
+        const canAddMore = engineTasks.length < getMaxTasksPerDay(isPremium);
 
         if (!canAddMore && !isPremium) {
             router.push('/subscription');
@@ -209,11 +199,11 @@ export const DailyTasksList = () => {
     const allEngineTasks = dailyTasks.filter(t => ENGINE_TYPES.includes(t.type as TaskType));
     
     // Enforce display limit based on subscription
-    const maxTasks = isPremium ? 4 : 3;
+    const maxTasks = getMaxTasksPerDay(isPremium);
     const engineTasks = allEngineTasks.slice(0, maxTasks);
 
     const showAddButton = true; // Always allow user to try to add or see categories
-    const isUpgradeButton = !isPremium && engineTasks.length >= 3;
+    const isUpgradeButton = !isPremium && engineTasks.length >= getMaxTasksPerDay(false);
 
     return (
         <View style={styles.container}>

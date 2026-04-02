@@ -38,40 +38,48 @@ export default function PhoneAnalysisScreen() {
     }, []);
 
     const checkPermissions = async () => {
+        console.log('[PhoneAnalysisScreen] Checking permissions');
         try {
             const usage = await hasUsagePermission();
+            console.log('[PhoneAnalysisScreen] Usage permission:', usage);
             setHasUsagePerm(usage);
         } catch (e) {
-            console.error(e);
+            console.log('[PhoneAnalysisScreen] Error checking permissions:', e);
         }
     };
 
     const handleGrantUsage = async () => {
+        console.log('[PhoneAnalysisScreen] handleGrantUsage pressed');
         await requestUsagePermission();
     };
 
     const handleGrantSms = async () => {
+        console.log('[PhoneAnalysisScreen] handleGrantSms pressed');
         const granted = await requestSmsPermission();
+        console.log('[PhoneAnalysisScreen] SMS permission result:', granted);
         setHasSmsPerm(granted);
         if (granted) fetchData();
     };
 
     const fetchData = async () => {
+        console.log('[PhoneAnalysisScreen] fetchData started');
         setLoading(true);
         try {
             if (hasUsagePerm) {
                 const now = Date.now();
                 const yesterday = now - 24 * 60 * 60 * 1000;
                 const stats = await getUsageStats(yesterday, now);
+                console.log('[PhoneAnalysisScreen] Usage stats fetched:', stats.length, 'items');
                 setUsageStats(stats.sort((a: UsageStat, b: UsageStat) => b.totalTimeInForeground - a.totalTimeInForeground));
             }
 
             if (hasSmsPerm) {
                 const sms = await getAllSms(20);
+                console.log('[PhoneAnalysisScreen] SMS messages fetched:', sms.length, 'items');
                 setSmsMessages(sms);
             }
         } catch (e) {
-            console.error("Error fetching data", e);
+            console.log('[PhoneAnalysisScreen] Error fetching data:', e);
         } finally {
             setLoading(false);
         }
@@ -87,6 +95,7 @@ export default function PhoneAnalysisScreen() {
     const [manualApp, setManualApp] = useState('');
 
     const openIosSettings = () => {
+        console.log('[PhoneAnalysisScreen] openIosSettings pressed');
         Linking.openURL('App-Prefs:root=SCREEN_TIME').catch(() => {
             Linking.openSettings();
         });
@@ -97,7 +106,10 @@ export default function PhoneAnalysisScreen() {
             <SafeAreaView style={styles.container}>
                 <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
                 <View style={[styles.header, { borderBottomWidth: 0 }]}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                    <TouchableOpacity onPress={() => {
+                        console.log('[PhoneAnalysisScreen] Back button pressed (iOS)');
+                        router.back();
+                    }} style={styles.backButton}>
                         <Image source={require('../../icons/back.png')} style={{ width: scale(24), height: scale(24), tintColor: colors.text }} resizeMode="contain" />
                     </TouchableOpacity>
                     <Text style={styles.title}>Data Analysis</Text>
@@ -117,6 +129,7 @@ export default function PhoneAnalysisScreen() {
                             <TouchableOpacity
                                 style={[styles.button, styles.primaryButton]}
                                 onPress={() => {
+                                    console.log('[PhoneAnalysisScreen] Open Settings pressed');
                                     openIosSettings();
                                     setTimeout(() => setStep('input'), 1000);
                                 }}
@@ -125,13 +138,19 @@ export default function PhoneAnalysisScreen() {
                                 <Text style={styles.primaryButtonText}>Open Settings</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.textButton} onPress={() => setStep('input')}>
+                            <TouchableOpacity style={styles.textButton} onPress={() => {
+                                console.log('[PhoneAnalysisScreen] I already have data pressed');
+                                setStep('input');
+                            }}>
                                 <Text style={styles.textButtonText}>I already have the data</Text>
                             </TouchableOpacity>
                         </View>
                     ) : (
                         <View style={styles.card}>
-                            <TouchableOpacity onPress={() => setStep('instruction')} style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginBottom: 20 }}>
+                            <TouchableOpacity onPress={() => {
+                                console.log('[PhoneAnalysisScreen] Back to instruction pressed');
+                                setStep('instruction');
+                            }} style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginBottom: 20 }}>
                                 <Image source={require('../../icons/back.png')} style={{ width: scale(20), height: scale(20), tintColor: colors.link, marginRight: 4 }} resizeMode="contain" />
                                 <Text style={{ color: colors.link, fontSize: 16 }}>Back</Text>
                             </TouchableOpacity>
@@ -160,7 +179,10 @@ export default function PhoneAnalysisScreen() {
                                 />
                             </View>
 
-                            <TouchableOpacity style={[styles.button, styles.primaryButton, { marginTop: 10 }]} onPress={() => alert('Data saved!')}>
+                            <TouchableOpacity style={[styles.button, styles.primaryButton, { marginTop: 10 }]} onPress={() => {
+                                console.log('[PhoneAnalysisScreen] Save Data pressed - time:', manualTime, 'app:', manualApp);
+                                alert('Data saved!');
+                            }}>
                                 <Ionicons name="save-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
                                 <Text style={styles.primaryButtonText}>Save Data</Text>
                             </TouchableOpacity>
@@ -199,7 +221,10 @@ export default function PhoneAnalysisScreen() {
                             )}
                         </View>
                     ) : (
-                        <TouchableOpacity style={styles.button} onPress={handleGrantUsage}>
+                        <TouchableOpacity style={styles.button} onPress={() => {
+                            console.log('[PhoneAnalysisScreen] Enable Usage Access pressed');
+                            handleGrantUsage();
+                        }}>
                             <Text style={styles.buttonText}>Enable Usage Access</Text>
                         </TouchableOpacity>
                     )}
@@ -221,13 +246,20 @@ export default function PhoneAnalysisScreen() {
                             )}
                         </View>
                     ) : (
-                        <TouchableOpacity style={styles.button} onPress={handleGrantSms}>
+                        <TouchableOpacity style={styles.button} onPress={() => {
+                            console.log('[PhoneAnalysisScreen] Grant SMS Permission pressed');
+                            handleGrantSms();
+                        }}>
                             <Text style={styles.buttonText}>Grant SMS Permission</Text>
                         </TouchableOpacity>
                     )}
                 </View>
 
-                <TouchableOpacity style={[styles.button, styles.refreshButton]} onPress={() => { checkPermissions(); fetchData(); }}>
+                <TouchableOpacity style={[styles.button, styles.refreshButton]} onPress={() => {
+                    console.log('[PhoneAnalysisScreen] Refresh Data pressed');
+                    checkPermissions();
+                    fetchData();
+                }}>
                     {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Refresh Data</Text>}
                 </TouchableOpacity>
 

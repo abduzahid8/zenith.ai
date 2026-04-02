@@ -63,7 +63,6 @@ export const metricService = {
                 metric_date: date,
                 completion_rate: completionRate,
                 tasks_completed: tasksCompletedSummary,
-                updated_at: new Date().toISOString()
             };
 
             if (timezone) payload.timezone = timezone;

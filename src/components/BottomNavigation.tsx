@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scale } from '../constants';
 import { APP_TAB_ROUTES, getMainTabUrl, type AppTabKey } from '../config/navigation';
 import { useAppTheme } from '../theme/useAppTheme';
@@ -15,7 +16,8 @@ interface BottomNavigationProps {
 export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab }) => {
     const router = useRouter();
     const { colors } = useAppTheme();
-    const styles = useMemo(() => createStyles(), []);
+    const insets = useSafeAreaInsets();
+    const styles = useMemo(() => createStyles(insets.bottom), [insets.bottom]);
 
     const handleTabPress = (key: AppTabKey) => {
         router.replace(getMainTabUrl(key) as any);
@@ -52,10 +54,10 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab })
     );
 };
 
-const createStyles = () => StyleSheet.create({
+const createStyles = (bottomInset: number) => StyleSheet.create({
     container: {
         position: 'absolute',
-        bottom: scale(34),
+        bottom: bottomInset + scale(8),
         alignSelf: 'center',
         width: 280,
         flexDirection: 'row',

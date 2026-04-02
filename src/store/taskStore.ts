@@ -5,7 +5,7 @@ import { Task, TaskType, UserStateSnapshot } from '../services/supabase/types';
 import { taskService } from '../services/taskService';
 import { useUserProfileStore } from './userProfileStore';
 import { getTodayDateString } from '../utils/date';
-import { canAddTask } from '../domain/tasks/rules';
+import { canAddTask, getMaxTasksPerDay, getAutoTasksPerDay } from '../domain/tasks/rules';
 import { toAppError } from '../shared/errors';
 
 interface TaskState {
@@ -39,21 +39,28 @@ export const useTaskStore = create<TaskState>()(
             fetchDailyPlan: async (userId: string) => {
                 const today = getTodayDateString();
                 const { lastFetchDate, dailyTasks } = get();
+                const isPremium = useUserProfileStore.getState().isPremium;
 
-                if (lastFetchDate === today && dailyTasks.length >= 2) {
+                const hasTempTasks = dailyTasks.some(t => t.id?.startsWith('temp-'));
+                if (lastFetchDate === today && dailyTasks.length >= getAutoTasksPerDay() && !hasTempTasks) {
+                    console.log('[taskStore] fetchDailyPlan using cached data for today');
                     return; // Use cached data if available for today
                 }
 
+                console.log('[taskStore] fetchDailyPlan fetching from server - userId:', userId);
                 set({ loading: true, error: null });
                 try {
-                    const tasks = await taskService.getDailyPlan(userId, today);
+                    const tasks = await taskService.getDailyPlan(userId, today, isPremium);
+                    console.log('[taskStore] fetchDailyPlan success - tasks count:', tasks.length);
                     set({ dailyTasks: tasks, lastFetchDate: today, loading: false });
                 } catch (e: unknown) {
+                    console.log('[taskStore] fetchDailyPlan error:', e);
                     set({ error: e instanceof Error ? e.message : 'Unknown error', loading: false });
                 }
             },
 
             addTask: async (userId: string, type: TaskType, template?: { title: string; duration: number }) => {
+                console.log('[taskStore] addTask - type:', type, 'title:', template?.title);
                 const profile = useUserProfileStore.getState();
                 const isPremium = profile.isPremium;
                 const { dailyTasks } = get();
@@ -65,6 +72,7 @@ export const useTaskStore = create<TaskState>()(
                 });
 
                 if (!addCheck.allowed) {
+                    console.log('[taskStore] addTask not allowed:', addCheck.errorMessage);
                     set({ error: addCheck.errorMessage || null });
                     if (addCheck.errorMessage) {
                         throw new Error(addCheck.errorMessage);
@@ -93,13 +101,20 @@ export const useTaskStore = create<TaskState>()(
 
                 taskService.createManualTask(userId, type, today, template)
                     .then(newTask => {
-                        set(state => ({
-                            dailyTasks: state.dailyTasks.map(t => t.id === tempId ? newTask : t),
-                        }));
+                        console.log('[taskStore] addTask server success - newTaskId:', newTask.id);
+                        set(state => {
+                            const current = state.dailyTasks.find(t => t.id === tempId);
+                            const merged = current && current.status !== 'pending'
+                                ? { ...newTask, status: current.status }
+                                : newTask;
+                            return {
+                                dailyTasks: state.dailyTasks.map(t => t.id === tempId ? merged : t),
+                            };
+                        });
                     })
                     .catch(e => {
                         const appError = toAppError(e, 'Failed to add task');
-                        console.error('Failed to add task:', JSON.stringify(e, null, 2));
+                        console.log('[taskStore] addTask server error:', appError.message);
                         set(state => ({
                             dailyTasks: state.dailyTasks.filter(t => t.id !== tempId),
                             error: appError.message
@@ -114,6 +129,7 @@ export const useTaskStore = create<TaskState>()(
                 engagement_rating?: number;
                 user_notes?: string;
             }) => {
+                console.log('[taskStore] completeTask - taskId:', taskId);
                 // Optimistic update
                 set((state) => ({
                     dailyTasks: state.dailyTasks.map(t =>
@@ -126,11 +142,15 @@ export const useTaskStore = create<TaskState>()(
                 }));
 
                 // Skip Supabase call for temp IDs (task not yet persisted)
-                if (taskId.startsWith('temp-')) return;
+                if (taskId.startsWith('temp-')) {
+                    console.log('[taskStore] completeTask skipped for temp id');
+                    return;
+                }
 
                 try {
                     const updated = await taskService.completeTask(userId, taskId, feedback);
                     if (updated) {
+                        console.log('[taskStore] completeTask server success');
                         set((state) => ({
                             dailyTasks: state.dailyTasks.map(t =>
                                 t.id === taskId ? updated : t
@@ -139,7 +159,7 @@ export const useTaskStore = create<TaskState>()(
                     }
                 } catch (e: unknown) {
                     const errMsg = e instanceof Error ? e.message : (typeof e === 'object' && e !== null && 'message' in e) ? (e as any).message : String(e);
-                    console.error('Failed to complete task:', errMsg, e);
+                    console.log('[taskStore] completeTask error:', errMsg);
                     set((state) => ({
                         dailyTasks: state.dailyTasks.map((t) =>
                             t.id === taskId ? { ...t, status: 'pending' } : t
@@ -150,6 +170,7 @@ export const useTaskStore = create<TaskState>()(
             },
 
             uncompleteTask: async (userId: string, taskId: string) => {
+                console.log('[taskStore] uncompleteTask - taskId:', taskId);
                 // Optimistic update
                 set((state) => ({
                     dailyTasks: state.dailyTasks.map(t =>
@@ -158,11 +179,15 @@ export const useTaskStore = create<TaskState>()(
                 }));
 
                 // Skip Supabase call for temp IDs (task not yet persisted)
-                if (taskId.startsWith('temp-')) return;
+                if (taskId.startsWith('temp-')) {
+                    console.log('[taskStore] uncompleteTask skipped for temp id');
+                    return;
+                }
 
                 try {
                     const updated = await taskService.uncompleteTask(userId, taskId);
                     if (updated) {
+                        console.log('[taskStore] uncompleteTask server success');
                         set((state) => ({
                             dailyTasks: state.dailyTasks.map(t =>
                                 t.id === taskId ? updated : t
@@ -171,7 +196,7 @@ export const useTaskStore = create<TaskState>()(
                     }
                 } catch (e: unknown) {
                     const errMsg = e instanceof Error ? e.message : (typeof e === 'object' && e !== null && 'message' in e) ? (e as any).message : String(e);
-                    console.error('Failed to uncomplete task:', errMsg, e);
+                    console.log('[taskStore] uncompleteTask error:', errMsg);
                     set((state) => ({
                         dailyTasks: state.dailyTasks.map((t) =>
                             t.id === taskId ? { ...t, status: 'completed' } : t
@@ -182,6 +207,7 @@ export const useTaskStore = create<TaskState>()(
             },
 
             skipTask: async (userId: string, taskId: string) => {
+                console.log('[taskStore] skipTask - taskId:', taskId);
                 set((state) => ({
                     dailyTasks: state.dailyTasks.map(t =>
                         t.id === taskId ? { ...t, status: 'skipped' } : t
@@ -191,6 +217,7 @@ export const useTaskStore = create<TaskState>()(
                 try {
                     const updated = await taskService.skipTask(userId, taskId);
                     if (updated) {
+                        console.log('[taskStore] skipTask server success');
                         set((state) => ({
                             dailyTasks: state.dailyTasks.map(t =>
                                 t.id === taskId ? updated : t
@@ -198,7 +225,7 @@ export const useTaskStore = create<TaskState>()(
                         }));
                     }
                 } catch (e: unknown) {
-                    console.error('Failed to skip task:', e);
+                    console.log('[taskStore] skipTask error:', e);
                     set((state) => ({
                         dailyTasks: state.dailyTasks.map((t) =>
                             t.id === taskId ? { ...t, status: 'pending' } : t
@@ -207,7 +234,10 @@ export const useTaskStore = create<TaskState>()(
                 }
             },
 
-            resetTasks: () => set({ dailyTasks: [], lastFetchDate: null, error: null })
+            resetTasks: () => {
+                console.log('[taskStore] resetTasks called');
+                set({ dailyTasks: [], lastFetchDate: null, error: null });
+            }
         }),
         {
             name: 'task-storage',

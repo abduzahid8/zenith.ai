@@ -24,6 +24,7 @@ import PagerView from '../components/ui/PagerView';
 import { fonts } from '../theme';
 import { MenuDrawer } from '../components/NavigationSidebar';
 import { useUserProfileStore, getGreeting } from '../store/userProfileStore';
+import useTaskStore from '../store/taskStore';
 import { scale, SCREEN_WIDTH } from '../constants';
 import { BottomTabBar } from '../components/navigation/BottomTabBar';
 import { HobbyIcon } from '../components/HobbyIcon';
@@ -33,6 +34,7 @@ import { useAppTheme } from '../theme/useAppTheme';
 import HomeTab from './tabs/HomeTab';
 import WeeklyPlanTab from './tabs/WeeklyPlanTab';
 import AICoachTab from './tabs/AICoachTab';
+import ScreenTimeTab from './tabs/ScreenTimeTab';
 
 const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24), marginTop: -scale(2) }} resizeMode="contain" />;
 
@@ -49,7 +51,9 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
         pagerRef.current?.setPage(initialTab);
     }, [initialTab]);
 
-    const { streakDays, subscriptionLevel } = useUserProfileStore();
+    const { subscriptionLevel } = useUserProfileStore();
+    const dailyTasks = useTaskStore(state => state.dailyTasks);
+    const completedTasksCount = dailyTasks.filter(t => t.status === 'completed').length;
     const isPremium = subscriptionLevel === 'premium' || subscriptionLevel === 'trial';
 
 
@@ -86,12 +90,14 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
     const greeting = getGreeting();
 
     const handleTabPress = (index: number) => {
+        console.log('[MainTabsScreen] handleTabPress - tab index:', index);
         pagerRef.current?.setPage(index);
         setActiveTab(index);
     };
 
     const handlePageSelected = (event: { nativeEvent: { position: number } }) => {
         const newIndex = event.nativeEvent.position;
+        console.log('[MainTabsScreen] handlePageSelected - new page index:', newIndex);
         if (newIndex !== activeTab) {
             setActiveTab(newIndex);
         }
@@ -116,10 +122,13 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
                 <View style={styles.headerRight}>
                     <HobbyIcon />
                     <View style={styles.streakContainer}>
-                        <Text style={styles.streakNumber}>{streakDays}</Text>
+                        <Text style={styles.streakNumber}>{completedTasksCount}</Text>
                         <FireIcon />
                     </View>
-                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)} activeOpacity={0.7}>
+                    <TouchableOpacity style={styles.menuButton} onPress={() => {
+                        console.log('[MainTabsScreen] Menu button pressed - opening menu');
+                        setMenuVisible(true);
+                    }} activeOpacity={0.7}>
                         <Image source={require('../../icons/menu.png')} style={{ width: scale(24), height: scale(24), tintColor: colors.text }} resizeMode="contain" />
                     </TouchableOpacity>
                 </View>
@@ -147,6 +156,10 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
 
                 <View key="3" style={styles.page}>
                     <AICoachTab />
+                </View>
+
+                <View key="4" style={styles.page}>
+                    <ScreenTimeTab />
                 </View>
             </PagerView>
 

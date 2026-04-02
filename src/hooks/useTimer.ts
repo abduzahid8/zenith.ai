@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Animated, Easing, AppState, AppStateStatus, Alert } from 'react-native';
+import { Animated, Easing, AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { scale } from '../constants';
@@ -8,6 +8,7 @@ import { ChatMessage, aiService } from '../services/ai';
 import { useTaskStore } from '../store/taskStore';
 import { useAuthStore } from '../store/authStore';
 import { useUserProfileStore } from '../store/userProfileStore';
+import { useHobbyTimeStore } from '../store/hobbyTimeStore';
 import { sessionService } from '../services/supabase/sessions';
 import { useT } from '../store/languageStore';
 
@@ -16,18 +17,25 @@ export type TimerStatus = 'idle' | 'running' | 'paused';
 const TOTAL_TIME = 30 * 60; // 30 minutes
 const STORAGE_KEY_PREF = 'session_stop_confirm_pref';
 const STORAGE_KEY_START_TS = 'session_timer_start_ts';
+const ENGINE_TYPES_ORDER = ['theory', 'practice', 'analysis', 'puzzles'];
 
-export function useTimer() {
+export interface UseTimerOptions {
+    onAllTasksDone?: (startAnyway: () => void) => void;
+}
+
+export function useTimer(options: UseTimerOptions = {}) {
+    const { onAllTasksDone } = options;
     const { dailyTasks, completeTask } = useTaskStore();
     const user = useAuthStore(s => s.user);
-    const { selectedHobby } = useUserProfileStore();
+    const { selectedHobby, isPremium } = useUserProfileStore();
+    useHobbyTimeStore(); // subscribed for potential future reactivity; mutations use getState() directly
     const t = useT();
 
     const TYPE_LABEL: Record<string, string> = {
         theory: t('Узнай'),
         practice: t('Сделай'),
-        analysis: t('Углуби 2'),
-        puzzles: t('Углуби 1'),
+        analysis: t('Углуби 1'),
+        puzzles: t('Углуби 2'),
     };
 
     // --- Timer state ---
@@ -51,18 +59,22 @@ export function useTimer() {
 
     // Sync tasks from store whenever dailyTasks changes
     useEffect(() => {
-        const sessionTasks: SessionTask[] = dailyTasks
-            .filter(t => t.status !== 'skipped')
-            .map((t, index) => ({
-                id: t.id ?? `local-${t.type}-${index}`,
-                storeTaskId: t.id ?? null,
-                title: TYPE_LABEL[t.type] ?? t.type,
-                subtitle: t.title,
-                completed: t.status === 'completed',
-                completedAt: t.status === 'completed' ? Date.now() : null,
+        const maxTasks = isPremium ? 4 : 3;
+        const orderedFiltered = ENGINE_TYPES_ORDER
+            .flatMap(type => dailyTasks.filter(task => task.type === type && task.status !== 'skipped'))
+            .slice(0, maxTasks);
+        const sessionTasks: SessionTask[] = orderedFiltered
+            .map((task, index) => ({
+                id: task.id ?? `local-${task.type}-${index}`,
+                storeTaskId: task.id ?? null,
+                title: TYPE_LABEL[task.type] ?? task.type,
+                subtitle: t(task.title),
+                completed: task.status === 'completed',
+                completedAt: task.status === 'completed' ? Date.now() : null,
+                startedAt: null, // Will be set when user starts working on this task
             }));
         setTasks(sessionTasks);
-    }, [dailyTasks]);
+    }, [dailyTasks, isPremium]);
 
     // --- UI state ---
     const [isTaskListVisible, setIsTaskListVisible] = useState(false);
@@ -98,22 +110,28 @@ export function useTimer() {
     }, []);
 
     // --- Persist timer across app background ---
+    const timeLeftRef = useRef(timeLeft);
+    useEffect(() => { timeLeftRef.current = timeLeft; }, [timeLeft]);
+
     useEffect(() => {
         const subscription = AppState.addEventListener('change', async (nextState: AppStateStatus) => {
             if (timerStatus === 'running') {
                 if (nextState === 'background' || nextState === 'inactive') {
-                    // Save the timestamp when app goes to background
-                    await AsyncStorage.setItem(STORAGE_KEY_START_TS, String(Date.now()));
+                    // Save both timestamp and current timeLeft so foreground recovery is authoritative
+                    await AsyncStorage.multiSet([
+                        [STORAGE_KEY_START_TS, String(Date.now())],
+                        ['session_timer_time_left', String(timeLeftRef.current)],
+                    ]);
                 } else if (nextState === 'active') {
-                    // Recover elapsed time
-                    const savedTs = await AsyncStorage.getItem(STORAGE_KEY_START_TS);
-                    if (savedTs) {
+                    // Recover elapsed time against saved timeLeft (avoids double-counting interval ticks)
+                    const pairs = await AsyncStorage.multiGet([STORAGE_KEY_START_TS, 'session_timer_time_left']);
+                    const savedTs = pairs[0][1];
+                    const savedLeft = pairs[1][1];
+                    if (savedTs && savedLeft) {
                         const elapsed = Math.floor((Date.now() - Number(savedTs)) / 1000);
-                        await AsyncStorage.removeItem(STORAGE_KEY_START_TS);
-                        setTimeLeft(prev => {
-                            const updated = prev - elapsed;
-                            return updated <= 0 ? 0 : updated;
-                        });
+                        await AsyncStorage.multiRemove([STORAGE_KEY_START_TS, 'session_timer_time_left']);
+                        const corrected = Number(savedLeft) - elapsed;
+                        setTimeLeft(corrected <= 0 ? 0 : corrected);
                     }
                 }
             }
@@ -131,11 +149,15 @@ export function useTimer() {
         } else if (timeLeft === 0 && timerStatus === 'running') {
             // Timer naturally completed — save session and show summary
             setTimerStatus('idle');
-            saveSessionToSupabase(TOTAL_TIME);
+            saveSessionToSupabase(totalTime);
+            if (!useHobbyTimeStore.getState().userCreatedDate) {
+                useHobbyTimeStore.getState().setUserCreatedDate(new Date().toISOString());
+            }
+            useHobbyTimeStore.getState().addHobbyTime(totalTime);
             setShowSummary(true);
         }
         return () => clearInterval(interval);
-    }, [timerStatus, timeLeft]);
+    }, [timerStatus, timeLeft, totalTime]);
 
     // --- Animate controls ---
     useEffect(() => {
@@ -214,57 +236,89 @@ export function useTimer() {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }, []);
 
-    const handlePlay = useCallback(() => {
-        // Check if all tasks are completed before starting
-        const nonSkippedTasks = tasks.filter(t => !t.completed || t.completed);
-        const allCompleted = nonSkippedTasks.length > 0 && nonSkippedTasks.every(t => t.completed);
-
-        if (allCompleted) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            Alert.alert(
-                'Все задачи выполнены! 🎉',
-                'Вы выполнили все задачи на сегодня. Отличная работа! Вы можете начать сессию для дополнительной практики.',
-                [
-                    { text: 'Закрыть', style: 'cancel' },
-                    {
-                        text: 'Начать',
-                        onPress: () => {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                            // Lock tasks already completed before this session
-                            setLockedTaskIds(new Set(tasks.filter(t => t.completed).map(t => t.id)));
-                            setTimerStatus('running');
-                        },
-                    },
-                ]
-            );
-            return;
-        }
-
-        // Lock tasks already completed before this session starts
-        setLockedTaskIds(new Set(tasks.filter(t => t.completed).map(t => t.id)));
+    const startSession = useCallback(() => {
+        console.log('[useTimer] Starting session');
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setLockedTaskIds(new Set(tasks.filter(t => t.completed).map(t => t.id)));
+        
+        // Set startedAt for the first incomplete task to session start time
+        const now = Date.now();
+        setTasks(prev => {
+            const firstIncompleteIndex = prev.findIndex(t => !t.completed);
+            if (firstIncompleteIndex === -1) return prev;
+            return prev.map((task, index) =>
+                index === firstIncompleteIndex ? { ...task, startedAt: now } : task
+            );
+        });
+        
         setTimerStatus('running');
     }, [tasks]);
 
+    const handlePlay = useCallback(() => {
+        console.log('[useTimer] handlePlay pressed');
+        const allCompleted = tasks.length > 0 && tasks.every(t => t.completed);
+
+        if (allCompleted) {
+            console.log('[useTimer] All tasks already completed - invoking callback');
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            if (onAllTasksDone) {
+                onAllTasksDone(startSession);
+            } else {
+                startSession();
+            }
+            return;
+        }
+
+        startSession();
+    }, [tasks, onAllTasksDone, startSession]);
+
     const handlePause = useCallback(() => {
+        console.log('[useTimer] handlePause pressed - current status will toggle');
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         setTimerStatus(prev => (prev === 'running' ? 'paused' : 'running'));
     }, []);
 
     const handleReset = useCallback(() => {
+        console.log('[useTimer] handleReset pressed');
+        // Uncomplete tasks that were completed during this session (not pre-session locked ones)
+        if (user?.id) {
+            tasks
+                .filter(t => t.completed && !lockedTaskIds.has(t.id))
+                .forEach(task => {
+                    const isRealId = task.storeTaskId && !task.storeTaskId.startsWith('temp-');
+                    if (isRealId) {
+                        useTaskStore.getState().uncompleteTask(user.id!, task.storeTaskId!);
+                    }
+                });
+        }
+        // Immediately reset local task state so UI doesn't show stale completed tasks
+        // while the async store update propagates through dailyTasks
+        setTasks(prev => prev.map(task =>
+            task.completed && !lockedTaskIds.has(task.id)
+                ? { ...task, completed: false, completedAt: null, startedAt: null }
+                : task
+        ));
         setTimeLeft(totalTime);
         setTimerStatus('idle');
         setLockedTaskIds(new Set());
-    }, [totalTime]);
+    }, [totalTime, tasks, lockedTaskIds, user]);
 
     const handleToggleTask = useCallback((id: string) => {
+        console.log('[useTimer] handleToggleTask - task id:', id);
         const selectedTask = tasks.find(task => task.id === id);
-        if (!selectedTask) return;
+        if (!selectedTask) {
+            console.log('[useTimer] Task not found:', id);
+            return;
+        }
 
         // Tasks completed before this session started are locked — cannot be toggled
-        if (lockedTaskIds.has(id)) return;
+        if (lockedTaskIds.has(id)) {
+            console.log('[useTimer] Task is locked - cannot toggle:', id);
+            return;
+        }
 
         const isCurrentlyCompleted = selectedTask.completed;
+        console.log('[useTimer] Toggling task - id:', id, 'current status:', isCurrentlyCompleted, 'new status:', !isCurrentlyCompleted);
 
         Haptics.notificationAsync(
             isCurrentlyCompleted 
@@ -273,13 +327,40 @@ export function useTimer() {
         );
 
         // Update local session UI immediately
-        setTasks(prev =>
-            prev.map(task =>
-                task.id === id
-                    ? { ...task, completed: !isCurrentlyCompleted, completedAt: isCurrentlyCompleted ? null : Date.now() }
-                    : task
-            )
-        );
+        const now = Date.now();
+        setTasks(prev => {
+            const taskIndex = prev.findIndex(t => t.id === id);
+            if (taskIndex === -1) return prev;
+            
+            const newCompleted = !isCurrentlyCompleted;
+            const updates: SessionTask[] = [...prev];
+            
+            // Update current task
+            updates[taskIndex] = {
+                ...updates[taskIndex],
+                completed: newCompleted,
+                completedAt: newCompleted ? now : null,
+            };
+            
+            if (newCompleted) {
+                // Task completed - start the next incomplete task
+                const nextIncompleteIndex = updates.findIndex((t, i) => i > taskIndex && !t.completed);
+                if (nextIncompleteIndex !== -1) {
+                    updates[nextIncompleteIndex] = {
+                        ...updates[nextIncompleteIndex],
+                        startedAt: now,
+                    };
+                }
+            } else {
+                // Task uncompleted - clear startedAt for this task and all subsequent tasks
+                // (user is going backwards)
+                for (let i = taskIndex; i < updates.length; i++) {
+                    updates[i] = { ...updates[i], startedAt: null };
+                }
+            }
+            
+            return updates;
+        });
 
         // Persist toggling to real task store and Supabase
         // Skip if storeTaskId is a temporary ID (Supabase requires a real UUID)
@@ -290,35 +371,51 @@ export function useTimer() {
                 : completeTask(user.id, selectedTask.storeTaskId!);
             
             storeAction.catch(err =>
-                console.error('Failed to persist task toggle:', err)
+                console.log('[useTimer] Failed to persist task toggle:', err)
             );
         }
     }, [user, completeTask, tasks, lockedTaskIds]);
 
-    const handleStopPress = useCallback(() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-        if (prefDontShowStop) {
-            finishSession();
-        } else {
-            setIsStopModalVisible(true);
-        }
-    }, [prefDontShowStop, tasks]);
-
     const finishSession = useCallback(() => {
-        const elapsed = totalTime - timeLeft;
+        console.log('[useTimer] finishSession called');
+        const elapsed = totalTime - timeLeftRef.current;
         const durationSeconds = elapsed > 0 ? elapsed : 0;
+        console.log('[useTimer] Session finished - elapsed:', durationSeconds, 'seconds');
         saveSessionToSupabase(durationSeconds);
+        if (durationSeconds > 0) {
+            console.log('[useTimer] calling addHobbyTime with', durationSeconds, 'seconds');
+            const hobbyStore = useHobbyTimeStore.getState();
+            if (!hobbyStore.userCreatedDate) hobbyStore.setUserCreatedDate(new Date().toISOString());
+            hobbyStore.addHobbyTime(durationSeconds);
+        } else {
+            console.log('[useTimer] durationSeconds is 0 - skipping addHobbyTime');
+        }
 
-        const completedTasks = tasks.filter(t => t.completed);
-        if (completedTasks.length > 0) {
+        const newlyCompletedTasks = tasks.filter(t => t.completed && !lockedTaskIds.has(t.id));
+        if (newlyCompletedTasks.length > 0) {
+            console.log('[useTimer] Showing summary - newly completed tasks:', newlyCompletedTasks.length);
             setShowSummary(true);
         } else {
+            console.log('[useTimer] No new tasks completed this session - resetting timer');
             setTimeLeft(totalTime);
             setTimerStatus('idle');
         }
-    }, [timeLeft, tasks, saveSessionToSupabase]);
+    }, [totalTime, tasks, lockedTaskIds, saveSessionToSupabase]);
+
+    const handleStopPress = useCallback(() => {
+        console.log('[useTimer] handleStopPress pressed');
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        if (prefDontShowStop) {
+            console.log('[useTimer] Skip confirmation modal - finishing session');
+            finishSession();
+        } else {
+            console.log('[useTimer] Showing stop confirmation modal');
+            setIsStopModalVisible(true);
+        }
+    }, [prefDontShowStop, finishSession]);
 
     const confirmStop = useCallback(async () => {
+        console.log('[useTimer] confirmStop pressed - dontShowAgain:', dontShowAgainChecked);
         if (dontShowAgainChecked) {
             await AsyncStorage.setItem(STORAGE_KEY_PREF, 'true');
             setPrefDontShowStop(true);
@@ -328,20 +425,27 @@ export function useTimer() {
     }, [dontShowAgainChecked, finishSession]);
 
     const handleSendMessage = useCallback(async () => {
-        if (!chatInput.trim() || isAiLoading) return;
+        const trimmedInput = chatInput.trim();
+        console.log('[useTimer] handleSendMessage - input:', trimmedInput.substring(0, 50));
+        if (!trimmedInput || isAiLoading) {
+            console.log('[useTimer] Cannot send - empty input or already loading');
+            return;
+        }
 
-        const userMsg: ChatMessage = { role: 'user', content: chatInput.trim() };
+        const userMsg: ChatMessage = { role: 'user', content: trimmedInput };
         const newMessages = [...messages, userMsg];
         setMessages(newMessages);
         setChatInput('');
         setIsAiLoading(true);
 
         try {
+            console.log('[useTimer] Sending message to AI service');
             const response = await aiService.sendMessage(newMessages, selectedHobby ?? undefined);
+            console.log('[useTimer] AI response received');
             const assistantMsg: ChatMessage = { role: 'assistant', content: response };
             setMessages(prev => [...prev, assistantMsg]);
         } catch (error) {
-            console.error(error);
+            console.log('[useTimer] Error sending message:', error);
             const errorMsg: ChatMessage = { role: 'assistant', content: 'Извините, ошибка соединения.' };
             setMessages(prev => [...prev, errorMsg]);
         } finally {

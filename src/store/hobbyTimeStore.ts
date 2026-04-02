@@ -16,9 +16,11 @@ interface HobbyTimeState {
     setWeeklyData: (data: DayData[]) => void;
     addHobbyTime: (seconds: number) => void;
     setUserCreatedDate: (date: string) => void;
+    reset: () => void;
 
     // Computed helpers
     getTotalSeconds: () => number;
+    getThisWeekSeconds: () => number;
     getDaysSinceCreation: () => number;
     getProductivityChange: () => { value: number; isNewUser: boolean };
 }
@@ -35,6 +37,7 @@ export const useHobbyTimeStore = create<HobbyTimeState>()(
             addHobbyTime: (seconds) => {
                 const today = new Date().toISOString().split('T')[0];
                 const { weeklyData } = get();
+                console.log('[hobbyTimeStore] addHobbyTime called - seconds:', seconds, 'today:', today, 'weeklyData before:', JSON.stringify(weeklyData));
 
                 const existingIndex = weeklyData.findIndex(d => d.date === today);
 
@@ -45,12 +48,25 @@ export const useHobbyTimeStore = create<HobbyTimeState>()(
                 } else {
                     set({ weeklyData: [...weeklyData, { date: today, seconds }] });
                 }
+                console.log('[hobbyTimeStore] addHobbyTime done - weeklyData after:', JSON.stringify(get().weeklyData));
             },
 
             setUserCreatedDate: (userCreatedDate) => set({ userCreatedDate }),
 
+            reset: () => set({ weeklyData: [], userCreatedDate: null }),
+
             getTotalSeconds: () => {
                 return get().weeklyData.reduce((acc, curr) => acc + curr.seconds, 0);
+            },
+
+            getThisWeekSeconds: () => {
+                const today = new Date();
+                const weekAgo = new Date(today);
+                weekAgo.setDate(today.getDate() - 6);
+                weekAgo.setHours(0, 0, 0, 0);
+                return get().weeklyData
+                    .filter(d => new Date(d.date) >= weekAgo)
+                    .reduce((acc, curr) => acc + curr.seconds, 0);
             },
 
             getDaysSinceCreation: () => {
@@ -104,7 +120,7 @@ export const useHobbyTimeStore = create<HobbyTimeState>()(
                     const thisWeekTotal = thisWeekStart.reduce((acc, d) => acc + d.seconds, 0);
                     const lastWeekTotal = lastWeekData.reduce((acc, d) => acc + d.seconds, 0);
 
-                    if (lastWeekTotal === 0) return { value: 45, isNewUser }; // Mock positive for demo
+                    if (lastWeekTotal === 0) return { value: thisWeekTotal > 0 ? 100 : 0, isNewUser };
 
                     const change = ((thisWeekTotal - lastWeekTotal) / lastWeekTotal) * 100;
                     return { value: Math.round(change), isNewUser };

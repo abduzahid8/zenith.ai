@@ -3,6 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StyleSheet, View, Text, ActivityIndicator, AppState, Platform } from 'react-native';
+import * as Linking from 'expo-linking';
 import { useAuthStore } from '../src/store/authStore';
 import { useTaskStore } from '../src/store/taskStore';
 import { useUserProfileStore } from '../src/store/userProfileStore';
@@ -25,9 +26,10 @@ if (Platform.OS !== 'web') {
 export default function RootLayout() {
     const [appIsReady, setAppIsReady] = useState(false);
     const { isAuthenticated, initialize, isLoading, isResettingPassword } = useAuthStore();
-    const { hasCompletedOnboarding } = useUserProfileStore();
+    const { hasCompletedOnboarding, _hasHydrated } = useUserProfileStore();
     const segments = useSegments();
     const router = useRouter();
+    const url = Linking.useURL();
     const { colors } = useAppTheme();
 
     const styles = useMemo(() => createStyles(colors), [colors]);
@@ -84,11 +86,78 @@ export default function RootLayout() {
         };
     }, []);
 
+    // Handle deep links (specifically for password recovery)
     useEffect(() => {
-        // Wait for both app ready AND auth to finish before redirecting
-        if (isLoading || !appIsReady) return;
+        if (!url) return;
 
-        // If we are in password recovery mode, force redirect to reset-password
+        try {
+            // Parse both query params AND hash fragment
+            // Supabase may send: zenyth://auth-callback?code=xxx#access_token=yyy&type=recovery
+            const getAllParams = (inputUrl: string): URLSearchParams => {
+                const params = new URLSearchParams();
+                
+                // Extract query params (after ?)
+                const queryIndex = inputUrl.indexOf('?');
+                const hashIndex = inputUrl.indexOf('#');
+                
+                if (queryIndex !== -1) {
+                    const queryEnd = hashIndex !== -1 ? hashIndex : inputUrl.length;
+                    const queryString = inputUrl.substring(queryIndex + 1, queryEnd);
+                    new URLSearchParams(queryString).forEach((value, key) => {
+                        params.set(key, value);
+                    });
+                }
+                
+                // Extract hash params (after #)
+                if (hashIndex !== -1) {
+                    const hashString = inputUrl.substring(hashIndex + 1);
+                    new URLSearchParams(hashString).forEach((value, key) => {
+                        params.set(key, value);
+                    });
+                }
+                
+                return params;
+            };
+
+            const params = getAllParams(url);
+            const accessToken = params.get('access_token');
+            const refreshToken = params.get('refresh_token');
+            const type = params.get('type');
+
+            if (accessToken && (type === 'recovery' || type === 'signup')) {
+                if (type === 'recovery') {
+                    // Mark immediately so the routing effect routes to reset-password
+                    // before the async setSession() resolves (avoids race with sign-in redirect)
+                    useAuthStore.getState().setResettingPassword(true);
+                }
+
+                const { getSupabase } = require('../src/services/supabase/client');
+                const supabase = getSupabase();
+
+                supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken || '',
+                }).then(({ error }: { error: any }) => {
+                    if (error && type === 'recovery') {
+                        // Token was invalid — cancel the reset flow
+                        useAuthStore.getState().setResettingPassword(false);
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('Failed to parse incoming deep link:', e);
+        }
+    }, [url]);
+
+    useEffect(() => {
+        // Wait for app assets, auth session, AND profile store AsyncStorage
+        // hydration before making any routing decision.  Without the
+        // _hasHydrated guard a returning (onboarded) user would briefly see
+        // the quiz-intro screen on every cold start because hasCompletedOnboarding
+        // starts as `false` until AsyncStorage finishes loading.
+        if (isLoading || !appIsReady || !_hasHydrated) return;
+
+        // Password recovery deep-link always wins
         if (isResettingPassword) {
             router.replace('/(auth)/reset-password');
             return;
@@ -113,7 +182,7 @@ export default function RootLayout() {
                 }
             }
         }
-    }, [isAuthenticated, segments, isLoading, appIsReady, hasCompletedOnboarding, isResettingPassword]);
+    }, [isAuthenticated, segments, isLoading, appIsReady, hasCompletedOnboarding, isResettingPassword, _hasHydrated]);
 
     // Show loading screen only until fonts/app are ready (NOT blocked on auth)
     if (!appIsReady) {
@@ -133,15 +202,17 @@ export default function RootLayout() {
         <RootView style={styles.container}>
             <ErrorBoundary>
                 <SafeAreaProvider>
-                    <Stack screenOptions={{ headerShown: false }}>
+                    <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
                         <Stack.Screen name="(auth)" />
                         <Stack.Screen name="(app)" />
+                        <Stack.Screen name="auth-callback" />
                         <Stack.Screen name="privacy" options={{ presentation: 'modal' }} />
                         <Stack.Screen name="quiz-intro" />
                         <Stack.Screen name="quiz" />
 
                         <Stack.Screen name="hobby-selection" />
                         <Stack.Screen name="subscription" />
+                        <Stack.Screen name="manage-subscription" />
                         <Stack.Screen
                             name="session-timer"
                             options={{

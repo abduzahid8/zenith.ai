@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
 import { scale } from '../../constants';
 import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
@@ -11,6 +10,11 @@ export interface StopConfirmationModalProps {
     onToggleDontShowAgain: () => void;
     onCancel: () => void;
     onConfirm: () => void;
+    titleOverride?: string;
+    messageOverride?: string;
+    confirmLabelOverride?: string;
+    cancelLabelOverride?: string;
+    hideDontShowAgain?: boolean;
 }
 
 const StopConfirmationModal: React.FC<StopConfirmationModalProps> = ({
@@ -19,6 +23,11 @@ const StopConfirmationModal: React.FC<StopConfirmationModalProps> = ({
     onToggleDontShowAgain,
     onCancel,
     onConfirm,
+    titleOverride,
+    messageOverride,
+    confirmLabelOverride,
+    cancelLabelOverride,
+    hideDontShowAgain,
 }) => {
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
@@ -30,35 +39,51 @@ const StopConfirmationModal: React.FC<StopConfirmationModalProps> = ({
             <View style={styles.modalContainer}>
                 {/* Red Hand Icon */}
                 <View style={styles.iconWrapper}>
-                    <Svg width={scale(80)} height={scale(80)} viewBox="0 0 100 100" fill="none" style={{ position: 'absolute' }}>
-                        <Circle cx="50" cy="50" r="50" fill={colors.sessionTimer.stopRed} />
-                    </Svg>
-                    <Image source={require('../../../icons/stop.png')} style={{ width: scale(40), height: scale(40), tintColor: 'white' }} resizeMode="contain" />
-                </View>
-
-                <Text style={styles.modalTitle}>Вы действительно хотите завершить занятие?</Text>
-
-                {/* Checkbox */}
-                <TouchableOpacity
-                    style={styles.checkboxContainer}
-                    activeOpacity={0.8}
-                    onPress={onToggleDontShowAgain}
-                >
                     <Image
-                        source={dontShowAgainChecked ? require('../../../icons/checkbox-checked.png') : require('../../../icons/checkbox-empty.png')}
-                        style={{ width: scale(20), height: scale(20), marginRight: scale(10), tintColor: undefined }}
+                        source={require('../../../icons/stop 1.png')}
+                        style={{ width: scale(80), height: scale(80) }}
                         resizeMode="contain"
                     />
-                    <Text style={styles.checkboxLabel}>Больше не показывать</Text>
-                </TouchableOpacity>
+                </View>
+
+                <Text style={styles.modalTitle}>{titleOverride ?? 'Вы действительно хотите завершить занятие?'}</Text>
+
+                {messageOverride ? (
+                    <Text style={styles.modalMessage}>{messageOverride}</Text>
+                ) : null}
+
+                {/* Checkbox */}
+                {!hideDontShowAgain && (
+                    <TouchableOpacity
+                        style={styles.checkboxContainer}
+                        activeOpacity={0.8}
+                        onPress={() => {
+                            console.log('[StopConfirmationModal] Toggle dont show again - current:', dontShowAgainChecked, 'new:', !dontShowAgainChecked);
+                            onToggleDontShowAgain();
+                        }}
+                    >
+                        <Image
+                            source={dontShowAgainChecked ? require('../../../icons/Vector.png') : require('../../../icons/checkbox-empty.png')}
+                            style={{ width: scale(20), height: scale(20), marginRight: scale(10), tintColor: '#FFFFFF' }}
+                            resizeMode="contain"
+                        />
+                        <Text style={styles.checkboxLabel}>Больше не показывать</Text>
+                    </TouchableOpacity>
+                )}
 
                 {/* Buttons */}
                 <View style={styles.modalButtonsRow}>
-                    <TouchableOpacity style={styles.modalButtonGray} onPress={onCancel}>
-                        <Text style={styles.modalButtonText}>Назад</Text>
+                    <TouchableOpacity style={styles.modalButtonGray} onPress={() => {
+                        console.log('[StopConfirmationModal] Cancel pressed');
+                        onCancel();
+                    }}>
+                        <Text style={styles.modalButtonText}>{cancelLabelOverride ?? 'Назад'}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.modalButtonGray} onPress={onConfirm}>
-                        <Text style={styles.modalButtonTextBold}>Завершить</Text>
+                    <TouchableOpacity style={styles.modalButtonGray} onPress={() => {
+                        console.log('[StopConfirmationModal] Confirm stop pressed');
+                        onConfirm();
+                    }}>
+                        <Text style={styles.modalButtonTextBold}>{confirmLabelOverride ?? 'Завершить'}</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -98,8 +123,16 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontSize: scale(20),
         color: colors.text,
         textAlign: 'center',
-        marginBottom: scale(24),
+        marginBottom: scale(12),
         lineHeight: scale(26),
+    },
+    modalMessage: {
+        fontFamily: fonts.heading.regular,
+        fontSize: scale(14),
+        color: colors.textSecondary,
+        textAlign: 'center',
+        marginBottom: scale(24),
+        lineHeight: scale(20),
     },
     checkboxContainer: {
         flexDirection: 'row',

@@ -19,6 +19,7 @@ export default function WelcomeScreen() {
     const styles = useMemo(() => createStyles(colors), [colors]);
 
     const handleStart = () => {
+        console.log('[WelcomeScreen] handleStart pressed - navigating to /auth');
         router.push('/auth');
     };
 
@@ -35,7 +36,7 @@ export default function WelcomeScreen() {
             <View style={styles.contentContainer}>
                 <Text style={styles.welcomeText}>Welcome!</Text>
                 <Text style={styles.subtitleText}>
-                    Reach your{'\n'}zenith
+                    Reach your{'\n'}zenyth
                 </Text>
             </View>
 

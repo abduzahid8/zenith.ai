@@ -118,6 +118,7 @@ export const useQuizStore = create<QuizState>()(
             isCompleted: false,
 
             setAnswer: (questionId, optionIndex) => {
+                console.log('[quizStore] setAnswer - questionId:', questionId, 'optionIndex:', optionIndex);
                 set((state) => ({
                     answers: { ...state.answers, [questionId]: optionIndex },
                 }));
@@ -125,6 +126,7 @@ export const useQuizStore = create<QuizState>()(
 
             nextQuestion: () => {
                 const { currentQuestion } = get();
+                console.log('[quizStore] nextQuestion - from:', currentQuestion, 'to:', Math.min(currentQuestion + 1, QUIZ_QUESTIONS.length));
                 if (currentQuestion < QUIZ_QUESTIONS.length) {
                     set({ currentQuestion: currentQuestion + 1 });
                 }
@@ -132,22 +134,26 @@ export const useQuizStore = create<QuizState>()(
 
             prevQuestion: () => {
                 const { currentQuestion } = get();
+                console.log('[quizStore] prevQuestion - from:', currentQuestion, 'to:', Math.max(currentQuestion - 1, 1));
                 if (currentQuestion > 1) {
                     set({ currentQuestion: currentQuestion - 1 });
                 }
             },
 
             goToQuestion: (questionId) => {
+                console.log('[quizStore] goToQuestion - questionId:', questionId);
                 if (questionId >= 1 && questionId <= QUIZ_QUESTIONS.length) {
                     set({ currentQuestion: questionId });
                 }
             },
 
             completeQuiz: () => {
+                console.log('[quizStore] completeQuiz called');
                 set({ isCompleted: true });
             },
 
             resetQuiz: () => {
+                console.log('[quizStore] resetQuiz called');
                 set({
                     currentQuestion: 1,
                     answers: {},

@@ -1,5 +1,6 @@
 Pod::Spec.new do |s|
   s.name           = 'DeviceActivity'
+  s.module_name    = 'ExpoDeviceActivity'
   s.version        = '1.0.0'
   s.summary        = 'Expo module for iOS Screen Time API using DeviceActivity Framework'
   s.description    = 'Native Expo module that provides access to iOS Screen Time data using FamilyControls and DeviceActivity frameworks'

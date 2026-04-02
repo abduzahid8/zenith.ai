@@ -1,109 +1,40 @@
-// AI Service — now running locally via Gemini API
-// ⚠️ SECURITY NOTE: API key is in the app bundle. Consider a backend proxy for production.
-// To switch back to edge function: set USE_LOCAL_AI = false
+// AI Service — proxied through Cloudflare Worker
+// API key is kept server-side in the Worker secret.
+// To fall back to local Gemini (key in bundle): set USE_LOCAL_AI = true
 
-import { getSupabase } from './supabase/client';
 import { localAiService } from './gemini';
 
-// Feature flag: true = use local Gemini, false = use edge function
 const USE_LOCAL_AI = false;
+const AI_PROXY_URL =
+    process.env.EXPO_PUBLIC_AI_PROXY_URL ?? 'https://ai-proxy.ppolqx065.workers.dev';
 
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
     content: string;
 }
 
-// ── Helper: invoke the ai-proxy Edge Function ────────────
+// ── Helper: call the Cloudflare Worker ai-proxy ──────────
 
 async function invokeAI<T>(action: string, payload: Record<string, unknown>): Promise<T> {
-    const supabase = getSupabase();
+    console.log('[AI Service] Calling worker action:', action);
 
-    // Debug: Check if user is authenticated
-    // Ensure we have a fresh session token
-    let { data: { session } } = await supabase.auth.getSession();
+    const response = await fetch(AI_PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ...payload }),
+    });
 
-    // If session is missing or expired (within a 60-second buffer), refresh it
-    const isExpired = session?.expires_at ? (session.expires_at - Math.floor(Date.now() / 1000) < 60) : true;
+    console.log('[AI Service] Response status:', response.status);
 
-    if (!session || isExpired) {
-        console.log('[AI Service] Session expired or missing, refreshing...');
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-        if (refreshError) {
-            console.error('[AI Service] Failed to refresh session:', refreshError);
-        } else {
-            session = refreshData.session;
-        }
+    const json = await response.json() as { data?: unknown; error?: string; timestamp?: string };
+
+    if (!response.ok) {
+        const message = json.error ?? `Worker error ${response.status}`;
+        console.error(`[AI Service] Worker error (${action}):`, json);
+        throw new Error(message);
     }
 
-    console.log('[AI Service] Session exists:', !!session);
-    console.log('[AI Service] User ID:', session?.user?.id);
-    console.log('[AI Service] Token length:', session?.access_token?.length || 0);
-
-    const doInvoke = async () => {
-        // Use supabase.functions.invoke - auth is handled automatically by Edge Runtime
-        return await supabase.functions.invoke('ai-proxy', {
-            body: { action, ...payload },
-        });
-    };
-
-    let { data, error } = await doInvoke();
-
-    // If 401 (Invalid JWT), try to refresh the session and retry once
-    const status = (error as any)?.context?.status ?? (error as any)?.status;
-    console.log('[AI Service] Response status:', status, 'Type:', typeof status);
-    
-    if (status == 401) {
-        console.log('[AI Service] 401 encountered, attempting forced refresh...');
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-        if (refreshError) {
-            console.error('[AI Service] Forced refresh failed:', refreshError);
-        } else if (refreshData.session) {
-            console.log('[AI Service] Refresh successful. New token length:', refreshData.session.access_token.length);
-            console.log('[AI Service] Retrying invocation...');
-            const retryResult = await doInvoke();
-            data = retryResult.data;
-            error = retryResult.error;
-        }
-    }
-
-    if (error) {
-        console.error(`AI proxy error (${action}):`, error);
-        if ('context' in error) {
-            const context = (error as any).context;
-            console.error('Error Status:', context.status);
-
-            // In React Native, the body might be a Blob that needs to be read
-            const extractErrorBody = async () => {
-                try {
-                    if (context._bodyText) return context._bodyText;
-                    if (context._bodyBlob) {
-                        return new Promise((resolve) => {
-                            const reader = new FileReader();
-                            reader.onloadend = () => resolve(reader.result);
-                            reader.readAsText(context._bodyBlob);
-                        });
-                    }
-                    return null;
-                } catch (e) {
-                    return `Error reading body: ${e}`;
-                }
-            };
-
-            const body = await extractErrorBody();
-            if (body) {
-                try {
-                    console.error('Error Body (JSON):', JSON.parse(body as string));
-                } catch {
-                    console.error('Error Body (Raw):', body);
-                }
-            }
-        }
-        throw error;
-    }
-
-    // The Edge Function returns { data: string }
-    // Parse the inner data if it's a JSON string
-    const raw = data?.data ?? data;
+    const raw = json.data;
     if (typeof raw === 'string') {
         try {
             return JSON.parse(raw.replace(/```json|```/g, '').trim()) as T;

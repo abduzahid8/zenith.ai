@@ -17,6 +17,7 @@ import { useTaskStore } from '../../store/taskStore';
 import { useAuthStore } from '../../store/authStore';
 import { useUserProfileStore } from '../../store/userProfileStore';
 import { Task, TaskType } from '../../services/supabase/types';
+import { getMaxTasksPerDay } from '../../domain/tasks/rules';
 import { useT } from '../../store/languageStore';
 
 interface WeeklyPlanTabProps {
@@ -28,74 +29,54 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
     const { user } = useAuthStore();
     const userId = user?.id;
     const { dailyTasks, loading, error, fetchDailyPlan } = useTaskStore();
-    const { isPremium: profilePremium, setWeeklyTasks } = useUserProfileStore();
+    const { isPremium: profilePremium } = useUserProfileStore();
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
     const t = useT();
 
     const ENGINE_TYPES: TaskType[] = ['theory', 'practice', 'analysis', 'puzzles'];
-    const allEngineTasks = dailyTasks.filter(task => ENGINE_TYPES.includes(task.type as TaskType));
-    
+    const allEngineTasks = ENGINE_TYPES
+        .flatMap(type => dailyTasks.filter(task => task.type === type));
+
     // Enforce display limit based on subscription
-    const maxTasks = (isPremium || profilePremium) ? 4 : 3;
+    const maxTasks = getMaxTasksPerDay(isPremium || profilePremium);
     const engineTasks = allEngineTasks.slice(0, maxTasks);
 
     useEffect(() => {
         if (userId) {
             fetchDailyPlan(userId);
         }
-    }, [userId]);
+    }, [userId, fetchDailyPlan]);
 
-    // Sync task titles into weeklyTasks whenever dailyTasks change
-    useEffect(() => {
-        if (engineTasks.length > 0) {
-            setWeeklyTasks(engineTasks.map(task => ({ text: task.title, completed: task.status === 'completed' })));
-        }
-    }, [dailyTasks]);
+
 
     const handleAddPress = () => {
-        const maxTasks = (isPremium || profilePremium) ? 4 : 3;
         const canAddMore = engineTasks.length < maxTasks;
 
+        console.log('[WeeklyPlanTab] handleAddPress pressed - canAddMore:', canAddMore, 'engineTasks:', engineTasks.length, 'maxTasks:', maxTasks);
+
         if (!canAddMore && !(isPremium || profilePremium)) {
+            console.log('[WeeklyPlanTab] Task limit reached - navigating to subscription');
             router.push('/subscription' as any);
         } else {
+            console.log('[WeeklyPlanTab] Navigating to your-tasks');
             router.push('/your-tasks');
         }
     };
 
     const getCardStyleForTask = (task: Task) => {
-        let baseStyle;
-        let baseHeight;
-
         switch (task.type) {
             case 'theory':
-                baseStyle = styles.theoryCard;
-                baseHeight = 119;
-                break;
+                return styles.theoryCard;
             case 'practice':
-                baseStyle = styles.practiceCard;
-                baseHeight = 100;
-                break;
+                return styles.practiceCard;
             case 'analysis':
-                baseStyle = styles.analysisCard;
-                baseHeight = 101;
-                break;
+                return styles.analysisCard;
             case 'puzzles':
-                baseStyle = styles.tasksCard;
-                baseHeight = 100;
-                break;
+                return styles.tasksCard;
             default:
-                baseStyle = styles.theoryCard;
-                baseHeight = 119;
+                return styles.theoryCard;
         }
-
-        const wordCount = task.title ? task.title.trim().split(/\s+/).length : 0;
-        if (wordCount >= 3) {
-            return [baseStyle, { height: scale(baseHeight + 20) }];
-        }
-
-        return baseStyle;
     };
 
     const getTitleForType = (type: TaskType) => {
@@ -105,9 +86,9 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
             case 'practice':
                 return t('Сделай');
             case 'analysis':
-                return t('Углуби 2');
-            case 'puzzles':
                 return t('Углуби 1');
+            case 'puzzles':
+                return t('Углуби 2');
             default:
                 return t('Задача');
         }
@@ -123,7 +104,10 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                 <Text style={styles.errorText}>Не удалось загрузить план</Text>
                 <TouchableOpacity
                     style={styles.retryButton}
-                    onPress={() => userId && fetchDailyPlan(userId)}
+                    onPress={() => {
+                        console.log('[WeeklyPlanTab] Retry button pressed');
+                        userId && fetchDailyPlan(userId);
+                    }}
                 >
                     <Text style={styles.retryButtonText}>Повторить</Text>
                 </TouchableOpacity>
@@ -154,7 +138,10 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                     <Text style={styles.emptyStateSubtitle}>
                         Добавьте первую задачу, чтобы начать свой день продуктивно.
                     </Text>
-                    <TouchableOpacity style={styles.emptyStateCta} onPress={handleAddPress}>
+                    <TouchableOpacity style={styles.emptyStateCta} onPress={() => {
+                        console.log('[WeeklyPlanTab] Empty state add task pressed');
+                        handleAddPress();
+                    }}>
                         <Text style={styles.emptyStateCtaText}>+ Добавить задачу</Text>
                     </TouchableOpacity>
                 </View>
@@ -212,12 +199,12 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                             <View style={styles.taskCardTextContainer}>
                                 <Text style={titleStyle}>{title}</Text>
                                 <Text style={descriptionStyle}>
-                                    {task.title}
+                                    {t(task.title)}
                                 </Text>
                             </View>
                             <View style={iconContainerStyle}>
                                 {isCompleted ? (
-                                    <Ionicons name="checkmark" size={scale(40)} color="#FFFFFF" />
+                                    <Image source={require('../../../icons/Vector.png')} style={{ width: scale(24), height: scale(24), tintColor: '#FFFFFF' }} resizeMode="contain" />
                                 ) : (
                                     <Image
                                         source={iconSource}
@@ -231,21 +218,26 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                 );
             })}
 
-            {/* Add Task button */}
-            {(orderedTasks.length < ((isPremium || profilePremium) ? 4 : 3) || (!(isPremium || profilePremium) && orderedTasks.length === 3)) && (
+            {/* Add Task button:
+                - Free users: always visible; shows lock when at 2-task limit, plus when below
+                - Premium users: visible only when below 4 tasks */}
+            {(!(isPremium || profilePremium) || orderedTasks.length < 4) && (
                 <TouchableOpacity
                     style={[
                         styles.addTaskCard,
-                        orderedTasks.length === 2 && { height: scale(179) },
-                        orderedTasks.length >= 3 && { height: scale(100) },
+                        orderedTasks.length === 0 && { height: scale(179) },
+                        orderedTasks.length >= 1 && { height: scale(179) },
                     ]}
                     activeOpacity={0.8}
-                    onPress={handleAddPress}
+                    onPress={() => {
+                        console.log('[WeeklyPlanTab] Add task card pressed');
+                        handleAddPress();
+                    }}
                 >
-                    <Image 
-                        source={(!(isPremium || profilePremium) && orderedTasks.length === 3) ? require('../../../icons/lock.png') : require('../../../icons/plus.png')} 
-                        style={{ width: scale(32), height: scale(32), tintColor: colors.iconMuted }} 
-                        resizeMode="contain" 
+                    <Image
+                        source={(!(isPremium || profilePremium) && orderedTasks.length >= maxTasks) ? require('../../../icons/lock.png') : require('../../../icons/plus.png')}
+                        style={{ width: scale(32), height: scale(32), tintColor: colors.iconMuted }}
+                        resizeMode="contain"
                     />
                 </TouchableOpacity>
             )}
@@ -269,7 +261,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         paddingHorizontal: scale(0),
     },
     theoryCard: {
-        height: scale(119),
+        minHeight: scale(119),
         alignSelf: 'stretch',
         borderRadius: scale(25),
         backgroundColor: colors.weeklyPlan.theoryBg,
@@ -279,7 +271,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         marginBottom: scale(10),
     },
     practiceCard: {
-        height: scale(100),
+        minHeight: scale(100),
         alignSelf: 'stretch',
         borderRadius: scale(25),
         backgroundColor: colors.weeklyPlan.practiceBg,
@@ -289,7 +281,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         marginBottom: scale(10),
     },
     analysisCard: {
-        height: scale(101),
+        minHeight: scale(101),
         alignSelf: 'stretch',
         borderRadius: scale(25),
         backgroundColor: colors.weeklyPlan.analysisBg,
@@ -310,7 +302,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontSize: scale(20),
         lineHeight: scale(24),
         color: colors.black,
-        alignSelf: 'stretch',
+        flex: 1,
     },
     analysisIconContainer: {
         width: scale(40),
@@ -320,7 +312,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         marginTop: scale(-25),
     },
     tasksCard: {
-        height: scale(101),
+        minHeight: scale(101),
         alignSelf: 'stretch',
         borderRadius: scale(25),
         backgroundColor: colors.weeklyPlan.tasksBg,
@@ -341,7 +333,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontSize: scale(20),
         lineHeight: scale(24),
         color: colors.sessionTimer.text,
-        width: scale(322),
+        flex: 1,
     },
     tasksIconContainer: {
         width: scale(40),
@@ -358,6 +350,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     },
     taskCardTextContainer: {
         flex: 1,
+        marginRight: scale(24),
     },
     taskCardTitle: {
         fontFamily: fonts.heading.bold,

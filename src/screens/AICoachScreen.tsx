@@ -57,12 +57,17 @@ export const AICoachScreen: React.FC = () => {
     }, [selectedHobby]);
 
     const handleSend = async () => {
-        if (!inputText.trim() || isLoading) return;
+        const trimmedInput = inputText.trim();
+        console.log('[AICoachScreen] handleSend pressed - input:', trimmedInput.substring(0, 50));
+        if (!trimmedInput || isLoading) {
+            console.log('[AICoachScreen] Cannot send - empty input or already loading');
+            return;
+        }
 
         const userMessage: DisplayMessage = {
             id: Date.now().toString(),
             role: 'user',
-            content: inputText.trim(),
+            content: trimmedInput,
             timestamp: new Date(),
         };
 
@@ -76,6 +81,7 @@ export const AICoachScreen: React.FC = () => {
         }, 100);
 
         try {
+            console.log('[AICoachScreen] Sending message to AI service');
             // Prepare messages for API
             const chatMessages: ChatMessage[] = messages
                 .map((m) => ({
@@ -85,6 +91,7 @@ export const AICoachScreen: React.FC = () => {
                 .concat([{ role: 'user', content: userMessage.content }]);
 
             const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined);
+            console.log('[AICoachScreen] AI response received');
 
             const assistantMessage: DisplayMessage = {
                 id: (Date.now() + 1).toString(),
@@ -95,6 +102,7 @@ export const AICoachScreen: React.FC = () => {
 
             setMessages((prev) => [...prev, assistantMessage]);
         } catch (error) {
+            console.log('[AICoachScreen] Error sending message:', error);
             const errorMessage: DisplayMessage = {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
@@ -111,6 +119,7 @@ export const AICoachScreen: React.FC = () => {
     };
 
     const handleBack = () => {
+        console.log('[AICoachScreen] handleBack pressed - navigating back');
         router.back();
     };
 
@@ -166,7 +175,7 @@ export const AICoachScreen: React.FC = () => {
             {/* Input */}
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+                keyboardVerticalOffset={0}
             >
                 <View style={styles.inputContainer}>
                     <TextInput

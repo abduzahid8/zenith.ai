@@ -5,7 +5,7 @@
  * This service handles connection lifecycle, product fetching,
  * purchase requests, restore, and transaction finishing.
  */
-import { Platform } from 'react-native';
+import { Platform, Linking } from 'react-native';
 import {
     initConnection,
     endConnection,
@@ -15,7 +15,6 @@ import {
     getActiveSubscriptions,
     hasActiveSubscriptions,
     finishTransaction,
-    deepLinkToSubscriptions,
     purchaseUpdatedListener,
     purchaseErrorListener,
     type Purchase,
@@ -25,14 +24,30 @@ import {
 // Use the errorMapping PurchaseError (code is optional) directly
 import type { PurchaseError } from 'expo-iap/build/utils/errorMapping';
 
-// ── Product IDs (App Store Connect) ─────────────────────
+// ── Product IDs (App Store Connect & Google Play Console) ─────────────────────
 
 export const PRODUCT_IDS = {
-    MONTHLY: 'com.zenyth.premium.monthly',
-    ANNUAL: 'com.zenyth.premium.annual',
+    IOS: {
+        MONTHLY: 'com.zenyth.premium.monthly',
+        ANNUAL: 'com.zenyth.premium.annual',
+    },
+    ANDROID: {
+        MONTHLY: 'com.zenyth.premium.monthly',
+        ANNUAL: 'com.zenyth.premium.annual',
+    },
 } as const;
 
-export const ALL_SKUS = [PRODUCT_IDS.MONTHLY, PRODUCT_IDS.ANNUAL];
+// Platform-specific SKU lists
+export const IOS_SKUS = [PRODUCT_IDS.IOS.MONTHLY, PRODUCT_IDS.IOS.ANNUAL];
+export const ANDROID_SKUS = [PRODUCT_IDS.ANDROID.MONTHLY, PRODUCT_IDS.ANDROID.ANNUAL];
+export const ALL_SKUS = Platform.OS === 'ios' ? IOS_SKUS : ANDROID_SKUS;
+
+/** Get the platform-specific SKU for a subscription type */
+export const getSku = (type: 'monthly' | 'annual'): string => {
+    return Platform.OS === 'ios' 
+        ? (type === 'monthly' ? PRODUCT_IDS.IOS.MONTHLY : PRODUCT_IDS.IOS.ANNUAL)
+        : (type === 'monthly' ? PRODUCT_IDS.ANDROID.MONTHLY : PRODUCT_IDS.ANDROID.ANNUAL);
+};
 
 // ── Types ───────────────────────────────────────────────
 
@@ -53,11 +68,14 @@ let connected = false;
 
 export const iapService = {
     /**
-     * Initialize StoreKit connection and set up purchase listeners.
+     * Initialize StoreKit / Google Play connection and set up purchase listeners.
      * Must be called once on app start (e.g. in root _layout).
      */
     setup: async (callbacks: PurchaseCallbacks): Promise<boolean> => {
-        if (Platform.OS !== 'ios') return false;
+        if (connected) {
+            console.log('[IAP] Already connected, skipping setup');
+            return true;
+        }
 
         try {
             await initConnection();
@@ -73,9 +91,10 @@ export const iapService = {
             purchaseUpdateSub = purchaseUpdatedListener(async (purchase) => {
                 try {
                     await finishTransaction({ purchase, isConsumable: false });
-                    callbacks.onPurchaseSuccess(purchase);
                 } catch (err) {
                     console.error('[IAP] Error finishing transaction:', err);
+                } finally {
+                    callbacks.onPurchaseSuccess(purchase);
                 }
             });
 
@@ -96,36 +115,48 @@ export const iapService = {
     },
 
     /**
-     * Fetch subscription products from StoreKit.
+     * Fetch subscription products from StoreKit / Google Play.
      * Returns an array of Product objects with localized pricing.
      */
     loadSubscriptions: async (): Promise<ProductOrSubscription[]> => {
-        if (Platform.OS !== 'ios' || !connected) return [];
+        if (!connected) return [];
+
+        const fetchOnce = () =>
+            fetchProducts({ skus: ALL_SKUS, type: 'subs' });
 
         try {
-            const products = await fetchProducts({
-                skus: ALL_SKUS,
-                type: 'subs',
-            });
-            return products ?? [];
-        } catch (err) {
+            return (await fetchOnce()) ?? [];
+        } catch (err: any) {
+            // StoreKit may not be fully ready immediately after initConnection —
+            // wait briefly and retry once before giving up.
+            if (err?.message?.toLowerCase().includes('billing is not prepared')) {
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                try {
+                    return (await fetchOnce()) ?? [];
+                } catch (retryErr) {
+                    console.error('[IAP] Failed to load subscriptions after retry:', retryErr);
+                    return [];
+                }
+            }
             console.error('[IAP] Failed to load subscriptions:', err);
             return [];
         }
     },
 
     /**
-     * Request a subscription purchase. This triggers the native StoreKit
-     * purchase sheet. The result comes back via the purchaseUpdatedListener.
+     * Request a subscription purchase. This triggers the native purchase sheet.
+     * The result comes back via the purchaseUpdatedListener.
      */
     purchaseSubscription: async (sku: string): Promise<void> => {
-        if (Platform.OS !== 'ios' || !connected) return;
+        if (!connected) {
+            throw new Error('IAP not connected');
+        }
 
         try {
             await requestPurchase({
-                request: {
-                    apple: { sku },
-                },
+                request: Platform.OS === 'ios' 
+                    ? { apple: { sku } }
+                    : { android: { skus: [sku] } },
                 type: 'subs',
             });
         } catch (err) {
@@ -139,7 +170,7 @@ export const iapService = {
      * Returns an array of restored purchases.
      */
     restorePurchases: async (): Promise<Purchase[]> => {
-        if (Platform.OS !== 'ios' || !connected) return [];
+        if (!connected) return [];
 
         try {
             const purchases = await getAvailablePurchases();
@@ -162,7 +193,7 @@ export const iapService = {
         isActive: boolean;
         productId: string | null;
     }> => {
-        if (Platform.OS !== 'ios' || !connected) {
+        if (!connected) {
             return { isActive: false, productId: null };
         }
 
@@ -185,7 +216,7 @@ export const iapService = {
      * Quick boolean check for active subscription.
      */
     isSubscriptionActive: async (): Promise<boolean> => {
-        if (Platform.OS !== 'ios' || !connected) return false;
+        if (!connected) return false;
 
         try {
             return await hasActiveSubscriptions(ALL_SKUS);
@@ -195,13 +226,31 @@ export const iapService = {
     },
 
     /**
-     * Open the native iOS subscription management screen.
+     * Open the native subscription management screen.
+     * iOS: App Store subscription management
+     * Android: Google Play subscription management
+     *
+     * Uses Linking.openURL instead of deepLinkToSubscriptions to avoid
+     * native crashes in TestFlight sandbox environment.
      */
     openManageSubscriptions: async (): Promise<void> => {
-        try {
-            await deepLinkToSubscriptions();
-        } catch (err) {
-            console.error('[IAP] Failed to open subscription management:', err);
+        if (Platform.OS === 'ios') {
+            try {
+                await Linking.openURL('itms-apps://apps.apple.com/account/subscriptions');
+            } catch (err) {
+                console.error('[IAP] itms-apps URL failed, trying HTTPS fallback:', err);
+                try {
+                    await Linking.openURL('https://apps.apple.com/account/subscriptions');
+                } catch (fallbackErr) {
+                    console.error('[IAP] HTTPS fallback also failed:', fallbackErr);
+                }
+            }
+        } else {
+            try {
+                await Linking.openURL('https://play.google.com/store/account/subscriptions');
+            } catch (err) {
+                console.error('[IAP] Failed to open Google Play subscriptions:', err);
+            }
         }
     },
 

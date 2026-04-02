@@ -17,7 +17,9 @@ export interface SessionSummaryViewProps {
 
 const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ tasks, startTime, onExit }) => {
     const completedTasks = tasks.filter(t => t.completed).sort((a, b) => (a.completedAt || 0) - (b.completedAt || 0));
-    const scrollX = useRef(new Animated.Value(0)).current;
+    const pagerPosition = useRef(new Animated.Value(0)).current;
+    const pagerOffset = useRef(new Animated.Value(0)).current;
+    const scrollX = useRef(Animated.add(pagerPosition, pagerOffset)).current;
     const pagerRef = useRef<any>(null);
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
@@ -43,15 +45,9 @@ const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ tasks, startTim
                 initialPage={0}
                 ref={pagerRef}
                 onPageScroll={Animated.event(
-                    [{ nativeEvent: { position: scrollX, offset: scrollX } }],
-                    {
-                        useNativeDriver: false,
-                        listener: (e: { nativeEvent: { position: number; offset: number } }) => {
-                            const { position, offset } = e.nativeEvent;
-                            scrollX.setValue(position + offset);
-                        },
-                    }
-                ) as any}
+                    [{ nativeEvent: { position: pagerPosition, offset: pagerOffset } }],
+                    { useNativeDriver: false }
+                )}
             >
                 {completedTasks.map((task, index) => {
                     const taskProgress = getTaskProgress(task.completedAt!);

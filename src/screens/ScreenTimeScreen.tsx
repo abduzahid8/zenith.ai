@@ -18,10 +18,12 @@ import { BottomNavigation } from '../components/BottomNavigation';
 import { useDeviceScreenTimeStore } from '../store/deviceScreenTimeStore';
 import { scale } from '../constants';
 import { useAppTheme } from '../theme/useAppTheme';
+import { useT, useLanguageStore } from '../store/languageStore';
 
 const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24) }} resizeMode="contain" />;
 
-const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEK_DAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEK_DAYS_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
 export const ScreenTimeScreen: React.FC = () => {
     const { streakDays } = useUserProfileStore();
@@ -39,13 +41,18 @@ export const ScreenTimeScreen: React.FC = () => {
         fetchTodayData,
     } = useDeviceScreenTimeStore();
     const [menuVisible, setMenuVisible] = useState(false);
+    const t = useT();
+    const language = useLanguageStore((s) => s.language);
+    const weekDays = language === 'ru' ? WEEK_DAYS_RU : WEEK_DAYS_EN;
 
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
 
     useEffect(() => {
         const init = async () => {
+            console.log('[ScreenTimeScreen] Initializing screen time data');
             const granted = await checkPermission();
+            console.log('[ScreenTimeScreen] Permission check result:', granted);
             if (!granted) {
                 await Promise.all([fetchWeeklyData(), fetchTodayData()]);
                 return;
@@ -56,11 +63,14 @@ export const ScreenTimeScreen: React.FC = () => {
     }, [checkPermission, fetchWeeklyData, fetchTodayData]);
 
     const handleGrantAccess = async () => {
+        console.log('[ScreenTimeScreen] handleGrantAccess pressed - requesting permission');
         let granted = await requestPermission();
+        console.log('[ScreenTimeScreen] Permission request result:', granted);
         if (!granted) {
             granted = await checkPermission();
         }
         if (granted) {
+            console.log('[ScreenTimeScreen] Permission granted - fetching data');
             await Promise.all([fetchWeeklyData(), fetchTodayData()]);
             return;
         }
@@ -69,20 +79,20 @@ export const ScreenTimeScreen: React.FC = () => {
 
     const chartData = useMemo(() => {
         if (!weeklyData || weeklyData.length === 0) {
-            return WEEK_DAYS.map((_, i) => {
+            return weekDays.map((_, i) => {
                 const d = new Date();
                 d.setDate(d.getDate() - (6 - i));
-                return { day: WEEK_DAYS[d.getDay()], value: 0 };
+                return { day: weekDays[d.getDay()], value: 0 };
             });
         }
         return weeklyData.map(d => {
             const date = new Date(d.date);
             return {
-                day: WEEK_DAYS[date.getDay()],
+                day: weekDays[date.getDay()],
                 value: Number((d.seconds / 3600).toFixed(1)),
             };
         }).slice(-7);
-    }, [weeklyData]);
+    }, [weeklyData, weekDays]);
 
     const totalDurationFormatted = useMemo(() => {
         const total = (weeklyData || []).reduce((acc, curr) => acc + curr.seconds, 0);
@@ -105,7 +115,10 @@ export const ScreenTimeScreen: React.FC = () => {
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
                     </View>
-                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)} activeOpacity={0.7}>
+                    <TouchableOpacity style={styles.menuButton} onPress={() => {
+                        console.log('[ScreenTimeScreen] Menu button pressed - opening menu');
+                        setMenuVisible(true);
+                    }} activeOpacity={0.7}>
                         <Image source={require('../../icons/menu.png')} style={{ width: scale(24), height: scale(24), tintColor: colors.text }} resizeMode="contain" />
                     </TouchableOpacity>
                 </View>
@@ -116,7 +129,7 @@ export const ScreenTimeScreen: React.FC = () => {
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                <Text style={styles.screenTitle}>Screen Time</Text>
+                <Text style={styles.screenTitle}>{t('Экранное время')}</Text>
                 {!hasAnalyticsData ? (
                     <View style={styles.permissionCard}>
                         <Text style={styles.permissionTitle}>No data access</Text>
@@ -164,12 +177,12 @@ export const ScreenTimeScreen: React.FC = () => {
                             <Text style={styles.statCardBigText}>
                                 {changeFromLastWeek >= 0 ? '+' : ''}{changeFromLastWeek}%
                             </Text>
-                            <Text style={styles.lastWeekText}>This past week</Text>
+                            <Text style={styles.lastWeekText}>{t('За последнюю неделю')}</Text>
                         </View>
 
                         <View style={styles.statCardDarkBlue}>
                             <Text style={styles.statCardBigText}>{totalDurationFormatted}</Text>
-                            <Text style={styles.screenTimeText}>Screen time{'\n'}this week</Text>
+                            <Text style={styles.screenTimeText}>{t('Время экрана\nна этой неделе')}</Text>
                         </View>
 
                         {(isLoading || isChecking) && (

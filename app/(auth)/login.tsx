@@ -9,6 +9,9 @@ import {
     Alert,
     TouchableOpacity,
     Image,
+    KeyboardAvoidingView,
+    ScrollView,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -17,7 +20,6 @@ import { Button } from '../../src/components/Button';
 import { fonts } from '../../src/theme';
 import { useAppTheme } from '../../src/theme/useAppTheme';
 import { useAuthStore } from '../../src/store/authStore';
-import { authService } from '../../src/services/supabase/auth';
 import { LogoNew } from '../../src/components/Logo';
 
 
@@ -46,19 +48,8 @@ export default function LoginScreen() {
         }
     };
 
-    const handleForgotPassword = async () => {
-        const trimmed = email.trim();
-        if (!trimmed) {
-            Alert.alert('Password Recovery', 'Enter your email above, then tap "Forgot password?"');
-            return;
-        }
-        try {
-            await authService.forgotPassword(trimmed);
-            Alert.alert('Email sent', `Password reset instructions sent to ${trimmed}`);
-        } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : 'Failed to send email';
-            Alert.alert('Error', msg);
-        }
+    const handleForgotPassword = () => {
+        router.push('/(auth)/forgot-password');
     };
 
     const { signInWithGoogle, signInWithApple } = useAuthStore();
@@ -78,6 +69,7 @@ export default function LoginScreen() {
             await signInWithApple();
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : 'Failed to sign in with Apple';
+            if (msg.includes('cancelled') || msg.includes('ERR_CANCELED')) return;
             Alert.alert('Error', msg);
         }
     };
@@ -85,15 +77,23 @@ export default function LoginScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.keyboardView}
+            >
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Header */}
+                    <View style={styles.headerContainer}>
+                        <LogoNew variant="icon" width={36} height={36} color={colors.text} />
+                        <Text style={styles.headerTitle}>Sign In</Text>
+                    </View>
 
-            {/* Header */}
-            <View style={styles.headerContainer}>
-                <LogoNew variant="icon" width={36} height={36} color={colors.text} />
-                <Text style={styles.headerTitle}>Sign In</Text>
-            </View>
-
-            {/* Form */}
-            <View style={styles.formContainer}>
+                    {/* Form */}
+                    <View style={styles.formContainer}>
                 {/* Email */}
                 <Text style={styles.inputLabel}>Email</Text>
                 <View style={styles.inputContainer}>
@@ -133,7 +133,7 @@ export default function LoginScreen() {
                         onPress={() => setRememberMe(!rememberMe)}
                     >
                         <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-                            {rememberMe && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                            {rememberMe && <Image source={require('../../icons/Vector.png')} style={styles.checkmarkIcon} />}
                         </View>
                         <Text style={styles.checkboxLabel}>Remember me</Text>
                     </TouchableOpacity>
@@ -172,11 +172,15 @@ export default function LoginScreen() {
                     <Text style={styles.socialButtonText}>Sign in with Google</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.socialButton} onPress={handleAppleSignIn}>
-                    <FontAwesome name="apple" size={24} color={colors.text} />
-                    <Text style={styles.socialButtonText}>Sign in with Apple</Text>
-                </TouchableOpacity>
+                {Platform.OS === 'ios' && (
+                    <TouchableOpacity style={styles.socialButton} onPress={handleAppleSignIn}>
+                        <FontAwesome name="apple" size={24} color={colors.text} />
+                        <Text style={styles.socialButtonText}>Sign in with Apple</Text>
+                    </TouchableOpacity>
+                )}
             </View>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
@@ -185,6 +189,12 @@ const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
+    },
+    keyboardView: {
+        flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
         paddingHorizontal: 28,
     },
     headerContainer: {
@@ -254,6 +264,11 @@ const createStyles = (colors: any) => StyleSheet.create({
     checkboxChecked: {
         backgroundColor: colors.buttonPrimary,
         borderColor: colors.buttonPrimary,
+    },
+    checkmarkIcon: {
+        width: 9,
+        height: 9,
+        tintColor: colors.white,
     },
     checkboxLabel: {
         fontFamily: fonts.body.medium,

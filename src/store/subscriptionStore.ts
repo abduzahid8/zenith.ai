@@ -45,7 +45,7 @@ interface SubscriptionState {
 
 // ── Helpers ─────────────────────────────────────────────
 
-/** Sync premium flag into the user profile store */
+/** Sync premium flag into the user profile store and backend */
 function syncPremiumStatus(isActive: boolean) {
     const profileStore = useUserProfileStore.getState();
     if (isActive) {
@@ -54,6 +54,23 @@ function syncPremiumStatus(isActive: boolean) {
         // Only demote if currently premium (don't touch 'trial' etc.)
         profileStore.setSubscriptionLevel('free');
     }
+
+    // Fire and forget backend sync
+    // Lazy imports avoid circular dependencies with authStore
+    Promise.resolve().then(async () => {
+        try {
+            const { useAuthStore } = require('./authStore');
+            const { profileService } = require('../services/supabase/profile');
+            const userId = useAuthStore.getState().user?.id;
+
+            if (userId) {
+                await profileService.updatePremiumStatus(userId, isActive);
+                console.log('[subscriptionStore] Synced premium status to backend:', isActive);
+            }
+        } catch (err) {
+            console.error('[subscriptionStore] Failed to sync premium status to backend:', err);
+        }
+    });
 }
 
 // ── Initial state ───────────────────────────────────────
@@ -80,7 +97,11 @@ export const useSubscriptionStore = create<SubscriptionState>()(
              * Called once from root _layout.tsx on app mount.
              */
             initialize: async () => {
-                if (Platform.OS !== 'ios') return;
+                if (get().isLoading) {
+                    console.log('[subscriptionStore] initialize already in progress, skipping');
+                    return;
+                }
+                console.log('[subscriptionStore] initialize started');
 
                 set({ isLoading: true, error: null });
 
@@ -90,6 +111,7 @@ export const useSubscriptionStore = create<SubscriptionState>()(
                         onPurchaseSuccess: (purchase: IAPPurchase) => {
                             // expo-iap Product uses `id`, but Purchase uses `productId`
                             const purchaseProductId = (purchase as any).productId ?? (purchase as any).id ?? null;
+                            console.log('[subscriptionStore] Purchase success - productId:', purchaseProductId);
                             set({
                                 isActive: true,
                                 activeProductId: purchaseProductId,
@@ -100,6 +122,7 @@ export const useSubscriptionStore = create<SubscriptionState>()(
                         },
                         onPurchaseError: (error: PurchaseError) => {
                             const isCancel = error.code === ErrorCode.UserCancelled;
+                            console.log('[subscriptionStore] Purchase error - code:', error.code, 'isCancel:', isCancel);
                             set({
                                 isPurchasing: false,
                                 error: isCancel ? null : (error.message || 'Ошибка покупки'),
@@ -108,18 +131,24 @@ export const useSubscriptionStore = create<SubscriptionState>()(
                     });
 
                     if (!connected) {
+                        console.log('[subscriptionStore] IAP setup failed - not connected');
                         set({ isLoading: false });
                         return;
                     }
+                    console.log('[subscriptionStore] IAP setup connected');
 
                     // 2. Load available products
                     const products = await iapService.loadSubscriptions();
+                    console.log('[subscriptionStore] Products loaded:', products.length);
                     set({ products });
 
-                    // 3. Check for existing active subscription
-                    await get().checkStatus();
+                    // 3. We intentionally DO NOT auto-call checkStatus() here on boot.
+                    // Doing so would auto-restore the device's Apple Sandbox receipt to 
+                    // EVERY newly created user, and would also instantly demote cross-platform users
+                    // who don't have the receipt on their secondary device. 
+                    // Restores should only happen when explicitly requested via `restore()`.
                 } catch (err) {
-                    console.error('[SubscriptionStore] Init error:', err);
+                    console.log('[subscriptionStore] Init error:', err);
                     set({ error: 'Не удалось загрузить подписки' });
                 } finally {
                     set({ isLoading: false });
@@ -130,16 +159,47 @@ export const useSubscriptionStore = create<SubscriptionState>()(
              * Purchase a subscription by SKU.
              */
             purchase: async (sku: string) => {
-                if (get().isPurchasing) return;
+                console.log('[subscriptionStore] purchase started - sku:', sku);
+                if (get().isPurchasing) {
+                    console.log('[subscriptionStore] purchase already in progress');
+                    return;
+                }
 
                 set({ isPurchasing: true, error: null });
 
                 try {
                     await iapService.purchaseSubscription(sku);
                     // Result comes via purchaseUpdatedListener → onPurchaseSuccess
-                } catch (_err) {
-                    set({ isPurchasing: false });
-                    // Error is handled by purchaseErrorListener
+                } catch (_err: any) {
+                    console.log('[subscriptionStore] purchase error:', _err);
+                    const errorMessage = String(_err?.message || '');
+                    
+                    // If the user already owns the subscription, process it as a successful restore
+                    if (errorMessage.toLowerCase().includes('already owned') || _err?.code === 'E_ALREADY_OWNED' || _err?.code === 'already-owned') {
+                        console.log('[subscriptionStore] Item already owned, triggering internal restore');
+                        try {
+                            await iapService.restorePurchases();
+                            const { isActive, productId } = await iapService.checkActiveSubscription();
+                            set({
+                                isActive,
+                                activeProductId: productId,
+                                isPurchasing: false,
+                                error: null,
+                            });
+                            syncPremiumStatus(isActive);
+                            if (!isActive) {
+                                set({ isPurchasing: false, error: 'Подписка не найдена' });
+                            }
+                        } catch (restoreErr) {
+                            set({ isPurchasing: false, error: 'Ошибка при восстановлении' });
+                        }
+                        return;
+                    }
+
+                    set({ 
+                        isPurchasing: false, 
+                        error: _err?.message || 'Не удалось начать покупку' 
+                    });
                 }
             },
 
@@ -147,12 +207,20 @@ export const useSubscriptionStore = create<SubscriptionState>()(
              * Restore previous purchases (e.g. reinstall, new device).
              */
             restore: async () => {
-                if (get().isRestoring) return;
+                console.log('[subscriptionStore] restore started');
+                if (get().isRestoring) {
+                    console.log('[subscriptionStore] restore already in progress');
+                    return;
+                }
 
                 set({ isRestoring: true, error: null });
 
                 try {
+                    // Fetch purchases from Apple/Google to populate the local receipt.
+                    await iapService.restorePurchases();
+                    // Now check the updated active subscriptions
                     const { isActive, productId } = await iapService.checkActiveSubscription();
+                    console.log('[subscriptionStore] restore result - isActive:', isActive, 'productId:', productId);
 
                     set({
                         isActive,
@@ -170,7 +238,7 @@ export const useSubscriptionStore = create<SubscriptionState>()(
                         Alert.alert('Готово', 'Подписка успешно восстановлена!');
                     }
                 } catch (err) {
-                    console.error('[SubscriptionStore] Restore error:', err);
+                    console.log('[subscriptionStore] restore error:', err);
                     set({ error: 'Не удалось восстановить покупки' });
                 } finally {
                     set({ isRestoring: false });
@@ -181,8 +249,10 @@ export const useSubscriptionStore = create<SubscriptionState>()(
              * Check for active subscription without user-facing alerts.
              */
             checkStatus: async () => {
+                console.log('[subscriptionStore] checkStatus started');
                 try {
                     const { isActive, productId } = await iapService.checkActiveSubscription();
+                    console.log('[subscriptionStore] checkStatus result - isActive:', isActive, 'productId:', productId);
 
                     set({
                         isActive,
@@ -191,13 +261,19 @@ export const useSubscriptionStore = create<SubscriptionState>()(
 
                     syncPremiumStatus(isActive);
                 } catch (err) {
-                    console.error('[SubscriptionStore] Status check error:', err);
+                    console.log('[subscriptionStore] checkStatus error:', err);
                 }
             },
 
-            clearError: () => set({ error: null }),
+            clearError: () => {
+                console.log('[subscriptionStore] clearError called');
+                set({ error: null });
+            },
 
-            reset: () => set(initialState),
+            reset: () => {
+                console.log('[subscriptionStore] reset called');
+                set(initialState);
+            },
         }),
         {
             name: 'subscription-storage',
@@ -213,8 +289,8 @@ export const useSubscriptionStore = create<SubscriptionState>()(
 
 // ── Manage Subscription helper ──────────────────────────
 
-export const openManageSubscriptions = () => {
-    iapService.openManageSubscriptions();
+export const openManageSubscriptions = (): Promise<void> => {
+    return iapService.openManageSubscriptions();
 };
 
 export default useSubscriptionStore;

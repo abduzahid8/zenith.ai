@@ -1,42 +1,46 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, StatusBar, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTaskStore } from '../store/taskStore';
 import { useUserProfileStore } from '../store/userProfileStore';
+import { useAuthStore } from '../store/authStore';
 import { TaskType } from '../services/supabase/types';
+import { getMaxTasksPerDay } from '../domain/tasks/rules';
+import { taskEngine } from '../services/taskEngine';
 import { fonts } from '../theme';
 import { scale } from '../constants';
 import { useAppTheme } from '../theme/useAppTheme';
+import { useT } from '../store/languageStore';
 
 const categories: { type: TaskType; label: string; icon: any; bg: string; subtitle: string }[] = [
     {
         type: 'theory',
-        label: 'Theory',
+        label: 'Узнай',
         subtitle: 'Learn something new',
         icon: require('../../icons/book.png'),
         bg: '#9CE4FD'
     },
     {
         type: 'practice',
-        label: 'Practice',
+        label: 'Сделай',
         subtitle: 'Train your skills',
         icon: require('../../icons/dumbbell.png'),
         bg: '#7CB9FF'
     },
     {
         type: 'analysis',
-        label: 'Analysis',
-        subtitle: 'Work on mistakes',
+        label: 'Углуби 1',
+        subtitle: 'Extra task 1',
         icon: require('../../icons/magnifier.png'),
         bg: '#F4C0FD'
     },
     {
         type: 'puzzles',
-        label: 'Tasks',
-        subtitle: 'Solve puzzles',
+        label: 'Углуби 2',
+        subtitle: 'Extra task 2',
         icon: require('../../icons/puzzle.png'),
         bg: '#FCB5FD'
     },
@@ -44,69 +48,114 @@ const categories: { type: TaskType; label: string; icon: any; bg: string; subtit
 
 export const YourTasksScreen = () => {
     const router = useRouter();
-    const { dailyTasks } = useTaskStore();
-    const { isPremium } = useUserProfileStore();
+    const { dailyTasks, addTask, loading } = useTaskStore();
+    const { isPremium, selectedHobby } = useUserProfileStore();
+    const { user } = useAuthStore();
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
+    const t = useT();
 
     const ENGINE_TYPES: TaskType[] = ['theory', 'practice', 'analysis', 'puzzles'];
     const engineTasksCount = dailyTasks.filter(t => ENGINE_TYPES.includes(t.type as TaskType)).length;
-    const maxTasks = isPremium ? 4 : 3;
+    const maxTasks = getMaxTasksPerDay(isPremium);
 
-    const handleAdd = (type: TaskType, label: string, bg: string) => {
-        router.push({
-            pathname: `/category/${type}` as any,
-            params: { categoryLabel: label, categoryBg: bg }
-        });
+    const handleAdd = async (type: TaskType) => {
+        console.log('[YourTasksScreen] handleAdd pressed - type:', type);
+        if (!user?.id) return;
+        const templates = (taskEngine as any).getAvailableTaskTemplates(selectedHobby ?? undefined, type);
+        const alreadyAdded = dailyTasks.filter(t => t.type === type);
+        const next = templates.find((tmpl: any) => !alreadyAdded.some((t: any) => t.title === tmpl.title));
+        const template = next || templates[0];
+        if (!template) return;
+        try {
+            await addTask(user.id, type, template);
+            console.log('[YourTasksScreen] Task added successfully');
+            router.back();
+        } catch (e: any) {
+            Alert.alert('Error', e.message || 'Failed to add task');
+        }
     };
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <TouchableOpacity onPress={() => {
+                    console.log('[YourTasksScreen] Back button pressed');
+                    router.back();
+                }} style={styles.backButton}>
                     <Ionicons
                         name="chevron-back"
                         size={scale(24)}
                         color={colors.text}
                     />
-                    <Text style={styles.backText}>Back</Text>
+                    <Text style={styles.backText}>{t('Назад')}</Text>
                 </TouchableOpacity>
-                <Text style={styles.title}>Your Tasks</Text>
+                <Text style={styles.title}>{t('Твои задачи')}</Text>
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
                 <Text style={styles.subtitle}>
-                    Select a task category to add to your plan for today.
+                    {t('Выберите категорию задач, чтобы добавить её в план на сегодня.')}
                 </Text>
 
                 <View style={styles.cardsContainer}>
                     {categories.map((cat) => {
                         const existingTask = dailyTasks.find(t => t.type === cat.type) ?? null;
-                        const isLocked = !existingTask && engineTasksCount >= maxTasks;
+                        const shouldShowLocked = !existingTask && engineTasksCount >= maxTasks;
+                        
+                        // Skip rendering locked cards here - we'll render one at the end
+                        if (shouldShowLocked) {
+                            return null;
+                        }
+                        
                         return (
                             <View key={cat.type} style={{ marginBottom: scale(16) }}>
                                 <CategoryCard
                                     category={cat}
                                     existingTask={existingTask}
-                                    isLocked={isLocked}
-                                    onAdd={() => handleAdd(cat.type, cat.label, cat.bg)}
+                                    isLocked={false}
+                                    onAdd={() => handleAdd(cat.type)}
                                     onUpgrade={() => router.push('/subscription')}
                                     colors={colors}
                                     styles={styles}
+                                    t={t}
                                 />
                             </View>
                         );
                     })}
+                    
+                    {/* Always show locked card in the last position if limit is reached (free users only) */}
+                    {!isPremium && engineTasksCount >= maxTasks && (
+                        <View key="locked-last" style={{ marginBottom: scale(16) }}>
+                            <CategoryCard
+                                category={categories[3]} // Use last category for icon/styling
+                                existingTask={null}
+                                isLocked={true}
+                                onAdd={() => {}}
+                                onUpgrade={() => router.push('/subscription')}
+                                colors={colors}
+                                styles={styles}
+                                t={t}
+                            />
+                        </View>
+                    )}
                 </View>
 
-                {!isPremium && dailyTasks.length >= 3 && (
+                {loading && (
+                    <ActivityIndicator color={colors.primary} style={{ marginTop: scale(16) }} />
+                )}
+
+                {!isPremium && engineTasksCount >= getMaxTasksPerDay(false) && (
                     <TouchableOpacity
                         style={styles.upgradeCard}
-                        onPress={() => router.push('/subscription')}
+                        onPress={() => {
+                            console.log('[YourTasksScreen] Upgrade card pressed - navigating to subscription');
+                            router.push('/subscription');
+                        }}
                     >
                         <Text style={styles.upgradeText}>
-                            Task limit reached. Upgrade to Premium to add more.
+                            {t('Достигнут лимит задач. Перейдите на Premium, чтобы добавить больше.')}
                         </Text>
                     </TouchableOpacity>
                 )}
@@ -115,7 +164,7 @@ export const YourTasksScreen = () => {
     );
 };
 
-const CategoryCard = ({ category, existingTask, isLocked, onAdd, onUpgrade, styles }: any) => {
+const CategoryCard = ({ category, existingTask, isLocked, onAdd, onUpgrade, styles, t }: any) => {
     const isAdded = !!existingTask;
     const isCompleted = existingTask?.status === 'completed';
 
@@ -135,22 +184,22 @@ const CategoryCard = ({ category, existingTask, isLocked, onAdd, onUpgrade, styl
             <View style={styles.cardInfo}>
                 <View style={styles.iconContainer}>
                     <Image
-                        source={isCompleted ? require('../../icons/checkbox-checked.png') : category.icon}
+                        source={category.icon}
                         style={styles.cardIcon}
                         resizeMode="contain"
                     />
                 </View>
                 <View style={styles.textContainer}>
-                    <Text style={styles.cardTitle}>{category.label}</Text>
+                    <Text style={styles.cardTitle}>{t(category.label)}</Text>
                     <Text style={styles.cardSubtitle} numberOfLines={2}>
-                        {existingTask ? existingTask.title : category.subtitle}
+                        {existingTask ? t(existingTask.title) : t(category.subtitle)}
                     </Text>
                 </View>
             </View>
 
             {isCompleted ? (
                 <View style={[styles.addButton, styles.doneButton]}>
-                    <Text style={styles.doneText}>✓</Text>
+                    <Image source={require('../../icons/Vector.png')} style={styles.checkIcon} />
                 </View>
             ) : isAdded ? (
                 <TouchableOpacity
@@ -300,10 +349,10 @@ const createStyles = (colors: any) => StyleSheet.create({
     doneButton: {
         backgroundColor: 'rgba(255,255,255,0.5)',
     },
-    doneText: {
-        fontSize: scale(22),
-        color: '#0F5C23',
-        fontWeight: '700',
+    checkIcon: {
+        width: scale(20),
+        height: scale(20),
+        tintColor: '#FFFFFF',
     },
     plusIcon: {
         width: scale(20),

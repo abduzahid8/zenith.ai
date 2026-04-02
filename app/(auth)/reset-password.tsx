@@ -173,7 +173,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         borderRadius: 28,
         paddingHorizontal: 16,
         height: 52,
-        backgroundColor: colors.surfaceLight,
+        backgroundColor: 'transparent',
         marginBottom: 20,
     },
     inputIcon: {

@@ -45,6 +45,7 @@ const TimePickerModal: React.FC<TimePickerModalProps> = ({
                                     currentMinutes === mins && styles.selectedOption
                                 ]}
                                 onPress={() => {
+                                    console.log('[TimePickerModal] Duration selected:', mins, 'minutes');
                                     onSelect(mins);
                                     onClose();
                                 }}
@@ -58,7 +59,10 @@ const TimePickerModal: React.FC<TimePickerModalProps> = ({
                             </TouchableOpacity>
                         ))}
                     </View>
-                    <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                    <TouchableOpacity style={styles.closeButton} onPress={() => {
+                        console.log('[TimePickerModal] Cancel pressed');
+                        onClose();
+                    }}>
                         <Text style={styles.closeButtonText}>Отмена</Text>
                     </TouchableOpacity>
                 </View>

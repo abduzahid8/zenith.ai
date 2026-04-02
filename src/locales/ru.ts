@@ -37,7 +37,7 @@ const ru = {
     // Welcome
     welcome: {
         title: 'Welcome!',
-        subtitle: 'Reach your\nzenith',
+        subtitle: 'Reach your\nzenyth',
         start: 'Start',
     },
 
@@ -126,6 +126,18 @@ const ru = {
     // Weekly Plan
     weeklyPlan: {
         title: 'Weekly Plan',
+        yourDayTitle: 'Твой день',
+        theoryTitle: 'Узнай',
+        practiceTitle: 'Сделай',
+        analysisTitle: 'Углуби 1',
+        puzzlesTitle: 'Углуби 2',
+        taskTitle: 'Задача',
+        noTasksTitle: 'Нет задач на сегодня',
+        noTasksSubtitle: 'Добавьте первую задачу, чтобы начать свой день продуктивно.',
+        addTask: '+ Добавить задачу',
+        loadingPlan: 'Загружаем план...',
+        errorLoading: 'Не удалось загрузить план',
+        retry: 'Повторить',
     },
 
     // Phone Analysis

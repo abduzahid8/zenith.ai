@@ -13,56 +13,48 @@ export const HobbyIcon: React.FC<HobbyIconProps> = ({ style }) => {
     let iconSource;
 
     switch (selectedHobby) {
+        // Technology / Code
+        case 'python':
         case 'programming':
-            iconSource = require('../../assets/images/icons-hobby/code.png');
-            break;
-        case 'english':
-            iconSource = require('../../assets/images/icons-hobby/united-kingdom.png');
-            break;
-        case 'speed_reading':
-            iconSource = require('../../assets/images/icons-hobby/book-icon.png');
-            break;
-        case 'languages':
-            iconSource = require('../../assets/images/icons-hobby/china.png');
-            break;
-        case 'chess':
-        case 'logic_puzzles':
-            iconSource = require('../../assets/images/icons-hobby/book-icon.png');
-            break;
         case 'web_design':
         case 'mobile_design':
-        case 'drawing':
-            iconSource = require('../../assets/images/icons-hobby/code.png');
-            break;
         case 'video_editing':
         case '3d_motion':
         case 'content_creation':
             iconSource = require('../../assets/images/icons-hobby/code.png');
             break;
-        case 'music':
+        // English
+        case 'english':
         case 'public_speaking':
-            iconSource = require('../../assets/images/icons-hobby/book-icon.png');
+            iconSource = require('../../assets/images/icons-hobby/united-kingdom.png');
             break;
-        case 'photography':
+        // Chinese / Other languages
+        case 'chinese':
+        case 'languages':
+            iconSource = require('../../assets/images/icons-hobby/china.png');
+            break;
+        // Reading / Writing / Knowledge
+        case 'reading':
+        case 'speed_reading':
+        case 'chess':
+        case 'logic_puzzles':
         case 'writing':
+        case 'journaling':
+        case 'planning':
+        case 'finance':
             iconSource = require('../../assets/images/icons-hobby/book-icon.png');
             break;
+        // Physical / Mindfulness / Creative — fallback
+        case 'drawing':
+        case 'music':
+        case 'photography':
         case 'home_workout':
         case 'running':
         case 'yoga':
         case 'dancing':
         case 'martial_arts':
-            iconSource = require('../../assets/images/icons-hobby/book-icon.png');
-            break;
         case 'meditation':
-        case 'journaling':
-        case 'planning':
-            iconSource = require('../../assets/images/icons-hobby/book-icon.png');
-            break;
         case 'cooking':
-        case 'finance':
-            iconSource = require('../../assets/images/icons-hobby/book-icon.png');
-            break;
         default:
             iconSource = require('../../assets/images/icons-hobby/book-icon.png');
             break;

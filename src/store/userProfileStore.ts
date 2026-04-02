@@ -40,12 +40,13 @@ export const getGreeting = (userName?: string): string => {
     return `${greeting}!`;
 };
 
-export interface WeeklyTask {
-    text: string;
-    completed: boolean;
-}
+
 
 interface UserProfileState {
+    // True once AsyncStorage has finished rehydrating the persisted slice.
+    // The nav guard must not redirect until this is true.
+    _hasHydrated: boolean;
+
     // Profile data
     userName: string;
     streakDays: number;
@@ -54,9 +55,6 @@ interface UserProfileState {
     isPremium: boolean;
     selectedHobby: string | null;
     hasCompletedOnboarding: boolean;
-
-    // Weekly Tasks
-    weeklyTasks: WeeklyTask[];
 
     // Actions
     setUserName: (name: string) => void;
@@ -68,13 +66,13 @@ interface UserProfileState {
     setPremium: (isPremium: boolean) => void;
     setSelectedHobby: (hobbyId: string) => void;
     completeOnboarding: () => void;
-    setWeeklyTasks: (tasks: WeeklyTask[]) => void;
-    toggleWeeklyTask: (index: number) => void;
 
     // Reset (called on sign out)
     resetProfile: () => void;
 }
 
+// NOTE: _hasHydrated is intentionally NOT in initialProfileState so that
+// resetProfile() (called on sign-out) does not reset it back to false.
 const initialProfileState = {
     userName: '',
     streakDays: 0,
@@ -83,24 +81,33 @@ const initialProfileState = {
     isPremium: false,
     selectedHobby: null as string | null,
     hasCompletedOnboarding: false,
-    weeklyTasks: [] as WeeklyTask[],
 };
 
 export const useUserProfileStore = create<UserProfileState>()(
     persist(
         (set, get) => ({
+            _hasHydrated: false,
             ...initialProfileState,
 
-            setUserName: (userName) => set({ userName }),
+            setUserName: (userName) => {
+                console.log('[userProfileStore] setUserName:', userName);
+                set({ userName });
+            },
 
-            setStreakDays: (streakDays) => set({ streakDays }),
+            setStreakDays: (streakDays) => {
+                console.log('[userProfileStore] setStreakDays:', streakDays);
+                set({ streakDays });
+            },
 
             incrementStreak: () => {
                 const today = new Date().toDateString();
                 const { lastSessionDate, streakDays } = get();
 
                 // If already logged session today, don't increment
-                if (lastSessionDate === today) return;
+                if (lastSessionDate === today) {
+                    console.log('[userProfileStore] incrementStreak skipped - already logged today');
+                    return;
+                }
 
                 const yesterday = new Date();
                 yesterday.setDate(yesterday.getDate() - 1);
@@ -108,47 +115,67 @@ export const useUserProfileStore = create<UserProfileState>()(
                 // If last session was yesterday, increment streak
                 // If last session was before yesterday, reset to 1
                 if (lastSessionDate === yesterday.toDateString()) {
+                    console.log('[userProfileStore] incrementStreak - continuing streak:', streakDays + 1);
                     set({ streakDays: streakDays + 1, lastSessionDate: today });
                 } else {
+                    console.log('[userProfileStore] incrementStreak - new streak started: 1');
                     set({ streakDays: 1, lastSessionDate: today });
                 }
             },
 
-            resetStreak: () => set({ streakDays: 0, lastSessionDate: null }),
+            resetStreak: () => {
+                console.log('[userProfileStore] resetStreak called');
+                set({ streakDays: 0, lastSessionDate: null });
+            },
 
-            setSubscriptionLevel: (subscriptionLevel) => set({
-                subscriptionLevel,
-                isPremium: subscriptionLevel === 'premium',
-            }),
+            setSubscriptionLevel: (subscriptionLevel) => {
+                console.log('[userProfileStore] setSubscriptionLevel:', subscriptionLevel);
+                set({
+                    subscriptionLevel,
+                    isPremium: subscriptionLevel === 'premium',
+                });
+            },
 
-            updateLastSessionDate: () => set({
-                lastSessionDate: new Date().toDateString()
-            }),
+            updateLastSessionDate: () => {
+                console.log('[userProfileStore] updateLastSessionDate called');
+                set({
+                    lastSessionDate: new Date().toDateString()
+                });
+            },
 
-            setPremium: (isPremium) => set({
-                isPremium,
-                subscriptionLevel: isPremium ? 'premium' : get().subscriptionLevel,
-            }),
+            setPremium: (isPremium) => {
+                console.log('[userProfileStore] setPremium:', isPremium);
+                set({
+                    isPremium,
+                    subscriptionLevel: isPremium ? 'premium' : get().subscriptionLevel,
+                });
+            },
 
-            setSelectedHobby: (hobbyId) => set({ selectedHobby: hobbyId, weeklyTasks: [] }),
+            setSelectedHobby: (hobbyId) => {
+                console.log('[userProfileStore] setSelectedHobby:', hobbyId);
+                set({ selectedHobby: hobbyId });
+            },
 
-            completeOnboarding: () => set({ hasCompletedOnboarding: true }),
+            completeOnboarding: () => {
+                console.log('[userProfileStore] completeOnboarding called');
+                set({ hasCompletedOnboarding: true });
+            },
 
-            setWeeklyTasks: (weeklyTasks) => set({ weeklyTasks }),
 
-            toggleWeeklyTask: (index) => set((state) => {
-                const newTasks = [...state.weeklyTasks];
-                if (newTasks[index]) {
-                    newTasks[index].completed = !newTasks[index].completed;
-                }
-                return { weeklyTasks: newTasks };
-            }),
 
-            resetProfile: () => set(initialProfileState),
+            resetProfile: () => {
+                console.log('[userProfileStore] resetProfile called');
+                set(initialProfileState);
+            }
         }),
         {
             name: 'user-profile-storage',
             storage: createJSONStorage(() => AsyncStorage),
+            onRehydrateStorage: () => (_state, error) => {
+                if (!error) {
+                    useUserProfileStore.setState({ _hasHydrated: true });
+                }
+            },
             partialize: (state) => ({
                 isPremium: state.isPremium,
                 selectedHobby: state.selectedHobby,
@@ -157,7 +184,6 @@ export const useUserProfileStore = create<UserProfileState>()(
                 streakDays: state.streakDays,
                 subscriptionLevel: state.subscriptionLevel,
                 lastSessionDate: state.lastSessionDate,
-                weeklyTasks: state.weeklyTasks,
             }),
         }
     )

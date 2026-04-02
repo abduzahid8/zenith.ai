@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import {
     View,
     Text,
@@ -9,6 +9,7 @@ import {
     Platform,
     StyleSheet,
     Image,
+    Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -46,12 +47,17 @@ const SessionChat: React.FC<SessionChatProps> = ({
 }) => {
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
+    const scrollRef = useRef<ScrollView>(null);
+
+    const scrollToBottom = () => {
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    };
 
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={{ flex: 1 }}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? scale(50) : 20}
         >
             <View style={styles.chatPage}>
                 {/* Header */}
@@ -68,9 +74,11 @@ const SessionChat: React.FC<SessionChatProps> = ({
 
                 {/* Chat Area */}
                 <ScrollView
+                    ref={scrollRef}
                     style={styles.chatArea}
                     contentContainerStyle={styles.chatContent}
                     keyboardShouldPersistTaps="handled"
+                    onContentSizeChange={scrollToBottom}
                 >
                     {messages.map((msg, index) => (
                         <View
@@ -107,6 +115,7 @@ const SessionChat: React.FC<SessionChatProps> = ({
                         value={chatInput}
                         onChangeText={onChangeText}
                         onSubmitEditing={onSendMessage}
+                        onFocus={scrollToBottom}
                         returnKeyType="send"
                         autoCapitalize="sentences"
                         autoCorrect={false}
@@ -171,7 +180,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         justifyContent: 'space-between',
         borderRadius: scale(30),
         marginHorizontal: scale(20),
-        marginBottom: scale(30),
+        marginBottom: scale(16),
         paddingVertical: scale(5),
         paddingLeft: scale(22),
         paddingRight: scale(5),

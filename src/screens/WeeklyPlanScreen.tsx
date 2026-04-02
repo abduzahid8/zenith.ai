@@ -31,7 +31,10 @@ export const WeeklyPlanScreen: React.FC = () => {
                     </View>
                     <TouchableOpacity
                         style={styles.menuButton}
-                        onPress={() => setMenuVisible(true)}
+                        onPress={() => {
+                            console.log('[WeeklyPlanScreen] Menu button pressed - opening menu');
+                            setMenuVisible(true);
+                        }}
                         activeOpacity={0.7}
                     >
                         <Image source={require('../../icons/menu.png')} style={{ width: scale(24), height: scale(24), tintColor: colors.text }} resizeMode="contain" />

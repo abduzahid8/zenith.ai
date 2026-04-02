@@ -6,6 +6,7 @@ import {
     StyleSheet,
     ImageBackground,
     ViewStyle,
+    Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { borderRadius } from '../theme';
@@ -80,7 +81,7 @@ export const HobbyCard: React.FC<HobbyCardProps> = ({
                 )}
                 {selected && (
                     <View style={styles.selectedBadge}>
-                        <Text style={styles.selectedText}>✓</Text>
+                        <Image source={require('../../icons/Vector.png')} style={styles.checkIcon} />
                     </View>
                 )}
             </LinearGradient>
@@ -134,10 +135,10 @@ const createStyles = (colors: any, typography: any) => StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    selectedText: {
-        color: '#121212', // Force dark text for contrast against primary color
-        fontSize: scaleFont(14),
-        fontWeight: 'bold',
+    checkIcon: {
+        width: scaleWidth(14),
+        height: scaleWidth(14),
+        tintColor: '#FFFFFF',
     },
 });
 

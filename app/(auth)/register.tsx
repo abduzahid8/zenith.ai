@@ -9,6 +9,9 @@ import {
     Alert,
     TouchableOpacity,
     Image,
+    KeyboardAvoidingView,
+    ScrollView,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -72,6 +75,7 @@ export default function RegisterScreen() {
             await signInWithApple();
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : 'Failed to sign in with Apple';
+            if (msg.includes('cancelled') || msg.includes('ERR_CANCELED')) return;
             Alert.alert('Error', msg);
         }
     };
@@ -79,15 +83,23 @@ export default function RegisterScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.keyboardView}
+            >
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Header */}
+                    <View style={styles.headerContainer}>
+                        <LogoNew variant="icon" width={36} height={36} color={colors.text} />
+                        <Text style={styles.headerTitle}>Sign Up</Text>
+                    </View>
 
-            {/* Header */}
-            <View style={styles.headerContainer}>
-                <LogoNew variant="icon" width={36} height={36} color={colors.text} />
-                <Text style={styles.headerTitle}>Sign Up</Text>
-            </View>
-
-            {/* Form */}
-            <View style={styles.formContainer}>
+                    {/* Form */}
+                    <View style={styles.formContainer}>
                 {/* Email */}
                 <Text style={styles.inputLabel}>Email</Text>
                 <View style={styles.inputContainer}>
@@ -139,7 +151,7 @@ export default function RegisterScreen() {
                     onPress={() => setAgreedToTerms(!agreedToTerms)}
                 >
                     <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
-                        {agreedToTerms && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                        {agreedToTerms && <Image source={require('../../icons/Vector.png')} style={styles.checkmarkIcon} />}
                     </View>
                     <Text style={styles.termsText}>I agree to the terms of use</Text>
                 </TouchableOpacity>
@@ -163,11 +175,15 @@ export default function RegisterScreen() {
                     <Text style={styles.socialButtonText}>Sign in with Google</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.socialButton} onPress={handleAppleSignIn}>
-                    <FontAwesome name="apple" size={24} color={colors.text} />
-                    <Text style={styles.socialButtonText}>Sign in with Apple</Text>
-                </TouchableOpacity>
+                {Platform.OS === 'ios' && (
+                    <TouchableOpacity style={styles.socialButton} onPress={handleAppleSignIn}>
+                        <FontAwesome name="apple" size={24} color={colors.text} />
+                        <Text style={styles.socialButtonText}>Sign in with Apple</Text>
+                    </TouchableOpacity>
+                )}
             </View>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
@@ -176,6 +192,12 @@ const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
+    },
+    keyboardView: {
+        flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
         paddingHorizontal: 28,
     },
     headerContainer: {
@@ -243,6 +265,11 @@ const createStyles = (colors: any) => StyleSheet.create({
     checkboxChecked: {
         backgroundColor: colors.buttonPrimary,
         borderColor: colors.buttonPrimary,
+    },
+    checkmarkIcon: {
+        width: 9,
+        height: 9,
+        tintColor: colors.white,
     },
     termsText: {
         fontFamily: fonts.body.medium,

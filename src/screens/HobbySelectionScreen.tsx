@@ -5,12 +5,14 @@ import { useRouter } from 'expo-router';
 import { LogoNew } from '../components/Logo';
 import { fonts } from '../theme';
 import { useUserProfileStore } from '../store/userProfileStore';
+import { useTaskStore } from '../store/taskStore';
 import { useQuizStore } from '../store/quizStore';
 import { useAuthStore } from '../store/authStore';
 import { matchHobbies, HobbyMatch } from '../services/hobbyMatcher';
 import { dbService } from '../services/supabase';
 import { scale } from '../constants';
 import { useAppTheme } from '../theme/useAppTheme';
+import { useT } from '../store/languageStore';
 
 // Custom circle indicator matching Figma design
 const SelectionCircle: React.FC<{ isSelected: boolean, colors: any }> = ({ isSelected, colors }) => (
@@ -38,6 +40,7 @@ export default function HobbySelectionScreen() {
     const { answers } = useQuizStore();
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
+    const t = useT();
 
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [matchedHobbies, setMatchedHobbies] = useState<HobbyMatch[]>([]);
@@ -45,22 +48,34 @@ export default function HobbySelectionScreen() {
 
     // Calculate matches when screen loads
     useEffect(() => {
+        console.log('[HobbySelectionScreen] Calculating hobby matches from quiz answers');
         const topMatches = matchHobbies(answers, 3);
         setMatchedHobbies(topMatches);
     }, [answers]);
 
     const handleSelect = (hobbyId: string) => {
+        console.log('[HobbySelectionScreen] handleSelect - hobbyId:', hobbyId, 'previously selected:', selectedId);
         setSelectedId(prev => (prev === hobbyId ? null : hobbyId));
     };
 
+    const resetTasks = useTaskStore(state => state.resetTasks);
+
     const handleContinue = async () => {
-        if (!selectedId || !user) return;
+        console.log('[HobbySelectionScreen] handleContinue pressed - selectedId:', selectedId);
+        if (!selectedId || !user) {
+            console.log('[HobbySelectionScreen] Cannot continue - no selection or no user');
+            return;
+        }
         setSaving(true);
         try {
+            console.log('[HobbySelectionScreen] Saving hobby:', selectedId, 'for user:', user.id);
             await dbService.saveHobby(user.id, selectedId, true);
+            console.log('[HobbySelectionScreen] Hobby saved successfully');
+            resetTasks(); // Clear stale task cache from previous hobby
             setSelectedHobby(selectedId);
             router.push('/subscription');
         } catch (e: unknown) {
+            console.log('[HobbySelectionScreen] Error saving hobby:', e);
             setSaving(false);
             Alert.alert(
                 'Ошибка',
@@ -82,11 +97,10 @@ export default function HobbySelectionScreen() {
             {/* Content */}
             <View style={styles.contentContainer}>
                 <Text style={styles.titleText}>
-                    Хобби, которые{'\n'}подходят тебе
+                    {t('Хобби, которые подходят тебе')}
                 </Text>
                 <Text style={styles.subtitleText}>
-                    На основе твоих ответов.{'\n'}
-                    Выбери одно, чтобы начать.
+                    {t('На основе твоих ответов.')}{'\n'}{t('Выбери одно, чтобы начать.')}
                 </Text>
             </View>
 
@@ -110,7 +124,7 @@ export default function HobbySelectionScreen() {
                                     isSelected && styles.hobbyLabelSelected,
                                 ]}
                             >
-                                {match.hobby.titleRu}
+                                {t(match.hobby.titleRu)}
                             </Text>
                             <SelectionCircle isSelected={isSelected} colors={colors} />
                         </TouchableOpacity>
@@ -135,11 +149,11 @@ export default function HobbySelectionScreen() {
                     {saving ? (
                         <ActivityIndicator color="#FFF" />
                     ) : (
-                        <Text style={styles.continueButtonText}>Приступим</Text>
+                        <Text style={styles.continueButtonText}>{t('Приступим')}</Text>
                     )}
                 </TouchableOpacity>
                 <Text style={styles.noteText}>
-                    Не переживай — это не навсегда.
+                    {t('Не переживай — это не навсегда.')}
                 </Text>
             </View>
         </SafeAreaView>

@@ -70,6 +70,17 @@ export const tasksDbService = {
         };
     },
 
+    // Delete all auto-generated tasks for a specific date (used when hobby changes)
+    deleteAutoTasksByDate: async (userId: string, date: string): Promise<void> => {
+        const supabase = getSupabase();
+        await supabase
+            .from('tasks')
+            .delete()
+            .eq('user_id', userId)
+            .eq('scheduled_date', date)
+            .eq('is_manual', false);
+    },
+
     // Get tasks within a date range (for weekly stats or history)
     getTasksByDateRange: async (userId: string, startDate: string, endDate: string): Promise<Task[]> => {
         const supabase = getSupabase();

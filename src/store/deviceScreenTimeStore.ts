@@ -16,6 +16,8 @@ import {
     setCategoryLimit,
     clearAllLimits,
     isScreenTimeAvailable,
+    setupMonitoring,
+    getMonitoringStartedAt,
     DailyUsageSummary,
     AppUsageData,
 } from '../../modules/device-activity';
@@ -88,6 +90,8 @@ interface DeviceScreenTimeState {
     isAuthorized: boolean;
     isChecking: boolean;
     dataSource: 'native' | 'supabase' | null;
+    // Unix timestamp (seconds) when monitoring was first started, 0 = not started
+    monitoringStartedAt: number;
 
     // Today's data
     todayTotalSeconds: number;
@@ -122,6 +126,7 @@ const initialState = {
     isAuthorized: false,
     isChecking: false,
     dataSource: null as 'native' | 'supabase' | null,
+    monitoringStartedAt: 0,
     todayTotalSeconds: 0,
     todayUsageSummary: null,
     topApps: [],
@@ -158,7 +163,9 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
                             : 'No device data access. Grant permission to see full analytics.')
                         : null;
 
-                    set({ isAuthorized: authorized, isChecking: false, error: deniedError });
+                    // Restore monitoringStartedAt from native App Groups storage
+                    const ts = getMonitoringStartedAt();
+                    set({ isAuthorized: authorized, isChecking: false, error: deniedError, monitoringStartedAt: ts });
                     return authorized;
                 } catch (error) {
                     console.error('Check permission error:', error);
@@ -179,8 +186,7 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
 
                 set({ isChecking: true, error: null });
                 try {
-                    await requestScreenTimePermission();
-                    const granted = await hasScreenTimePermission();
+                    const granted = await requestScreenTimePermission();
                     set({
                         isAuthorized: granted,
                         isChecking: false,
@@ -190,6 +196,11 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
                     });
 
                     if (granted) {
+                        // Start DeviceActivityCenter schedule and record start time
+                        const started = await setupMonitoring();
+                        console.log('[DeviceScreenTimeStore] setupMonitoring result:', started);
+                        const ts = getMonitoringStartedAt();
+                        if (ts > 0) set({ monitoringStartedAt: ts });
                         // Auto-fetch data after permission granted
                         await get().refresh();
                     }
@@ -308,51 +319,59 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
                 set({ isLoading: true, error: null });
                 try {
                     const user = useAuthStore.getState().user;
-                    if (!get().isAuthorized && user) {
-                        const trends = await screenTimeService.getWeeklyTrends(user.id);
-                        const filledWeeklyData = fillLastDays(mapDailyTotalsToWeeklyPoints(trends.daily_totals), 7);
-                        const { averageDailySeconds, changeFromLastWeek } = computeWeeklyMetrics(filledWeeklyData);
+
+                    // Always try native data first when authorized
+                    // (returns [] on iOS until DeviceActivityReport extension writes data)
+                    const nativeData = get().isAuthorized
+                        ? await getWeeklyScreenTime()
+                        : [];
+                    const userHasNativeData = nativeData.some((day) => (day?.seconds ?? 0) > 0);
+
+                    if (userHasNativeData) {
+                        // Native data is available (Android UsageStats or future iOS extension)
+                        const filledWeeklyData = fillLastDays(nativeData, 7);
+                        const { averageDailySeconds, changeFromLastWeek } = computeWeeklyMetrics(nativeData);
                         set({
                             weeklyData: filledWeeklyData,
                             averageDailySeconds,
                             changeFromLastWeek,
                             isLoading: false,
-                            dataSource: 'supabase',
+                            dataSource: 'native',
                             lastUpdated: Date.now(),
                         });
                         return;
                     }
 
-                    const nativeData = await getWeeklyScreenTime();
-                    const userHasNativeData = nativeData.some((day) => (day?.seconds ?? 0) > 0);
-
-                    if (user && !userHasNativeData) {
-                        const trends = await screenTimeService.getWeeklyTrends(user.id);
-                        const fallbackPoints = fillLastDays(mapDailyTotalsToWeeklyPoints(trends.daily_totals), 7);
-                        const hasFallbackData = fallbackPoints.some((day) => day.seconds > 0);
-                        if (hasFallbackData) {
-                            const { averageDailySeconds, changeFromLastWeek } = computeWeeklyMetrics(fallbackPoints);
-                            set({
-                                weeklyData: fallbackPoints,
-                                averageDailySeconds,
-                                changeFromLastWeek,
-                                isLoading: false,
-                                dataSource: 'supabase',
-                                lastUpdated: Date.now(),
-                            });
-                            return;
+                    // Native returned empty/zeros — try Supabase regardless of auth status
+                    if (user) {
+                        try {
+                            const trends = await screenTimeService.getWeeklyTrends(user.id);
+                            const supabasePoints = fillLastDays(mapDailyTotalsToWeeklyPoints(trends.daily_totals), 7);
+                            const hasSupabaseData = supabasePoints.some((day) => day.seconds > 0);
+                            if (hasSupabaseData) {
+                                const { averageDailySeconds, changeFromLastWeek } = computeWeeklyMetrics(supabasePoints);
+                                set({
+                                    weeklyData: supabasePoints,
+                                    averageDailySeconds,
+                                    changeFromLastWeek,
+                                    isLoading: false,
+                                    dataSource: 'supabase',
+                                    lastUpdated: Date.now(),
+                                });
+                                return;
+                            }
+                        } catch (supabaseErr) {
+                            console.warn('[DeviceScreenTimeStore] Supabase fallback failed:', supabaseErr);
                         }
                     }
 
-                    const filledWeeklyData = fillLastDays(nativeData, 7);
-                    const { averageDailySeconds, changeFromLastWeek } = computeWeeklyMetrics(nativeData);
-
+                    // No data from any source — store empty (not zeros) so UI shows monitoring state
                     set({
-                        weeklyData: filledWeeklyData,
-                        averageDailySeconds,
-                        changeFromLastWeek,
+                        weeklyData: [],
+                        averageDailySeconds: 0,
+                        changeFromLastWeek: 0,
                         isLoading: false,
-                        dataSource: 'native',
+                        dataSource: get().isAuthorized ? 'native' : null,
                         lastUpdated: Date.now(),
                     });
                 } catch (error) {

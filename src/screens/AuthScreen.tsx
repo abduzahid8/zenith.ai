@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     Image,
     Alert,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -24,28 +25,36 @@ export default function AuthScreen() {
     const { signInWithGoogle, signInWithApple } = useAuthStore();
 
     const handleGoogleSignIn = async () => {
+        console.log('[AuthScreen] handleGoogleSignIn pressed');
         try {
             await signInWithGoogle();
         } catch (error: unknown) {
+            console.log('[AuthScreen] handleGoogleSignIn error:', error);
             const msg = error instanceof Error ? error.message : 'Failed to sign in with Google';
+            if (msg.includes('cancelled')) return;
             Alert.alert('Error', msg);
         }
     };
 
     const handleAppleSignIn = async () => {
+        console.log('[AuthScreen] handleAppleSignIn pressed');
         try {
             await signInWithApple();
         } catch (error: unknown) {
+            console.log('[AuthScreen] handleAppleSignIn error:', error);
             const msg = error instanceof Error ? error.message : 'Failed to sign in with Apple';
+            if (msg.includes('cancelled') || msg.includes('ERR_CANCELED')) return;
             Alert.alert('Error', msg);
         }
     };
 
     const handleEmailSignIn = () => {
+        console.log('[AuthScreen] handleEmailSignIn pressed - navigating to /login');
         router.push('/login');
     };
 
     const handleEmailSignUp = () => {
+        console.log('[AuthScreen] handleEmailSignUp pressed - navigating to /register');
         router.push('/register');
     };
 
@@ -108,13 +117,15 @@ export default function AuthScreen() {
                     <Text style={styles.socialButtonText}>Sign in with Google</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                    style={styles.socialButton}
-                    onPress={handleAppleSignIn}
-                >
-                    <FontAwesome name="apple" size={24} color="black" />
-                    <Text style={styles.socialButtonText}>Sign in with Apple</Text>
-                </TouchableOpacity>
+                {Platform.OS === 'ios' && (
+                    <TouchableOpacity
+                        style={styles.socialButton}
+                        onPress={handleAppleSignIn}
+                    >
+                        <FontAwesome name="apple" size={24} color={colors.text} />
+                        <Text style={styles.socialButtonText}>Sign in with Apple</Text>
+                    </TouchableOpacity>
+                )}
             </View>
         </SafeAreaView>
     );

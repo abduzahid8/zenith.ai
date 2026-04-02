@@ -21,6 +21,7 @@ export const ROUTES = {
     // Standalone screens
     SESSION_TIMER: '/session-timer',
     PHONE_ANALYSIS: '/phone-analysis',
+    MANAGE_SUBSCRIPTION: '/manage-subscription',
 } as const;
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];

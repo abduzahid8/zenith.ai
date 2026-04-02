@@ -178,7 +178,37 @@ export async function clearAllLimits(): Promise<boolean> {
 export async function getWeeklyStats(): Promise<DailyUsageSummary[]> {
     const module = getDeviceActivity();
     if (Platform.OS !== 'ios' || !module) return [];
-    return module.getWeeklyStats();
+    const result = await module.getWeeklyStats();
+    return Array.isArray(result) ? result : [];
+}
+
+/**
+ * Start DeviceActivityCenter daily monitoring schedule (iOS only)
+ * Should be called after FamilyControls authorization is granted.
+ * Records monitoring start time in App Groups for the JS side to read.
+ */
+export async function setupMonitoring(): Promise<boolean> {
+    const module = getDeviceActivity();
+    if (Platform.OS !== 'ios' || !module) return false;
+    try {
+        return await module.setupMonitoring();
+    } catch (e) {
+        console.warn('setupMonitoring error:', e);
+        return false;
+    }
+}
+
+/**
+ * Returns the Unix timestamp (seconds) when monitoring was first started, or 0 (iOS only)
+ */
+export function getMonitoringStartedAt(): number {
+    const module = getDeviceActivity();
+    if (Platform.OS !== 'ios' || !module) return 0;
+    try {
+        return module.getMonitoringStartedAt() ?? 0;
+    } catch {
+        return 0;
+    }
 }
 
 // ============= Cross-Platform Functions =============

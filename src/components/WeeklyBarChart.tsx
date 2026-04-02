@@ -26,13 +26,13 @@ const defaultData: DayData[] = [
 ];
 
 const BAR_COLORS = [
-    '#5ECFCF', // Пн - teal/cyan
-    '#37A0EF', // Вт - dark blue
-    '#7EC8FF', // Ср - medium/light blue  
-    '#37A0EF', // Чт - dark blue
-    '#5ECFCF', // Пт - teal/cyan
-    '#37A0EF', // Сб - dark blue
-    '#7EC8FF', // Вс - medium/light blue
+    '#37A0EF', // Пн
+    '#46B3F2', // Вт
+    '#2D86C8', // Ср
+    '#30C0E5', // Чт
+    '#5E81AC', // Пт
+    '#1976D2', // Сб
+    '#81D4FA', // Вс
 ] as const;
 
 const gridImage = require('../../assets/images/grid_pattern.png');

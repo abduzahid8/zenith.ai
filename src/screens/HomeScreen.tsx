@@ -59,7 +59,10 @@ export const HomeScreen: React.FC = () => {
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
                     </View>
-                    <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)} activeOpacity={0.7}>
+                    <TouchableOpacity style={styles.menuButton} onPress={() => {
+                        console.log('[HomeScreen] Menu button pressed - opening menu');
+                        setMenuVisible(true);
+                    }} activeOpacity={0.7}>
                         <Image source={require('../../icons/menu.png')} style={{ width: scale(24), height: scale(24), tintColor: colors.text }} resizeMode="contain" />
                     </TouchableOpacity>
                 </View>

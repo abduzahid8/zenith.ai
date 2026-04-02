@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -8,8 +8,11 @@ import {
     ScrollView,
     ActivityIndicator,
     Platform,
+    Linking,
+    Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LogoNew } from '../components/Logo';
 import { Button } from '../components/Button';
@@ -18,7 +21,7 @@ import { scale } from '../constants';
 import { ROUTES } from '../config/routes';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { useSubscriptionStore } from '../store/subscriptionStore';
-import { PRODUCT_IDS } from '../services/iapService';
+import { PRODUCT_IDS, getSku, ALL_SKUS } from '../services/iapService';
 import { useAppTheme } from '../theme/useAppTheme';
 
 // ── Helpers ─────────────────────────────────────────────
@@ -54,9 +57,16 @@ const PREMIUM_FEATURES = [
 
 export const SubscriptionScreen: React.FC = () => {
     const router = useRouter();
-    const { completeOnboarding } = useUserProfileStore();
+    const { completeOnboarding, subscriptionLevel } = useUserProfileStore();
+    // Capture whether the user was already active/premium when this screen mounted,
+    // so we can distinguish "redirect existing subscriber" vs "just purchased".
+    const wasActiveOnMount = useRef(false);
+    // Set to true only when the user explicitly taps Buy or Restore.
+    // Prevents background checkStatus() from mistakenly navigating to the main app.
+    const hasPurchaseIntent = useRef(false);
     const {
         products,
+        isActive,
         isLoading,
         isPurchasing,
         isRestoring,
@@ -68,46 +78,73 @@ export const SubscriptionScreen: React.FC = () => {
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
 
-    const [selectedSku, setSelectedSku] = useState<string>(PRODUCT_IDS.MONTHLY);
+    const platformMonthlyId = Platform.OS === 'ios' ? PRODUCT_IDS.IOS.MONTHLY : PRODUCT_IDS.ANDROID.MONTHLY;
+    const platformAnnualId = Platform.OS === 'ios' ? PRODUCT_IDS.IOS.ANNUAL : PRODUCT_IDS.ANDROID.ANNUAL;
+    const [selectedSku, setSelectedSku] = useState<string>(platformMonthlyId);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
 
     // Ensure products are loaded
     useEffect(() => {
-        if (products.length === 0 && Platform.OS === 'ios') {
+        if (products.length === 0) {
+            console.log('[SubscriptionScreen] Initializing IAP products');
             initialize();
         }
     }, []);
 
+    // Track when isPurchasing finishes
+    const prevIsPurchasing = useRef(isPurchasing);
+    
+    useEffect(() => {
+        if (prevIsPurchasing.current && !isPurchasing) {
+            // isPurchasing just finished
+            if (isActive && hasPurchaseIntent.current && !error) {
+                console.log('[SubscriptionScreen] Purchase succeeded, showing modal');
+                completeOnboarding();
+                setShowSuccessModal(true);
+            }
+        }
+        prevIsPurchasing.current = isPurchasing;
+    }, [isPurchasing, isActive, error]);
+
     // Look up products by `id` (expo-iap Product field)
-    const monthlyProduct = products.find((p) => p.id === PRODUCT_IDS.MONTHLY);
-    const annualProduct = products.find((p) => p.id === PRODUCT_IDS.ANNUAL);
+    const monthlyProduct = products.find((p) => p.id === platformMonthlyId);
+    const annualProduct = products.find((p) => p.id === platformAnnualId);
 
     const handlePurchase = async () => {
+        console.log('[SubscriptionScreen] handlePurchase pressed - selectedSku:', selectedSku);
+        hasPurchaseIntent.current = true;
         await purchase(selectedSku);
-        // If purchase succeeds, the listener in subscriptionStore sets isActive=true
-        // and syncs to userProfileStore, so we can proceed:
-        const { isActive } = useSubscriptionStore.getState();
-        if (isActive) {
-            completeOnboarding();
-            router.replace(ROUTES.APP as any);
-        }
+        // Navigation is handled by the isActive useEffect above once the
+        // purchaseUpdatedListener fires and sets isActive=true in the store.
     };
 
     const handleSelectFree = () => {
+        console.log('[SubscriptionScreen] handleSelectFree pressed - selecting free plan');
         useUserProfileStore.getState().setPremium(false);
         completeOnboarding();
         router.replace(ROUTES.APP as any);
     };
 
     const handleRestore = async () => {
+        console.log('[SubscriptionScreen] handleRestore pressed');
+        hasPurchaseIntent.current = true;
         await restore();
-        const { isActive } = useSubscriptionStore.getState();
-        if (isActive) {
+
+        // If isActive was already true, the useEffect above won't trigger because the dependency
+        // didn't change. We need to manually handle success here.
+        if (useSubscriptionStore.getState().isActive) {
+            console.log('[SubscriptionScreen] handleRestore fallback - isActive is true, showing success');
             completeOnboarding();
-            router.replace(ROUTES.APP as any);
+            setShowSuccessModal(true);
         }
     };
 
     const isBusy = isPurchasing || isRestoring;
+
+    const handleSuccessContinue = () => {
+        setShowSuccessModal(false);
+        router.replace(ROUTES.APP as any);
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -135,9 +172,9 @@ export const SubscriptionScreen: React.FC = () => {
                     style={[
                         styles.planCard,
                         styles.monthlyCard,
-                        selectedSku === PRODUCT_IDS.MONTHLY && styles.planCardSelected,
+                        selectedSku === platformMonthlyId && styles.planCardSelected,
                     ]}
-                    onPress={() => setSelectedSku(PRODUCT_IDS.MONTHLY)}
+                    onPress={() => setSelectedSku(platformMonthlyId)}
                     activeOpacity={0.9}
                     disabled={isBusy}
                 >
@@ -165,19 +202,22 @@ export const SubscriptionScreen: React.FC = () => {
                     style={[
                         styles.planCard,
                         styles.annualCard,
-                        selectedSku === PRODUCT_IDS.ANNUAL && styles.planCardSelected,
+                        selectedSku === platformAnnualId && styles.planCardSelected,
                     ]}
-                    onPress={() => setSelectedSku(PRODUCT_IDS.ANNUAL)}
+                    onPress={() => setSelectedSku(platformAnnualId)}
                     activeOpacity={0.9}
                     disabled={isBusy}
                 >
                     <View style={styles.planHeader}>
                         <Text style={[styles.planTitle, styles.premiumTitle]}>Annual</Text>
-                        <View style={styles.priceContainer}>
-                            <Text style={[styles.planPrice, styles.premiumPrice]}>
-                                {annualProduct ? getDisplayPrice(annualProduct) : '—'}
-                            </Text>
-                            <Text style={styles.planPeriodLight}>/yr</Text>
+                        <View>
+                            <View style={styles.priceContainer}>
+                                <Text style={[styles.planPrice, styles.premiumPrice]}>
+                                    {annualProduct ? getDisplayPrice(annualProduct) : '—'}
+                                </Text>
+                                <Text style={styles.planPeriodLight}>/yr</Text>
+                            </View>
+                            <Text style={styles.discountBadge}>-20%</Text>
                         </View>
                     </View>
                     <View style={styles.featuresContainer}>
@@ -195,10 +235,10 @@ export const SubscriptionScreen: React.FC = () => {
                     <Text style={styles.disclosureText}>
                         Subscription renews automatically unless auto-renewal is disabled
                         at least 24 hours before the end of the current period. Payment is charged
-                        through your App Store account. Manage your subscription and disable
-                        auto-renewal in your App Store account settings after purchase.
+                        through your {Platform.OS === 'ios' ? 'App Store' : 'Google Play'} account. Manage your subscription and disable
+                        auto-renewal in your {Platform.OS === 'ios' ? 'App Store' : 'Google Play'} account settings after purchase.
                     </Text>
-                    <TouchableOpacity onPress={() => router.push('/privacy' as any)}>
+                    <TouchableOpacity onPress={() => Linking.openURL('https://zenyth-ai-privacy.vercel.app/')}>
                         <Text style={styles.disclosureLink}>Privacy Policy</Text>
                     </TouchableOpacity>
                 </View>
@@ -251,6 +291,33 @@ export const SubscriptionScreen: React.FC = () => {
                     <Text style={styles.freeLinkText}>Continue with Free</Text>
                 </TouchableOpacity>
             </View>
+
+            {/* Success Modal */}
+            <Modal
+                visible={showSuccessModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={handleSuccessContinue}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalIconContainer}>
+                            <Ionicons name="star" size={scale(40)} color="#FFD700" />
+                        </View>
+                        <Text style={styles.modalTitle}>Welcome to Premium!</Text>
+                        <Text style={styles.modalText}>
+                            Your subscription is active. Get ready to unlock your full potential with unlimited features.
+                        </Text>
+                        <Button
+                            title="Start Premium"
+                            onPress={handleSuccessContinue}
+                            variant="primary"
+                            size="large"
+                            style={styles.modalButton}
+                        />
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 };
@@ -264,12 +331,12 @@ const createStyles = (colors: any) => StyleSheet.create({
     },
     logoContainer: {
         alignItems: 'center',
-        marginTop: scale(40),
+        marginTop: scale(30),
     },
     titleContainer: {
         alignItems: 'center',
-        marginTop: scale(40),
-        marginBottom: scale(30),
+        marginTop: scale(25),
+        marginBottom: scale(20),
     },
     titleText: {
         fontFamily: fonts.heading.bold,
@@ -291,9 +358,11 @@ const createStyles = (colors: any) => StyleSheet.create({
         paddingVertical: scale(14),
         paddingHorizontal: scale(18),
         marginBottom: scale(12),
+        minHeight: scale(220),
+        borderWidth: 2,
+        borderColor: 'transparent',
     },
     planCardSelected: {
-        borderWidth: 2,
         borderColor: colors.buttonPrimary,
     },
     monthlyCard: {
@@ -401,7 +470,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     buttonContainer: {
         paddingHorizontal: scale(24),
         paddingBottom: scale(10),
-        paddingTop: scale(12),
+        paddingTop: scale(8),
     },
     continueButton: {
         backgroundColor: colors.buttonPrimary,
@@ -434,6 +503,60 @@ const createStyles = (colors: any) => StyleSheet.create({
         color: colors.error || '#FF3B30',
         textAlign: 'center',
         marginBottom: scale(8),
+    },
+    discountBadge: {
+        fontFamily: fonts.heading.medium,
+        fontSize: scale(12),
+        color: colors.subscription?.premiumAccent || '#FFD700',
+        textAlign: 'right',
+        marginTop: scale(2),
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: scale(20),
+    },
+    modalContent: {
+        width: '100%',
+        backgroundColor: colors.surfaceLight || '#FFFFFF',
+        borderRadius: scale(24),
+        padding: scale(24),
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 8,
+    },
+    modalIconContainer: {
+        width: scale(80),
+        height: scale(80),
+        borderRadius: scale(40),
+        backgroundColor: 'rgba(255, 215, 0, 0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: scale(20),
+    },
+    modalTitle: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(24),
+        color: colors.text,
+        textAlign: 'center',
+        marginBottom: scale(12),
+    },
+    modalText: {
+        fontFamily: fonts.body.regular,
+        fontSize: scale(15),
+        color: colors.textSecondary,
+        textAlign: 'center',
+        lineHeight: scale(22),
+        marginBottom: scale(30),
+    },
+    modalButton: {
+        width: '100%',
+        borderRadius: scale(30),
     },
 });
 

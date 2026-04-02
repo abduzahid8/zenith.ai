@@ -10,6 +10,7 @@ import { scale } from '../constants';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/useAppTheme';
+import { useT } from '../store/languageStore';
 
 
 export const CategoryTasksScreen = () => {
@@ -19,6 +20,7 @@ export const CategoryTasksScreen = () => {
     const categoryType = id as TaskType;
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
+    const t = useT();
 
     const { addTask, loading, dailyTasks } = useTaskStore();
     const { user } = useAuthStore();
@@ -26,12 +28,19 @@ export const CategoryTasksScreen = () => {
     const templates = (taskEngine as any).getAvailableTaskTemplates(undefined, categoryType as TaskType);
 
     const handleSelectTask = async (template: TaskTemplate) => {
-        if (!user?.id) return;
+        console.log('[CategoryTasksScreen] handleSelectTask pressed - template:', template.title);
+        if (!user?.id) {
+            console.log('[CategoryTasksScreen] Cannot add task - no user');
+            return;
+        }
         try {
+            console.log('[CategoryTasksScreen] Adding task for user:', user.id);
             await addTask(user.id, categoryType as TaskType, template);
+            console.log('[CategoryTasksScreen] Task added successfully - navigating back');
             router.back();
             router.back();
         } catch (e: any) {
+            console.log('[CategoryTasksScreen] Error adding task:', e);
             Alert.alert('Error', e.message || 'Failed to add task');
         }
     };
@@ -40,20 +49,23 @@ export const CategoryTasksScreen = () => {
         <SafeAreaView style={styles.container} edges={['top']}>
             <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <TouchableOpacity onPress={() => {
+                    console.log('[CategoryTasksScreen] Back button pressed');
+                    router.back();
+                }} style={styles.backButton}>
                     <Ionicons
                         name="chevron-back"
                         size={scale(24)}
                         color={colors.text}
                     />
-                    <Text style={styles.backText}>Back</Text>
+                    <Text style={styles.backText}>{t('Назад')}</Text>
                 </TouchableOpacity>
                 <Text style={styles.title}>{categoryLabel}</Text>
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
                 <Text style={styles.subtitle}>
-                    Select a task you want to add:
+                    {t('Выберите задачу для добавления:')}
                 </Text>
 
                 <View style={styles.listContainer}>
@@ -72,7 +84,7 @@ export const CategoryTasksScreen = () => {
                                     <Text style={styles.taskDuration}>{template.duration} min</Text>
                                 </View>
                                 {isAdded ? (
-                                    <Image source={require('../../icons/checkbox-checked.png')} style={styles.checkIcon} />
+                                    <Image source={require('../../icons/Vector.png')} style={styles.checkIcon} />
                                 ) : (
                                     <View style={[styles.plusButton, { backgroundColor: categoryBg as string }]}>
                                         <Image source={require('../../icons/plus.png')} style={styles.plusIcon} />
@@ -189,7 +201,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     checkIcon: {
         width: scale(24),
         height: scale(24),
-        tintColor: colors.success,
+        tintColor: '#FFFFFF',
     },
     loadingOverlay: {
         ...StyleSheet.absoluteFillObject,

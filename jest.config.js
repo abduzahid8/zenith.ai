@@ -10,6 +10,8 @@ module.exports = {
         '^@react-native-async-storage/async-storage$':
             '<rootDir>/src/__tests__/__mocks__/asyncStorage.ts',
         '^react-native$': '<rootDir>/src/__tests__/__mocks__/reactNative.ts',
+        '^react-native-url-polyfill/auto$':
+            '<rootDir>/src/__tests__/__mocks__/emptyMock.ts',
     },
     // Ignore node_modules except Expo packages if needed
     transformIgnorePatterns: ['/node_modules/'],

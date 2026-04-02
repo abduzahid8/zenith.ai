@@ -4,6 +4,8 @@ import { UserHobby } from './types';
 export const hobbyService = {
     saveHobby: async (userId: string, hobbyId: string, isPrimary: boolean = false) => {
         const supabase = getSupabase();
+        // Delete all previous hobby rows so re-selection starts fresh with correct selected_at
+        await supabase.from('user_hobbies').delete().eq('user_id', userId);
         const { data, error } = await supabase
             .from('user_hobbies')
             .insert({ user_id: userId, hobby_id: hobbyId, is_primary: isPrimary })

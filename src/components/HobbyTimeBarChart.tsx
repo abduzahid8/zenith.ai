@@ -14,13 +14,13 @@ interface HobbyTimeBarChartProps {
 }
 
 const defaultData: DayData[] = [
-    { day: 'Пн', value: 3 },
-    { day: 'Вт', value: 5 },
-    { day: 'Ср', value: 3.5 },
-    { day: 'Чт', value: 1 },
-    { day: 'Пт', value: 2 },
-    { day: 'Сб', value: 4.5 },
-    { day: 'Вс', value: 2.5 },
+    { day: 'Пн', value: 0 },
+    { day: 'Вт', value: 0 },
+    { day: 'Ср', value: 0 },
+    { day: 'Чт', value: 0 },
+    { day: 'Пт', value: 0 },
+    { day: 'Сб', value: 0 },
+    { day: 'Вс', value: 0 },
 ];
 
 // Purple/Magenta color palette for hobby time bars
@@ -43,9 +43,9 @@ export const HobbyTimeBarChart: React.FC<HobbyTimeBarChartProps> = ({
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
 
-    const maxValue = 7;
-    const yAxisLabels = ['7+', '6', '5', '4', '3', '2', '1'];
     const chartHeight = scale(160);
+    const maxValue = 4;
+    const yAxisLabels = ['4', '3', '2', '1', '0'];
 
     return (
         <View style={styles.container}>

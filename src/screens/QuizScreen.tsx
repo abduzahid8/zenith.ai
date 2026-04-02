@@ -41,12 +41,16 @@ export default function QuizScreen() {
     const canProceed = selectedOption !== undefined;
 
     const handleNext = async () => {
+        console.log('[QuizScreen] handleNext pressed - currentQuestion:', currentQuestion, 'isLastQuestion:', isLastQuestion);
         if (isLastQuestion) {
             if (user) {
+                console.log('[QuizScreen] Saving quiz answers for user:', user.id);
                 setSaving(true);
                 try {
                     await dbService.saveQuizAnswers(user.id, answers);
+                    console.log('[QuizScreen] Quiz answers saved successfully');
                 } catch (e: unknown) {
+                    console.log('[QuizScreen] Error saving quiz answers:', e);
                     setSaving(false);
                     Alert.alert(
                         'Error',
@@ -56,22 +60,27 @@ export default function QuizScreen() {
                     return;
                 }
             }
+            console.log('[QuizScreen] Completing quiz - navigating to /hobby-selection');
             completeQuiz();
             router.push('/hobby-selection');
         } else {
+            console.log('[QuizScreen] Moving to next question');
             nextQuestion();
         }
     };
 
     const handleBack = () => {
+        console.log('[QuizScreen] handleBack pressed - currentQuestion:', currentQuestion);
         if (currentQuestion > 1) {
             prevQuestion();
         } else {
+            console.log('[QuizScreen] Going back to previous screen');
             router.back();
         }
     };
 
     const handleSelectOption = (optionIndex: number) => {
+        console.log('[QuizScreen] handleSelectOption - question:', currentQuestion, 'optionIndex:', optionIndex);
         setAnswer(currentQuestion, optionIndex);
     };
 
@@ -131,16 +140,20 @@ export default function QuizScreen() {
             <View style={styles.bottomContainer}>
                 <View style={styles.bottomRow}>
                     {/* Back button */}
-                    <TouchableOpacity
-                        style={styles.backButton}
-                        onPress={handleBack}
-                    >
-                        <Image
-                            source={require('../../assets/icons/back-arrow.png')}
-                            style={[styles.backIcon, { tintColor: colors.text }]}
-                            resizeMode="contain"
-                        />
-                    </TouchableOpacity>
+                    {currentQuestion > 1 ? (
+                        <TouchableOpacity
+                            style={styles.backButton}
+                            onPress={handleBack}
+                        >
+                            <Image
+                                source={require('../../assets/icons/back-arrow.png')}
+                                style={[styles.backIcon, { tintColor: colors.text }]}
+                                resizeMode="contain"
+                            />
+                        </TouchableOpacity>
+                    ) : (
+                        <View style={styles.backButton} />
+                    )}
 
                     {/* Next button */}
                     <View style={styles.nextButtonContainer}>

@@ -71,7 +71,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                             <View style={styles.header}>
                                 <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
                                 <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                                    <Image source={require('../../../icons/back.png')} style={[styles.closeIcon, { tintColor: colors.text, transform: [{ rotate: '180deg' }] }]} />
+                                    <Text style={[styles.closeIcon, { color: colors.text }]}>✕</Text>
                                 </TouchableOpacity>
                             </View>
 
@@ -154,8 +154,8 @@ const styles = StyleSheet.create({
         fontSize: scale(20),
     },
     closeIcon: {
-        width: scale(20),
-        height: scale(20),
+        fontSize: scale(20),
+        fontWeight: '500',
     },
     content: {
         marginBottom: scale(24),

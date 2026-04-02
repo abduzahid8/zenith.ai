@@ -56,7 +56,6 @@ beforeEach(() => {
         isPremium: false,
         selectedHobby: null,
         hasCompletedOnboarding: false,
-        weeklyTasks: [],
     });
 });
 

@@ -17,10 +17,12 @@ export default function QuizIntroScreen() {
 
     // Reset quiz when entering this screen
     useEffect(() => {
+        console.log('[QuizIntroScreen] Resetting quiz state');
         resetQuiz();
     }, []);
 
     const handleStart = () => {
+        console.log('[QuizIntroScreen] handleStart pressed - navigating to /quiz');
         router.push('/quiz');
     };
 

@@ -15,10 +15,6 @@ beforeEach(() => {
         isPremium: false,
         selectedHobby: null,
         hasCompletedOnboarding: false,
-        weeklyTasks: [
-            { text: 'Task 1', completed: false },
-            { text: 'Task 2', completed: false },
-        ],
     });
 });
 
@@ -126,26 +122,6 @@ describe('useUserProfileStore — setSubscriptionLevel', () => {
     it('sets isPremium to false when level is "trial"', () => {
         useUserProfileStore.getState().setSubscriptionLevel('trial');
         expect(useUserProfileStore.getState().isPremium).toBe(false);
-    });
-});
-
-describe('useUserProfileStore — toggleWeeklyTask', () => {
-    it('toggles a task from incomplete to complete', () => {
-        useUserProfileStore.getState().toggleWeeklyTask(0);
-        expect(useUserProfileStore.getState().weeklyTasks[0].completed).toBe(true);
-    });
-
-    it('toggles back to incomplete on second call', () => {
-        useUserProfileStore.getState().toggleWeeklyTask(0);
-        useUserProfileStore.getState().toggleWeeklyTask(0);
-        expect(useUserProfileStore.getState().weeklyTasks[0].completed).toBe(false);
-    });
-
-    it('does nothing for out-of-range index', () => {
-        const before = [...useUserProfileStore.getState().weeklyTasks];
-        useUserProfileStore.getState().toggleWeeklyTask(99);
-        const after = useUserProfileStore.getState().weeklyTasks;
-        expect(after).toEqual(before);
     });
 });
 

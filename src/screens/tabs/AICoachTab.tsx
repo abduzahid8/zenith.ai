@@ -47,12 +47,17 @@ const AICoachTab: React.FC = () => {
     const t = useT();
 
     const handleSend = async () => {
-        if (!inputText.trim() || isLoading) return;
+        const trimmedInput = inputText.trim();
+        console.log('[AICoachTab] handleSend pressed - input:', trimmedInput.substring(0, 50));
+        if (!trimmedInput || isLoading) {
+            console.log('[AICoachTab] Cannot send - empty input or already loading');
+            return;
+        }
 
         const userMessage: DisplayMessage = {
             id: Date.now().toString(),
             role: 'user',
-            content: inputText.trim(),
+            content: trimmedInput,
         };
 
         setMessages(prev => [...prev, userMessage]);
@@ -64,10 +69,56 @@ const AICoachTab: React.FC = () => {
         }, 100);
 
         try {
+            console.log('[AICoachTab] Sending message to AI service');
             const chatMessages: ChatMessage[] = messages
                 .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
                 .concat([{ role: 'user', content: userMessage.content }]);
 
+            const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined);
+            console.log('[AICoachTab] AI response received');
+
+            const assistantMessage: DisplayMessage = {
+                id: (Date.now() + 1).toString(),
+                role: 'assistant',
+                content: response,
+            };
+
+            setMessages(prev => [...prev, assistantMessage]);
+        } catch (error) {
+            console.log('[AICoachTab] Error sending message:', error);
+            const errorMessage: DisplayMessage = {
+                id: (Date.now() + 1).toString(),
+                role: 'assistant',
+                content: t('Извините, произошла ошибка. Попробуйте еще раз.'),
+            };
+            setMessages(prev => [...prev, errorMessage]);
+        } finally {
+            setIsLoading(false);
+            setTimeout(() => {
+                chatListRef.current?.scrollToEnd({ animated: true });
+            }, 100);
+        }
+    };
+
+    const handleSuggestionPress = async (suggestion: string) => {
+        console.log('[AICoachTab] handleSuggestionPress - suggestion:', suggestion);
+        if (isLoading) return;
+
+        const userMessage: DisplayMessage = {
+            id: Date.now().toString(),
+            role: 'user',
+            content: suggestion,
+        };
+
+        setMessages(prev => [...prev, userMessage]);
+        setIsLoading(true);
+
+        setTimeout(() => {
+            chatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+
+        try {
+            const chatMessages: ChatMessage[] = [{ role: 'user', content: suggestion }];
             const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined);
 
             const assistantMessage: DisplayMessage = {
@@ -92,15 +143,11 @@ const AICoachTab: React.FC = () => {
         }
     };
 
-    const handleSuggestionPress = (suggestion: string) => {
-        setInputText(suggestion);
-    };
-
     return (
         <KeyboardAvoidingView
             style={styles.aiContent}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+            keyboardVerticalOffset={0}
         >
             {messages.length === 0 && (
                 <>

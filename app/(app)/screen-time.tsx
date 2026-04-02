@@ -1,3 +1,5 @@
-import ScreenTimeScreen from '../../src/screens/ScreenTimeScreen';
+import { MainTabsScreen } from '../../src/screens/MainTabsScreen';
 
-export default ScreenTimeScreen;
+export default function ScreenTimeRoute() {
+    return <MainTabsScreen initialTab={3} />;
+}

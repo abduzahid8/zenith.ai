@@ -76,7 +76,7 @@ export const profileService = {
 
         let newStreak: number;
         if (lastDate === today) {
-            return profile;
+            return null; // already incremented today — signal no-op to caller
         } else if (lastDate === yesterdayStr) {
             newStreak = (profile.streak_days || 0) + 1;
         } else {

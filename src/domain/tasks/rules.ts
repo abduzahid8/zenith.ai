@@ -14,8 +14,14 @@ export interface CanAddTaskResult {
     errorMessage?: string;
 }
 
+export const AUTO_TASKS_PER_DAY = 2;
+
+export function getAutoTasksPerDay(): number {
+    return AUTO_TASKS_PER_DAY;
+}
+
 export function getMaxTasksPerDay(isPremium: boolean): number {
-    return isPremium ? 4 : 3;
+    return isPremium ? 4 : 2;
 }
 
 export function isDuplicateTemplate(params: {

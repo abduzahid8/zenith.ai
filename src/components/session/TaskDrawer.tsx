@@ -12,6 +12,7 @@ export interface SessionTask {
     subtitle: string;
     completed: boolean;
     completedAt: number | null;
+    startedAt: number | null;
 }
 
 export interface TaskDrawerProps {
@@ -69,20 +70,11 @@ const TaskDrawer: React.FC<TaskDrawerProps> = ({
                                     disabled={isLocked}
                                 >
                                     {task.completed ? (
-                                        <Svg
-                                            width={scale(18)}
-                                            height={scale(12)}
-                                            viewBox="0 0 18 12"
-                                            fill="none"
-                                        >
-                                            <Polyline
-                                                points="2 6 6 10 16 2"
-                                                stroke={isLocked ? 'rgba(228,250,235,0.45)' : '#E4FAEB'}
-                                                strokeWidth="7"
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                            />
-                                        </Svg>
+                                        <Image
+                                            source={require('../../../icons/Vector.png')}
+                                            style={{ width: scale(20), height: scale(20) }}
+                                            resizeMode="contain"
+                                        />
                                     ) : (
                                         <Image
                                             source={require('../../../icons/plus.png')}

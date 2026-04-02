@@ -6,27 +6,15 @@ import {
     StatusBar,
     Animated,
     Easing,
+    Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import Svg, { Path, Circle } from 'react-native-svg';
 import { Button } from '../../src/components/Button';
 import { fonts } from '../../src/theme';
 import { useAppTheme } from '../../src/theme/useAppTheme';
 import { LogoNew } from '../../src/components/Logo';
 
-const CheckmarkIcon = ({ color }: { color: string }) => (
-    <Svg width="64" height="64" viewBox="0 0 64 64" fill="none">
-        <Circle cx="32" cy="32" r="30" stroke={color} strokeWidth="3" fill="none" />
-        <Path
-            d="M20 32L28 40L44 24"
-            stroke={color}
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-        />
-    </Svg>
-);
 
 export default function RegistrationSuccessScreen() {
     const router = useRouter();
@@ -80,7 +68,7 @@ export default function RegistrationSuccessScreen() {
             <View style={styles.contentContainer}>
                 {/* Animated Checkmark */}
                 <Animated.View style={[styles.iconContainer, { transform: [{ scale: scaleAnim }] }]}>
-                    <CheckmarkIcon color={colors.buttonPrimary} />
+                    <Image source={require('../../icons/Vector.png')} style={{ width: 64, height: 64, tintColor: colors.buttonPrimary }} resizeMode="contain" />
                 </Animated.View>
 
                 <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>

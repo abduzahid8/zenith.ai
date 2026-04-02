@@ -59,6 +59,7 @@ export const SessionTimerScreen: React.FC = () => {
     } = useTimer();
 
     const handleStop = () => {
+        console.log('[SessionTimerScreen] handleStop pressed - navigating back');
         router.back();
     };
 
@@ -80,9 +81,10 @@ export const SessionTimerScreen: React.FC = () => {
         extrapolate: 'clamp',
     });
 
-    // Render Summary if active
+    // Render Summary if active — only show tasks completed in this session (not pre-completed/locked ones)
     if (showSummary && startTime) {
-        return <SessionSummaryView tasks={tasks} startTime={startTime} onExit={handleStop} />;
+        const newlyCompletedTasks = tasks.filter(t => t.completed && !lockedTaskIds.has(t.id));
+        return <SessionSummaryView tasks={newlyCompletedTasks} startTime={startTime} onExit={handleStop} />;
     }
 
     // Control button slide animations
@@ -292,6 +294,7 @@ export const SessionTimerScreen: React.FC = () => {
                 onSelect={(mins) => setTotalTime(mins * 60)}
                 onClose={() => setIsTimePickerVisible(false)}
             />
+
         </SafeAreaView>
     );
 };

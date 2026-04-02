@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
     View,
     ScrollView,
@@ -7,8 +7,10 @@ import {
     TouchableOpacity,
     Animated,
     Image,
+    Modal,
     Alert,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { scale } from '../../constants';
@@ -44,32 +46,61 @@ const HomeTab: React.FC<HomeTabProps> = ({
     const styles = useMemo(() => createStyles(colors), [colors]);
     const t = useT();
     const { dailyTasks } = useTaskStore();
+    const [showAllDoneModal, setShowAllDoneModal] = useState(false);
 
     const handleNavigate = (route: string) => {
+        console.log('[HomeTab] handleNavigate - route:', route);
         router.push(route as any);
     };
 
     const handleStartLesson = () => {
+        console.log('[HomeTab] handleStartLesson pressed');
+        console.log('[HomeTab] dailyTasks total:', dailyTasks.length);
         const engineTasks = dailyTasks.filter(t => ENGINE_TYPES.includes(t.type as TaskType));
-        const allCompleted = engineTasks.length >= 4 && engineTasks.every(t => t.status === 'completed');
+        console.log('[HomeTab] engineTasks count:', engineTasks.length);
+        console.log('[HomeTab] engineTasks statuses:', engineTasks.map(t => `${t.type}:${t.status}`).join(', '));
+        const allCompleted = engineTasks.length > 0 && engineTasks.every(t => t.status === 'completed');
+        console.log('[HomeTab] allCompleted:', allCompleted);
 
         if (allCompleted) {
-            Alert.alert(
-                '🎉 ' + t('Отличная работа!'),
-                t('Ты выполнил все задачи на сегодня! Продолжай в том же духе — каждый день делает тебя лучше.'),
-                [
-                    {
-                        text: t('Начать занятие'),
-                        onPress: () => handleNavigate('/session-timer'),
-                    },
-                ],
-            );
+            console.log('[HomeTab] All tasks completed - showing all-done modal');
+            setShowAllDoneModal(true);
         } else {
+            console.log('[HomeTab] Not all done - navigating to session-timer');
             handleNavigate('/session-timer');
         }
     };
 
     return (
+        <>
+        <Modal
+            transparent
+            visible={showAllDoneModal}
+            animationType="fade"
+            statusBarTranslucent
+            onRequestClose={() => setShowAllDoneModal(false)}
+        >
+            <BlurView intensity={40} tint="dark" style={styles.modalBackdrop}>
+                <View style={styles.modalCard}>
+                    <Text style={styles.modalTitle}>{t('Все задачи выполнены!')} 🎉</Text>
+                    <Text style={styles.modalBody}>
+                        {t('Вы выполнили все задачи на сегодня. Отличная работа! Вы можете начать сессию для дополнительной практики.')}
+                    </Text>
+                    <View style={styles.modalButtons}>
+                        <TouchableOpacity
+                            style={[styles.modalBtn, { flex: 1 }]}
+                            activeOpacity={0.8}
+                            onPress={() => {
+                                console.log('[HomeTab] All-done modal dismissed');
+                                setShowAllDoneModal(false);
+                            }}
+                        >
+                            <Text style={styles.modalBtnText}>{t('Закрыть')}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </BlurView>
+        </Modal>
         <ScrollView
             style={styles.homeContent}
             contentContainerStyle={{ paddingBottom: scale(100), flexGrow: 1, justifyContent: 'flex-end' }}
@@ -108,7 +139,10 @@ const HomeTab: React.FC<HomeTabProps> = ({
             <TouchableOpacity
                 activeOpacity={0.8}
                 style={styles.cardShadowProp}
-                onPress={() => (onDailyGoal ? onDailyGoal() : handleNavigate('/weekly-plan'))}
+                onPress={() => {
+                    console.log('[HomeTab] Daily Goal pressed');
+                    onDailyGoal ? onDailyGoal() : handleNavigate('/weekly-plan');
+                }}
             >
                 <LinearGradient
                     start={{ x: 0, y: 0.5 }}
@@ -134,7 +168,10 @@ const HomeTab: React.FC<HomeTabProps> = ({
 
             <View style={styles.bottomCardsRow}>
                 <TouchableOpacity
-                    onPress={() => (onAICoach ? onAICoach() : handleNavigate('/ai-coach'))}
+                    onPress={() => {
+                        console.log('[HomeTab] AI Coach pressed');
+                        onAICoach ? onAICoach() : handleNavigate('/ai-coach');
+                    }}
                     activeOpacity={0.8}
                     style={[styles.cardShadowProp, { flex: 1.3 }]}
                 >
@@ -163,7 +200,10 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    onPress={() => Alert.alert(t('Скоро'), t('Этот раздел находится в разработке и скоро будет доступен.'))}
+                    onPress={() => {
+                        console.log('[HomeTab] Screen Time card pressed');
+                        handleNavigate('/screen-time');
+                    }}
                     activeOpacity={0.8}
                     style={[styles.cardShadowProp, { flex: 1 }]}
                 >
@@ -191,6 +231,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 </TouchableOpacity>
             </View>
         </ScrollView>
+        </>
     );
 };
 
@@ -276,6 +317,49 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontSize: scale(24),
         lineHeight: scale(28),
         color: '#1E1E2E',
+    },
+    modalBackdrop: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: scale(32),
+    },
+    modalCard: {
+        backgroundColor: 'rgba(30, 30, 46, 0.88)',
+        borderRadius: scale(20),
+        paddingHorizontal: scale(20),
+        paddingTop: scale(20),
+        paddingBottom: scale(16),
+        width: '100%',
+    },
+    modalTitle: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(18),
+        color: '#FFFFFF',
+        marginBottom: scale(8),
+    },
+    modalBody: {
+        fontFamily: fonts.body?.regular ?? fonts.heading.bold,
+        fontSize: scale(14),
+        color: 'rgba(255,255,255,0.75)',
+        lineHeight: scale(20),
+        marginBottom: scale(20),
+    },
+    modalButtons: {
+        flexDirection: 'row',
+        gap: scale(12),
+    },
+    modalBtn: {
+        flex: 1,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        borderRadius: scale(50),
+        paddingVertical: scale(12),
+        alignItems: 'center',
+    },
+    modalBtnText: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(16),
+        color: '#FFFFFF',
     },
 });
 

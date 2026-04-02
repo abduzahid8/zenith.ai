@@ -18,10 +18,12 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { useUserProfileStore, getSubscriptionDisplayText } from '../store/userProfileStore';
+import { useSubscriptionStore } from '../store/subscriptionStore';
 import { scale } from '../constants';
 import { fonts } from '../theme';
 import { useAppTheme } from '../theme/useAppTheme';
 import { InfoModal } from './ui/InfoModal';
+import { ConfirmModal } from './ui/ConfirmModal';
 import * as Linking from 'expo-linking';
 import { useLanguageStore, useT } from '../store/languageStore';
 import { openManageSubscriptions } from '../store/subscriptionStore';
@@ -42,6 +44,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
     const router = useRouter();
     const { signOut, deleteAccount } = useAuthStore();
     const { userName, subscriptionLevel } = useUserProfileStore();
+    const { isActive } = useSubscriptionStore();
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -54,6 +57,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
     const [howItWorksVisible, setHowItWorksVisible] = React.useState(false);
     const [shareVisible, setShareVisible] = React.useState(false);
     const [feedbackVisible, setFeedbackVisible] = React.useState(false);
+    const [deleteConfirmVisible, setDeleteConfirmVisible] = React.useState(false);
 
     const { language, setLanguage } = useLanguageStore();
     const t = useT();
@@ -99,37 +103,33 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
     const [expandedSection, setExpandedSection] = React.useState<string | null>('main');
 
     const handleLogout = async () => {
+        console.log('[NavigationSidebar] handleLogout pressed');
         onClose();
         await signOut();
-        setTimeout(() => {
-            router.replace('/');
-        }, 300);
     };
 
     const handleDeleteAccount = () => {
-        Alert.alert(
-            t('Вы уверены?'),
-            t('Это действие необратимо. Все ваши данные будут удалены.'),
-            [
-                { text: t('Отмена'), style: 'cancel' },
-                {
-                    text: t('Удалить'),
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            onClose();
-                            await deleteAccount();
-                            router.replace('/');
-                        } catch (error) {
-                            Alert.alert(t('Ошибка'), t('Не удалось удалить аккаунт'));
-                        }
-                    }
-                }
-            ]
-        );
+        console.log('[NavigationSidebar] handleDeleteAccount pressed');
+        setDeleteConfirmVisible(true);
+    };
+
+    const confirmDeleteAccount = async () => {
+        setDeleteConfirmVisible(false);
+        console.log('[Sidebar] Handling delete account button press...');
+        try {
+            onClose();
+            console.log('[Sidebar] Calling deleteAccount() from authStore...');
+            await deleteAccount();
+            console.log('[Sidebar] deleteAccount() succeeded, redirecting to /...');
+            router.replace('/');
+        } catch (error) {
+            console.error('[Sidebar] Error from deleteAccount():', error);
+            Alert.alert(t('Ошибка'), t('Не удалось удалить аккаунт'));
+        }
     };
 
     const handleNavItemPress = (item: string) => {
+        console.log('[NavigationSidebar] handleNavItemPress - item:', item, 'expanded:', expandedSection === item ? 'collapsing' : 'expanding');
         if (expandedSection === item) {
             setExpandedSection(null);
         } else {
@@ -138,31 +138,44 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
     };
 
     const handleSubItemPress = (item: { key?: string; label: string; route?: string }) => {
+        console.log('[NavigationSidebar] handleSubItemPress - label:', item.label, 'key:', item.key, 'route:', item.route);
         if (item.route) {
             onClose();
             setTimeout(() => {
-                router.replace(item.route as any);
+                router.push(item.route as any);
             }, 300);
             return;
         }
 
         switch (item.key) {
             case 'how-it-works':
+                console.log('[NavigationSidebar] Opening How It Works modal');
                 setHowItWorksVisible(true);
                 break;
             case 'feedback':
+                console.log('[NavigationSidebar] Opening Feedback modal');
                 setFeedbackVisible(true);
                 break;
             case 'share':
+                console.log('[NavigationSidebar] Opening Share modal');
                 setShareVisible(true);
                 break;
             case 'manage-subscription':
+                console.log('[NavigationSidebar] Opening Manage Subscriptions');
                 openManageSubscriptions();
                 break;
+            case 'privacy':
+                console.log('[NavigationSidebar] Opening Privacy Policy');
+                Linking.openURL('https://zenyth-ai-privacy.vercel.app/').catch((err) =>
+                    console.error('[NavigationSidebar] Privacy URL failed:', err)
+                );
+                break;
             case 'delete-account':
+                console.log('[NavigationSidebar] Opening Delete Account confirmation');
                 handleDeleteAccount();
                 break;
             default:
+                console.log('[NavigationSidebar] Feature not implemented:', item.key);
                 Alert.alert(t('Скоро'), t('Этот раздел находится в разработке и скоро будет доступен.'));
         }
     };
@@ -178,6 +191,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                 { label: t('Главная'), route: '/(app)/' },
                 { label: t('Хобби и план'), route: '/(app)/weekly-plan' },
                 { label: t('AI-наставник'), route: '/(app)/ai-coach' },
+                { label: t('Экранное время'), route: '/(app)/screen-time' },
             ],
         },
         {
@@ -192,7 +206,11 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             key: 'settings',
             label: t('Управление'),
             subItems: [
-                { key: 'manage-subscription', label: t('Управление подпиской') },
+                {
+                    key: 'manage-subscription',
+                    label: t('Управление подпиской'),
+                    route: (subscriptionLevel === 'premium' || isActive) ? '/manage-subscription' : '/subscription',
+                },
                 { label: t('Настройки') },
                 { label: t('Уведомления') },
                 { key: 'delete-account', label: t('Удалить аккаунт') },
@@ -245,7 +263,14 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                 <Ionicons name="person" size={22} color={colors.buttonTextPrimary} />
                             </View>
                             <View style={styles.userInfo}>
-                                <Text style={styles.userName} numberOfLines={1} ellipsizeMode="tail">{displayName}</Text>
+                                <Text style={[
+                                    styles.userName,
+                                    displayName.length > 18
+                                        ? { fontSize: 9 }
+                                        : displayName.length > 12
+                                        ? { fontSize: 11 }
+                                        : null,
+                                ]} numberOfLines={2}>{displayName}</Text>
                                 <Text style={styles.subscriptionLevel}>{displaySubscription}</Text>
                                 <TouchableOpacity
                                     style={styles.logoutButton}
@@ -267,14 +292,20 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                         <View style={styles.languageButtons}>
                             <TouchableOpacity
                                 style={[styles.langButton, language === 'ru' && styles.langButtonActive]}
-                                onPress={() => setLanguage('ru')}
+                                onPress={() => {
+                                    console.log('[NavigationSidebar] Language switched to RU');
+                                    setLanguage('ru');
+                                }}
                                 activeOpacity={0.7}
                             >
                                 <Text style={[styles.langButtonText, language === 'ru' && styles.langButtonTextActive]}>RU</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.langButton, language === 'en' && styles.langButtonActive]}
-                                onPress={() => setLanguage('en')}
+                                onPress={() => {
+                                    console.log('[NavigationSidebar] Language switched to EN');
+                                    setLanguage('en');
+                                }}
                                 activeOpacity={0.7}
                             >
                                 <Text style={[styles.langButtonText, language === 'en' && styles.langButtonTextActive]}>EN</Text>
@@ -321,11 +352,17 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
 
                     <View style={styles.footerSection}>
                         <View style={styles.footerContent}>
-                            <TouchableOpacity activeOpacity={0.7} onPress={() => handleSubItemPress({ key: 'faq', label: 'FAQ' })}>
+                            <TouchableOpacity activeOpacity={0.7} onPress={() => {
+                                console.log('[NavigationSidebar] FAQ pressed');
+                                handleSubItemPress({ key: 'faq', label: 'FAQ' });
+                            }}>
                                 <Text style={styles.faqText}>{t('FAQ')}</Text>
                             </TouchableOpacity>
                             <View style={styles.footerDivider} />
-                            <TouchableOpacity activeOpacity={0.7} onPress={() => handleSubItemPress({ key: 'privacy', label: t('Политика\nКонфиденциальности') })}>
+                            <TouchableOpacity activeOpacity={0.7} onPress={() => {
+                                console.log('[NavigationSidebar] Privacy Policy pressed');
+                                handleSubItemPress({ key: 'privacy', label: t('Политика\nКонфиденциальности') });
+                            }}>
                                 <Text style={styles.privacyText}>
                                     {t('Политика\nКонфиденциальности')}
                                 </Text>
@@ -354,7 +391,18 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                 visible={feedbackVisible}
                 onClose={() => setFeedbackVisible(false)}
                 title="Feedback"
-                content="We always welcome your questions and suggestions! Write to us at info@zenyth.ai"
+                content="We always welcome your questions and suggestions! Write to us at info@zenyth.ink"
+            />
+
+            <ConfirmModal
+                visible={deleteConfirmVisible}
+                onClose={() => setDeleteConfirmVisible(false)}
+                onConfirm={confirmDeleteAccount}
+                title={t('Вы уверены?')}
+                content={t('Это действие необратимо. Все ваши данные будут удалены.')}
+                confirmText={t('Удалить')}
+                cancelText={t('Отмена')}
+                isDestructive={true}
             />
         </Modal>
     );

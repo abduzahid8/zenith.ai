@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, TouchableOpacity, StyleSheet, Image, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scale, SCREEN_WIDTH } from '../../constants';
 import { useAppTheme } from '../../theme/useAppTheme';
 
@@ -11,7 +12,8 @@ interface BottomTabBarProps {
 
 export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabPress }) => {
     const { colors } = useAppTheme();
-    const styles = useMemo(() => createStyles(), []);
+    const insets = useSafeAreaInsets();
+    const styles = useMemo(() => createStyles(insets.bottom), [insets.bottom]);
 
     const activeIconTint = '#262A44';
     const inactiveIconTint = '#C7CCE1';
@@ -87,17 +89,38 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabPres
                 {activeTab === 2 && <View style={[styles.activeDot, { backgroundColor: activeDotColor }]} />}
             </TouchableOpacity>
 
+            {/* Tab 4: Screen Time */}
+            <TouchableOpacity
+                style={styles.tabItem}
+                onPress={() => onTabPress(3)}
+                activeOpacity={0.7}
+            >
+                <Image
+                    source={require('../../../icons/stats.png')}
+                    style={[
+                        {
+                            height: activeTab === 3 ? scale(31) : scale(31),
+                            width: activeTab === 3 ? scale(24) : undefined,
+                            aspectRatio: 1,
+                            tintColor: activeTab === 3 ? activeIconTint : inactiveIconTint,
+                            transform: activeTab === 3 ? [{ translateY: -scale(2) }] : [],
+                        }
+                    ]}
+                    resizeMode="contain"
+                />
+                {activeTab === 3 && <View style={[styles.activeDot, { backgroundColor: activeDotColor }]} />}
+            </TouchableOpacity>
 
         </View>
     );
 };
 
-const createStyles = () => StyleSheet.create({
+const createStyles = (bottomInset: number) => StyleSheet.create({
     container: {
         position: 'absolute',
-        bottom: scale(34),
+        bottom: bottomInset + scale(8),
         alignSelf: 'center',
-        width: 280,
+        width: scale(362),
         height: 67,
         borderRadius: 47,
         flexDirection: 'row',
@@ -128,7 +151,7 @@ const createStyles = () => StyleSheet.create({
     },
     activeDot: {
         position: 'absolute',
-        bottom: scale(12),
+        bottom: 11,
         width: scale(30),
         height: scale(5),
         borderRadius: scale(20),
