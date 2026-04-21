@@ -15,6 +15,7 @@ import { BlurView } from 'expo-blur';
 import { scale } from '../../constants';
 import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { useT } from '../../store/languageStore';
 
 interface InfoModalProps {
     visible: boolean;
@@ -34,13 +35,14 @@ export const InfoModal: React.FC<InfoModalProps> = ({
     shareLink,
 }) => {
     const { colors } = useAppTheme();
+    const t = useT();
     const [copied, setCopied] = React.useState(false);
 
     const handleShare = async () => {
         if (!shareLink) return;
         try {
             await Share.share({
-                message: `Присоединяйся к Zenyth AI! 🚀\n${shareLink}`,
+                message: `${t('Присоединяйся к Zenyth AI! 🚀')}\n${shareLink}`,
             });
         } catch (error) {
             console.error(error);
@@ -83,7 +85,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                                 ) : (
                                     <View style={styles.shareContainer}>
                                         <Text style={[styles.shareLabel, { color: colors.textSecondary }]}>
-                                            Поделись ссылкой с друзьями:
+                                            {t('Поделись ссылкой с друзьями:')}
                                         </Text>
                                         <TouchableOpacity 
                                             style={[styles.linkContainer, { backgroundColor: colors.background }]}
@@ -93,7 +95,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                                                 {shareLink}
                                             </Text>
                                             <Text style={[styles.copyText, { color: colors.sessionTimer.primary }]}>
-                                                {copied ? 'Скопировано!' : 'Копировать'}
+                                                {copied ? t('Скопировано!') : t('Копировать')}
                                             </Text>
                                         </TouchableOpacity>
                                         
@@ -102,7 +104,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                                             onPress={handleShare}
                                         >
                                             <Text style={[styles.shareButtonText, { color: colors.white }]}>
-                                                Отправить друзьям
+                                                {t('Отправить друзьям')}
                                             </Text>
                                         </TouchableOpacity>
                                     </View>
@@ -114,7 +116,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                                 onPress={onClose}
                             >
                                 <Text style={[styles.doneButtonText, { color: colors.sessionTimer.primary }]}>
-                                    Понятно
+                                    {t('Понятно')}
                                 </Text>
                             </TouchableOpacity>
                         </View>

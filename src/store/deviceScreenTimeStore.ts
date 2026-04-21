@@ -18,6 +18,7 @@ import {
     isScreenTimeAvailable,
     setupMonitoring,
     getMonitoringStartedAt,
+    triggerReportUpdate,
     DailyUsageSummary,
     AppUsageData,
 } from '../../modules/device-activity';
@@ -411,6 +412,13 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
 
                 if (!isAuthorized) {
                     await get().checkPermission();
+                }
+
+                // On iOS, force the DeviceActivityReport extension to run and
+                // write fresh usage data to App Groups before we read it.
+                if (Platform.OS === 'ios' && get().isAuthorized) {
+                    console.log('[DeviceScreenTimeStore] Triggering report update...');
+                    await triggerReportUpdate();
                 }
 
                 await Promise.all([

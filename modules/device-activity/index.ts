@@ -3,15 +3,18 @@ import { requireNativeModule, Platform } from 'expo-modules-core';
 // Lazily load the native module to prevent creating it at import time
 // This allows the code to run even if the native module is not linked yet (e.g. in Expo Go or before rebuild)
 let DeviceActivityModule: any = null;
+let hasAttemptedLoad = false;
 
 function getDeviceActivity() {
     if (DeviceActivityModule) return DeviceActivityModule;
+    if (hasAttemptedLoad) return null;
 
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
+        hasAttemptedLoad = true;
         try {
             DeviceActivityModule = requireNativeModule('DeviceActivity');
         } catch (e) {
-            console.warn('DeviceActivity native module not found. Make sure to run "npx expo run:ios" or "npx expo run:android"');
+            console.warn('DeviceActivity native module is not available on this build.');
             DeviceActivityModule = null;
         }
     }
@@ -63,8 +66,14 @@ export function getUsageStats(startTime: number, endTime: number): UsageStats[] 
 export function requestUsagePermission(): Promise<boolean> {
     const module = getDeviceActivity();
     if (Platform.OS !== 'android' || !module) return Promise.resolve(false);
-    const result = module.requestUsagePermission();
-    return Promise.resolve(typeof result === 'boolean' ? result : false);
+    try {
+        const result = module.requestUsagePermission();
+        // Native now returns a boolean, but Settings opens async so it may still be false.
+        // The caller must re-check permission when the app returns to foreground.
+        return Promise.resolve(result === true);
+    } catch {
+        return Promise.resolve(false);
+    }
 }
 
 export function hasUsagePermission(): Promise<boolean> {
@@ -208,6 +217,22 @@ export function getMonitoringStartedAt(): number {
         return module.getMonitoringStartedAt() ?? 0;
     } catch {
         return 0;
+    }
+}
+
+/**
+ * Force the DeviceActivityReport extension to render and write fresh usage data
+ * to App Groups. Call this before reading today/weekly data to ensure it's current.
+ * Waits ~3s internally for the extension to finish writing. (iOS only)
+ */
+export async function triggerReportUpdate(): Promise<boolean> {
+    const module = getDeviceActivity();
+    if (Platform.OS !== 'ios' || !module) return false;
+    try {
+        return await module.triggerReportUpdate();
+    } catch (e) {
+        console.warn('triggerReportUpdate error:', e);
+        return false;
     }
 }
 

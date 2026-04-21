@@ -65,6 +65,22 @@ export interface PurchaseCallbacks {
 let purchaseUpdateSub: { remove: () => void } | null = null;
 let purchaseErrorSub: { remove: () => void } | null = null;
 let connected = false;
+let listenersRegistered = false;
+let activeCallbacks: PurchaseCallbacks | null = null;
+let lastHandledTransactionId: string | null = null;
+
+/**
+ * Returns true only if the transaction was completed within the last 10 minutes.
+ * Guards against StoreKit delivering stale unfinished transactions from previous
+ * sessions (e.g. another sandbox user on the same device).
+ */
+function isRecentTransaction(purchase: any): boolean {
+    const txDate = purchase?.transactionDate;
+    if (!txDate) return true; // no date info — assume it's new
+    // transactionDate can be Unix seconds or ms depending on expo-iap version
+    const txMs = txDate > 1_000_000_000_000 ? txDate : txDate * 1000;
+    return (Date.now() - txMs) < 10 * 60 * 1000;
+}
 
 export const iapService = {
     /**
@@ -74,12 +90,22 @@ export const iapService = {
     setup: async (callbacks: PurchaseCallbacks): Promise<boolean> => {
         if (connected) {
             console.log('[IAP] Already connected, skipping setup');
+            activeCallbacks = callbacks;
             return true;
         }
 
         try {
-            await initConnection();
+            console.log('[IAP] Connecting to StoreKit...');
+            // Timeout initConnection — on simulator or without StoreKit it can hang forever
+            await Promise.race([
+                initConnection(),
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('initConnection timed out after 15s')), 15_000)
+                ),
+            ]);
             connected = true;
+            activeCallbacks = callbacks;
+            console.log('[IAP] StoreKit connected successfully');
         } catch (err) {
             console.error('[IAP] initConnection failed:', err);
             return false;
@@ -87,14 +113,30 @@ export const iapService = {
 
         // Register purchase listeners separately — this can fail under Expo Dev Client
         // (Proxy wrapping native modules). App should still work without IAP in that case.
+        listenersRegistered = false;
         try {
             purchaseUpdateSub = purchaseUpdatedListener(async (purchase) => {
+                // Deduplicate: skip if already handled via requestPurchase direct return
+                const txId = (purchase as any).transactionId ?? (purchase as any).id ?? null;
+                if (txId && txId === lastHandledTransactionId) {
+                    console.log('[IAP] Listener: duplicate transaction, skipping');
+                    return;
+                }
+
+                // Stale transaction guard: finish silently without granting premium
+                if (!isRecentTransaction(purchase)) {
+                    console.log('[IAP] Listener: stale transaction, finishing silently without granting premium');
+                    try { await finishTransaction({ purchase, isConsumable: false }); } catch {}
+                    return;
+                }
+
+                if (txId) lastHandledTransactionId = txId;
                 try {
                     await finishTransaction({ purchase, isConsumable: false });
                 } catch (err) {
                     console.error('[IAP] Error finishing transaction:', err);
                 } finally {
-                    callbacks.onPurchaseSuccess(purchase);
+                    activeCallbacks?.onPurchaseSuccess(purchase);
                 }
             });
 
@@ -102,13 +144,15 @@ export const iapService = {
                 if (error.code !== ErrorCode.UserCancelled) {
                     console.error('[IAP] Purchase error:', error);
                 }
-                callbacks.onPurchaseError(error);
+                activeCallbacks?.onPurchaseError(error);
             });
+            listenersRegistered = true;
         } catch (err) {
             // This typically happens in Expo Dev Client where native modules run behind
             // a JS Proxy that doesn't support StoreKit event listeners.
             // The connection is still alive — purchases will still work via polling.
             console.warn('[IAP] Listener setup failed (likely Dev Client proxy):', err);
+            listenersRegistered = false;
         }
 
         return connected;
@@ -122,10 +166,18 @@ export const iapService = {
         if (!connected) return [];
 
         const fetchOnce = () =>
-            fetchProducts({ skus: ALL_SKUS, type: 'subs' });
+            Promise.race([
+                fetchProducts({ skus: ALL_SKUS, type: 'subs' }),
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('fetchProducts timed out after 15s')), 15_000)
+                ),
+            ]);
 
         try {
-            return (await fetchOnce()) ?? [];
+            console.log('[IAP] Fetching products for SKUs:', ALL_SKUS);
+            const products = (await fetchOnce()) ?? [];
+            console.log('[IAP] Products fetched:', products.length, products.map((p: any) => p.id));
+            return products;
         } catch (err: any) {
             // StoreKit may not be fully ready immediately after initConnection —
             // wait briefly and retry once before giving up.
@@ -148,17 +200,92 @@ export const iapService = {
      * The result comes back via the purchaseUpdatedListener.
      */
     purchaseSubscription: async (sku: string): Promise<void> => {
+        console.log('[IAP] purchaseSubscription called — sku:', sku, 'connected:', connected, 'listenersRegistered:', listenersRegistered);
         if (!connected) {
-            throw new Error('IAP not connected');
+            throw new Error('IAP not connected. Call initialize() first.');
         }
 
+        // ── Request purchase (with stale-tx retry) ───────────────────────
+        // Helper: normalise the raw result from requestPurchase into a
+        // single Purchase or null (expo-iap may return Purchase, Purchase[], or []).
+        const normalisePurchase = (raw: any): Purchase | null => {
+            if (Array.isArray(raw)) return raw.length > 0 ? raw[0] : null;
+            return raw ? (raw as Purchase) : null;
+        };
+
+        const doRequest = () =>
+            Promise.race([
+                requestPurchase({
+                    request: Platform.OS === 'ios'
+                        ? { apple: { sku } }
+                        : { android: { skus: [sku] } },
+                    type: 'subs',
+                }),
+                new Promise<never>((_, reject) =>
+                    setTimeout(
+                        () => reject(Object.assign(new Error('Purchase timed out. Please try again.'), { code: 'E_PURCHASE_TIMEOUT' })),
+                        120_000,
+                    ),
+                ),
+            ]);
+
         try {
-            await requestPurchase({
-                request: Platform.OS === 'ios' 
-                    ? { apple: { sku } }
-                    : { android: { skus: [sku] } },
-                type: 'subs',
-            });
+            let purchase = normalisePurchase(await doRequest());
+            console.log('[IAP] requestPurchase resolved — purchase:', purchase ? 'present' : 'null');
+
+            // If StoreKit returned a stale transaction instead of showing the
+            // payment sheet, finish it and retry once.
+            if (purchase && !isRecentTransaction(purchase)) {
+                console.log('[IAP] Stale transaction returned — finishing and retrying');
+                try { await finishTransaction({ purchase, isConsumable: false }); } catch {}
+                purchase = normalisePurchase(await doRequest());
+                console.log('[IAP] Retry resolved — purchase:', purchase ? 'present' : 'null');
+
+                // Still stale after retry — give up
+                if (purchase && !isRecentTransaction(purchase)) {
+                    try { await finishTransaction({ purchase, isConsumable: false }); } catch {}
+                    throw Object.assign(
+                        new Error('No payment sheet appeared. Please try again.'),
+                        { code: 'STALE_TRANSACTION' },
+                    );
+                }
+            }
+
+            // ── Process result ────────────────────────────────────────────
+            if (purchase) {
+                const txId = (purchase as any).transactionId ?? (purchase as any).id ?? null;
+                if (txId) lastHandledTransactionId = txId;
+                try {
+                    await finishTransaction({ purchase, isConsumable: false });
+                } catch (err) {
+                    console.error('[IAP] Error finishing transaction (direct):', err);
+                }
+                activeCallbacks?.onPurchaseSuccess(purchase);
+            } else if (listenersRegistered) {
+                // Normal path: purchase result will arrive via purchaseUpdatedListener.
+                console.log('[IAP] No direct result — waiting for listener callback...');
+            } else {
+                // Listeners failed to register (Dev Client proxy or StoreKit issue).
+                // Poll getActiveSubscriptions as a fallback so the user doesn't get stuck.
+                console.log('[IAP] No direct result & listeners unavailable — polling for subscription...');
+                for (let attempt = 0; attempt < 15; attempt++) {
+                    await new Promise<void>(r => setTimeout(r, 2000));
+                    try {
+                        const active = await getActiveSubscriptions(ALL_SKUS);
+                        if (active && active.length > 0) {
+                            const latestPurchase = active[0] as any;
+                            if (isRecentTransaction(latestPurchase)) {
+                                const txId = latestPurchase?.transactionId ?? latestPurchase?.id ?? null;
+                                if (txId) lastHandledTransactionId = txId;
+                                try { await finishTransaction({ purchase: latestPurchase, isConsumable: false }); } catch {}
+                                activeCallbacks?.onPurchaseSuccess(latestPurchase);
+                                return;
+                            }
+                        }
+                    } catch {}
+                }
+                console.warn('[IAP] Fallback polling ended without finding active subscription');
+            }
         } catch (err) {
             console.error('[IAP] Purchase request failed:', err);
             throw err;
@@ -263,14 +390,20 @@ export const iapService = {
         purchaseErrorSub?.remove();
         purchaseUpdateSub = null;
         purchaseErrorSub = null;
+        activeCallbacks = null;
+        lastHandledTransactionId = null;
+        listenersRegistered = false;
 
-        if (connected) {
+        // Set connected = false BEFORE the async endConnection() call so that
+        // a subsequent setup() won't short-circuit with a stale flag.
+        const wasConnected = connected;
+        connected = false;
+        if (wasConnected) {
             try {
                 await endConnection();
             } catch (err) {
                 console.error('[IAP] Disconnect error:', err);
             }
-            connected = false;
         }
     },
 };

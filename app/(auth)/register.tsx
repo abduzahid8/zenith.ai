@@ -12,6 +12,7 @@ import {
     KeyboardAvoidingView,
     ScrollView,
     Platform,
+    Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -21,6 +22,7 @@ import { fonts } from '../../src/theme';
 import { useAppTheme } from '../../src/theme/useAppTheme';
 import { useAuthStore } from '../../src/store/authStore';
 import { LogoNew } from '../../src/components/Logo';
+import { TERMS_OF_USE_URL } from '../../src/constants';
 
 
 export default function RegisterScreen() {
@@ -151,9 +153,23 @@ export default function RegisterScreen() {
                     onPress={() => setAgreedToTerms(!agreedToTerms)}
                 >
                     <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
-                        {agreedToTerms && <Image source={require('../../icons/Vector.png')} style={styles.checkmarkIcon} />}
+                        {agreedToTerms && (
+                            <Ionicons name="checkmark" size={14} color={colors.white} />
+                        )}
                     </View>
-                    <Text style={styles.termsText}>I agree to the terms of use</Text>
+                    <Text style={styles.termsText}>
+                        I agree to the{' '}
+                        <Text
+                            style={styles.termsLink}
+                            onPress={() => {
+                                Linking.openURL(TERMS_OF_USE_URL).catch((error) =>
+                                    console.error('[RegisterScreen] Failed to open Terms of Use:', error)
+                                );
+                            }}
+                        >
+                            Terms of Use
+                        </Text>
+                    </Text>
                 </TouchableOpacity>
             </View>
 
@@ -254,11 +270,11 @@ const createStyles = (colors: any) => StyleSheet.create({
         marginBottom: 8,
     },
     checkbox: {
-        width: 20,
-        height: 20,
+        width: 24,
+        height: 24,
         borderWidth: 1,
         borderColor: colors.textSecondary,
-        borderRadius: 4,
+        borderRadius: 999,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -266,15 +282,15 @@ const createStyles = (colors: any) => StyleSheet.create({
         backgroundColor: colors.buttonPrimary,
         borderColor: colors.buttonPrimary,
     },
-    checkmarkIcon: {
-        width: 9,
-        height: 9,
-        tintColor: colors.white,
-    },
     termsText: {
         fontFamily: fonts.body.medium,
         fontSize: 13,
         color: colors.textSecondary,
+        flex: 1,
+    },
+    termsLink: {
+        color: colors.link || colors.buttonPrimary,
+        textDecorationLine: 'underline',
     },
     dividerContainer: {
         flexDirection: 'row',

@@ -28,7 +28,11 @@ export const authService = {
 
     signInWithGoogle: async () => {
         const supabase = getSupabase();
-        const redirectUrl = makeRedirectUri({ scheme: 'zenyth' });
+        const redirectUrl = makeRedirectUri({
+            scheme: 'zenyth',
+            path: 'auth-callback',
+            native: 'zenyth://auth-callback',
+        });
 
         const { data, error } = await supabase.auth.signInWithOAuth({
             provider: 'google',

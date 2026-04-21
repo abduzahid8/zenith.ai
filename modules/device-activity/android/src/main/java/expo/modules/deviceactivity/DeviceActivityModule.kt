@@ -54,6 +54,15 @@ class DeviceActivityModule : Module() {
       val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
       intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       context.startActivity(intent)
+      // Return current permission state — will be false until user toggles in Settings.
+      // JS side must re-check when app returns to foreground.
+      val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+      val mode = appOps.checkOpNoThrow(
+        AppOpsManager.OPSTR_GET_USAGE_STATS,
+        Process.myUid(),
+        context.packageName
+      )
+      return@Function mode == AppOpsManager.MODE_ALLOWED
     }
   }
 

@@ -5,7 +5,6 @@ import {
     StyleSheet,
     StatusBar,
     TouchableOpacity,
-    Image,
     Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,7 +29,6 @@ export default function QuizScreen() {
         answers,
         setAnswer,
         nextQuestion,
-        prevQuestion,
         completeQuiz,
     } = useQuizStore();
     const [saving, setSaving] = useState(false);
@@ -66,16 +64,6 @@ export default function QuizScreen() {
         } else {
             console.log('[QuizScreen] Moving to next question');
             nextQuestion();
-        }
-    };
-
-    const handleBack = () => {
-        console.log('[QuizScreen] handleBack pressed - currentQuestion:', currentQuestion);
-        if (currentQuestion > 1) {
-            prevQuestion();
-        } else {
-            console.log('[QuizScreen] Going back to previous screen');
-            router.back();
         }
     };
 
@@ -138,32 +126,12 @@ export default function QuizScreen() {
 
             {/* Bottom controls */}
             <View style={styles.bottomContainer}>
-                <View style={styles.bottomRow}>
-                    {/* Back button */}
-                    {currentQuestion > 1 ? (
-                        <TouchableOpacity
-                            style={styles.backButton}
-                            onPress={handleBack}
-                        >
-                            <Image
-                                source={require('../../assets/icons/back-arrow.png')}
-                                style={[styles.backIcon, { tintColor: colors.text }]}
-                                resizeMode="contain"
-                            />
-                        </TouchableOpacity>
-                    ) : (
-                        <View style={styles.backButton} />
-                    )}
-
-                    {/* Next button */}
-                    <View style={styles.nextButtonContainer}>
-                        <Button
-                            title={isLastQuestion ? 'Finish' : 'Next'}
-                            onPress={handleNext}
-                            disabled={!canProceed || saving}
-                        />
-                    </View>
-                </View>
+                <Button
+                    title={isLastQuestion ? 'Finish' : 'Next'}
+                    onPress={handleNext}
+                    disabled={!canProceed || saving}
+                    size="large"
+                />
             </View>
         </SafeAreaView>
     );
@@ -260,25 +228,5 @@ const createStyles = (colors: any) => StyleSheet.create({
     bottomContainer: {
         paddingHorizontal: 24,
         paddingBottom: 48,
-    },
-    bottomRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 16,
-    },
-    backButton: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: colors.quiz?.backButtonBg || colors.surfaceLight,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    backIcon: {
-        width: 24,
-        height: 24,
-    },
-    nextButtonContainer: {
-        flex: 1,
     },
 });

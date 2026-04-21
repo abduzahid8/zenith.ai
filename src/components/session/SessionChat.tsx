@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
     View,
     Text,
@@ -9,15 +9,16 @@ import {
     Platform,
     StyleSheet,
     Image,
-    Keyboard,
+    Animated,
+    Easing,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import Svg, { Path } from 'react-native-svg';
 import { scale } from '../../constants';
 import { fonts } from '../../theme';
 import { ChatMessage } from '../../services/ai';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export interface SessionChatProps {
     messages: ChatMessage[];
@@ -37,6 +38,120 @@ const SendIcon = ({ color = "white" }) => (
     </Svg>
 );
 
+// Animated "thinking" indicator — sequential spotlight dots (one active at a time).
+const TypingDots: React.FC<{ color: string }> = ({ color }) => {
+    const progress = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.timing(progress, {
+                toValue: 3,
+                duration: 1200,
+                easing: Easing.linear,
+                useNativeDriver: true,
+            })
+        );
+        loop.start();
+        return () => loop.stop();
+    }, [progress]);
+
+    return (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+            {[0, 1, 2].map(i => {
+                // Each dot is "active" when progress is near i (wrapping at 3)
+                const opacity = progress.interpolate({
+                    inputRange: [
+                        i === 0 ? 2.5 : i - 0.5,
+                        i,
+                        i === 0 ? 3 : i + 0.5,
+                        ...(i === 0 ? [0, 0.5] : []),
+                    ],
+                    outputRange: [
+                        i === 0 ? 0.25 : 0.25,
+                        1,
+                        0.25,
+                        ...(i === 0 ? [1, 0.25] : []),
+                    ],
+                    extrapolate: 'clamp',
+                });
+                const scaleDot = progress.interpolate({
+                    inputRange: [
+                        i === 0 ? 2.5 : i - 0.5,
+                        i,
+                        i === 0 ? 3 : i + 0.5,
+                        ...(i === 0 ? [0, 0.5] : []),
+                    ],
+                    outputRange: [
+                        0.75,
+                        1.25,
+                        0.75,
+                        ...(i === 0 ? [1.25, 0.75] : []),
+                    ],
+                    extrapolate: 'clamp',
+                });
+                return (
+                    <Animated.View
+                        key={i}
+                        style={{
+                            width: scale(8),
+                            height: scale(8),
+                            borderRadius: scale(4),
+                            backgroundColor: color,
+                            opacity,
+                            transform: [{ scale: scaleDot }],
+                        }}
+                    />
+                );
+            })}
+        </View>
+    );
+};
+
+// Lightweight inline formatter: renders **bold**, strips stray markdown
+// (headers, single leading asterisks for lists) and converts `* ` / `- ` into bullets.
+// Keeps everything in one Text so line-wrapping stays natural.
+const renderFormatted = (text: string, baseStyle: any, boldColor: string) => {
+    const cleaned = text
+        // Normalize bullet list markers at line starts → "• "
+        .replace(/^[ \t]*[*\-•][ \t]+/gm, '• ')
+        // Strip markdown headers ("#", "##", ...) at line starts
+        .replace(/^[ \t]*#{1,6}[ \t]+/gm, '')
+        // Strip inline backticks
+        .replace(/`([^`]+)`/g, '$1');
+
+    const parts: Array<{ text: string; bold: boolean }> = [];
+    const regex = /\*\*(.+?)\*\*|__(.+?)__/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(cleaned)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push({ text: cleaned.slice(lastIndex, match.index), bold: false });
+        }
+        parts.push({ text: match[1] ?? match[2] ?? '', bold: true });
+        lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < cleaned.length) {
+        parts.push({ text: cleaned.slice(lastIndex), bold: false });
+    }
+
+    return (
+        <Text style={baseStyle}>
+            {parts.map((p, i) =>
+                p.bold ? (
+                    <Text
+                        key={i}
+                        style={{ fontFamily: fonts.body.medium, color: boldColor }}
+                    >
+                        {p.text}
+                    </Text>
+                ) : (
+                    <Text key={i}>{p.text}</Text>
+                )
+            )}
+        </Text>
+    );
+};
+
 const SessionChat: React.FC<SessionChatProps> = ({
     messages,
     chatInput,
@@ -46,7 +161,8 @@ const SessionChat: React.FC<SessionChatProps> = ({
     onOpenTaskList,
 }) => {
     const { colors } = useAppTheme();
-    const styles = useMemo(() => createStyles(colors), [colors]);
+    const insets = useSafeAreaInsets();
+    const styles = useMemo(() => createStyles(colors, insets.bottom), [colors, insets.bottom]);
     const scrollRef = useRef<ScrollView>(null);
 
     const scrollToBottom = () => {
@@ -80,27 +196,34 @@ const SessionChat: React.FC<SessionChatProps> = ({
                     keyboardShouldPersistTaps="handled"
                     onContentSizeChange={scrollToBottom}
                 >
-                    {messages.map((msg, index) => (
-                        <View
-                            key={index}
-                            style={[
-                                styles.messageBubble,
-                                msg.role === 'user' ? styles.userBubble : styles.assistantBubble,
-                            ]}
-                        >
-                            <Text
+                    {messages.map((msg, index) => {
+                        const isUser = msg.role === 'user';
+                        const baseStyle = [
+                            styles.messageText,
+                            isUser ? styles.userText : styles.assistantText,
+                        ];
+                        const boldColor = isUser
+                            ? colors.sessionTimer.chatUserText
+                            : colors.sessionTimer.chatAssistantText;
+                        return (
+                            <View
+                                key={index}
                                 style={[
-                                    styles.messageText,
-                                    msg.role === 'user' ? styles.userText : styles.assistantText,
+                                    styles.messageBubble,
+                                    isUser ? styles.userBubble : styles.assistantBubble,
                                 ]}
                             >
-                                {msg.content}
-                            </Text>
-                        </View>
-                    ))}
+                                {isUser ? (
+                                    <Text style={baseStyle}>{msg.content}</Text>
+                                ) : (
+                                    renderFormatted(msg.content, baseStyle, boldColor)
+                                )}
+                            </View>
+                        );
+                    })}
                     {isAiLoading && (
-                        <View style={[styles.messageBubble, styles.assistantBubble]}>
-                            <Text style={[styles.messageText, styles.assistantText]}>...</Text>
+                        <View style={[styles.messageBubble, styles.assistantBubble, styles.typingBubble]}>
+                            <TypingDots color={colors.sessionTimer.chatAssistantText} />
                         </View>
                     )}
                 </ScrollView>
@@ -137,7 +260,7 @@ const SessionChat: React.FC<SessionChatProps> = ({
     );
 };
 
-const createStyles = (colors: any) => StyleSheet.create({
+const createStyles = (colors: any, bottomInset: number) => StyleSheet.create({
     chatPage: {
         flex: 1,
         backgroundColor: colors.sessionTimer.background,
@@ -180,7 +303,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         justifyContent: 'space-between',
         borderRadius: scale(30),
         marginHorizontal: scale(20),
-        marginBottom: scale(16),
+        marginBottom: Math.max(scale(24), bottomInset + scale(12)),
         paddingVertical: scale(5),
         paddingLeft: scale(22),
         paddingRight: scale(5),
@@ -211,6 +334,10 @@ const createStyles = (colors: any) => StyleSheet.create({
         backgroundColor: colors.sessionTimer.chatAssistant,
         borderBottomLeftRadius: scale(4),
     },
+    typingBubble: {
+        paddingVertical: scale(10),
+        paddingHorizontal: scale(14),
+    },
     messageText: {
         fontSize: scale(16),
         fontFamily: fonts.body.light,
@@ -228,6 +355,8 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontSize: scale(18),
         color: colors.home.darkText,
         paddingVertical: scale(8),
+        paddingRight: scale(12),
+        marginRight: scale(8),
     },
     sendButton: {
         width: scale(35),

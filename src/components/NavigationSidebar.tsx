@@ -11,6 +11,7 @@ import {
     Alert,
     Easing,
     Dimensions,
+    Platform,
 } from 'react-native';
 import {
     Ionicons
@@ -61,6 +62,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
 
     const { language, setLanguage } = useLanguageStore();
     const t = useT();
+    const insightsLabel = Platform.OS === 'ios' ? t('Время Хобби') : t('Экранное время');
 
     useEffect(() => {
         if (visible) {
@@ -191,7 +193,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                 { label: t('Главная'), route: '/(app)/' },
                 { label: t('Хобби и план'), route: '/(app)/weekly-plan' },
                 { label: t('AI-наставник'), route: '/(app)/ai-coach' },
-                { label: t('Экранное время'), route: '/(app)/screen-time' },
+                { label: insightsLabel, route: '/(app)/screen-time' },
             ],
         },
         {
@@ -287,7 +289,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                     {/* Language Toggle - Moved up */}
                     <View style={styles.languageSection}>
                         <Text style={styles.languageSectionTitle}>
-                            {'Language'}
+                            {t('Язык')}
                         </Text>
                         <View style={styles.languageButtons}>
                             <TouchableOpacity
@@ -375,14 +377,14 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             <InfoModal
                 visible={howItWorksVisible}
                 onClose={() => setHowItWorksVisible(false)}
-                title="How It Works"
-                content="Zenyth AI is your personal assistant for hobby development. We help you plan sessions, track your progress, and chat with a smart AI Coach that's always ready to offer advice or motivation."
+                title={t('Как это работает')}
+                content={t('Zenyth AI — ваш персональный помощник в развитии хобби. Мы помогаем планировать занятия, отслеживать прогресс и общаться с умным AI-наставником, который всегда готов дать совет или мотивацию.')}
             />
 
             <InfoModal
                 visible={shareVisible}
                 onClose={() => setShareVisible(false)}
-                title="Share with a Friend"
+                title={t('Поделиться с другом')}
                 type="share"
                 shareLink="https://zenyth.ai/download"
             />
@@ -390,8 +392,8 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             <InfoModal
                 visible={feedbackVisible}
                 onClose={() => setFeedbackVisible(false)}
-                title="Feedback"
-                content="We always welcome your questions and suggestions! Write to us at info@zenyth.ink"
+                title={t('Обратная связь')}
+                content={t('Мы всегда рады вашим вопросам и предложениям! Напишите нам на info@zenyth.ink')}
             />
 
             <ConfirmModal

@@ -84,41 +84,49 @@ export const useHobbyTimeStore = create<HobbyTimeState>()(
                 const daysSinceCreation = get().getDaysSinceCreation();
                 const isNewUser = daysSinceCreation < 7;
 
-                if (weeklyData.length < 2) {
+                if (weeklyData.length === 0) {
                     return { value: 0, isNewUser };
                 }
 
+                const now = new Date();
+                const todayStr = now.toISOString().split('T')[0];
+                const yesterdayDate = new Date(now);
+                yesterdayDate.setDate(now.getDate() - 1);
+                const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
+
                 if (isNewUser) {
-                    // Day-to-day comparison for new users
-                    const sortedData = [...weeklyData].sort((a, b) =>
-                        new Date(b.date).getTime() - new Date(a.date).getTime()
-                    );
+                    // Day-to-day comparison using actual today / yesterday dates
+                    const todaySeconds = weeklyData.find(d => d.date === todayStr)?.seconds ?? 0;
+                    const yesterdaySeconds = weeklyData.find(d => d.date === yesterdayStr)?.seconds ?? 0;
 
-                    if (sortedData.length < 2) return { value: 0, isNewUser };
+                    if (yesterdaySeconds === 0) return { value: todaySeconds > 0 ? 100 : 0, isNewUser };
 
-                    const today = sortedData[0].seconds;
-                    const yesterday = sortedData[1].seconds;
-
-                    if (yesterday === 0) return { value: 100, isNewUser };
-
-                    const change = ((today - yesterday) / yesterday) * 100;
+                    const change = ((todaySeconds - yesterdaySeconds) / yesterdaySeconds) * 100;
                     return { value: Math.round(change), isNewUser };
                 } else {
-                    // Week-to-week comparison for existing users
-                    const sortedData = [...weeklyData].sort((a, b) =>
-                        new Date(a.date).getTime() - new Date(b.date).getTime()
-                    );
+                    // Week-to-week comparison using actual calendar week boundaries (string-based to avoid TZ issues)
+                    const dayOfWeek = now.getDay(); // 0 = Sun
+                    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
 
-                    // Split into this week and last week
-                    const thisWeekStart = sortedData.length >= 7
-                        ? sortedData.slice(-7)
-                        : sortedData;
-                    const lastWeekData = sortedData.length >= 14
-                        ? sortedData.slice(-14, -7)
-                        : [];
+                    const thisMonday = new Date(now);
+                    thisMonday.setDate(now.getDate() - daysFromMonday);
+                    const thisMondayStr = thisMonday.toISOString().split('T')[0];
 
-                    const thisWeekTotal = thisWeekStart.reduce((acc, d) => acc + d.seconds, 0);
-                    const lastWeekTotal = lastWeekData.reduce((acc, d) => acc + d.seconds, 0);
+                    const lastMonday = new Date(thisMonday);
+                    lastMonday.setDate(thisMonday.getDate() - 7);
+                    const lastMondayStr = lastMonday.toISOString().split('T')[0];
+
+                    const lastSunday = new Date(thisMonday);
+                    lastSunday.setDate(thisMonday.getDate() - 1);
+                    const lastSundayStr = lastSunday.toISOString().split('T')[0];
+
+                    const thisWeekTotal = weeklyData
+                        .filter(d => d.date >= thisMondayStr && d.date <= todayStr)
+                        .reduce((acc, d) => acc + d.seconds, 0);
+
+                    const lastWeekTotal = weeklyData
+                        .filter(d => d.date >= lastMondayStr && d.date <= lastSundayStr)
+                        .reduce((acc, d) => acc + d.seconds, 0);
 
                     if (lastWeekTotal === 0) return { value: thisWeekTotal > 0 ? 100 : 0, isNewUser };
 

@@ -53,11 +53,24 @@ export const aiService = {
         messages: ChatMessage[],
         hobby?: string
     ): Promise<string> => {
+        // Inject a style instruction so replies feel warm (emojis) and render
+        // cleanly on the client (no raw markdown like ** or #).
+        const styleInstruction: ChatMessage = {
+            role: 'system',
+            content:
+                'Reply in the same language as the user. Keep the tone warm, friendly and encouraging, ' +
+                'and naturally sprinkle 1-3 relevant emojis per reply (e.g. 🎯 ✨ 💪 📚 🌱). ' +
+                'Do NOT use markdown syntax — no **bold**, no ##headings, no backticks. ' +
+                'When you need a list, use short bullets prefixed with "• ". ' +
+                'Keep answers concise and skimmable.',
+        };
+        const enrichedMessages: ChatMessage[] = [styleInstruction, ...messages];
+
         if (USE_LOCAL_AI) {
-            return localAiService.sendMessage(messages, hobby);
+            return localAiService.sendMessage(enrichedMessages, hobby);
         }
         try {
-            return await invokeAI<string>('sendMessage', { messages, hobby });
+            return await invokeAI<string>('sendMessage', { messages: enrichedMessages, hobby });
         } catch (error) {
             const status = (error as any)?.context?.status ?? (error as any)?.status;
             if (status === 429) {

@@ -8,6 +8,7 @@ import {
     ScrollView,
     TouchableOpacity,
     ActivityIndicator,
+    AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fonts } from '../theme';
@@ -60,6 +61,20 @@ export const ScreenTimeScreen: React.FC = () => {
             await Promise.all([fetchWeeklyData(), fetchTodayData()]);
         };
         init();
+    }, [checkPermission, fetchWeeklyData, fetchTodayData]);
+
+    // Re-check permission when user returns from Settings (critical for Android)
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', async (nextState) => {
+            if (nextState === 'active') {
+                console.log('[ScreenTimeScreen] App returned to foreground — re-checking permission');
+                const granted = await checkPermission();
+                if (granted) {
+                    await Promise.all([fetchWeeklyData(), fetchTodayData()]);
+                }
+            }
+        });
+        return () => subscription.remove();
     }, [checkPermission, fetchWeeklyData, fetchTodayData]);
 
     const handleGrantAccess = async () => {

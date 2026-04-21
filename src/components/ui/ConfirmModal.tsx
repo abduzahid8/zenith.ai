@@ -6,9 +6,9 @@ import {
     Modal,
     TouchableOpacity,
     TouchableWithoutFeedback,
-    Image,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import { scale } from '../../constants';
 import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
@@ -53,7 +53,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
                             <View style={styles.header}>
                                 <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
                                 <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                                    <Image source={require('../../../icons/back.png')} style={[styles.closeIcon, { tintColor: colors.text, transform: [{ rotate: '180deg' }] }]} />
+                                    <Ionicons name="close-outline" size={scale(24)} color={colors.text} />
                                 </TouchableOpacity>
                             </View>
 

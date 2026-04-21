@@ -9,6 +9,7 @@ import {
     Image,
     Modal,
     Alert,
+    Platform,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
@@ -47,6 +48,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
     const t = useT();
     const { dailyTasks } = useTaskStore();
     const [showAllDoneModal, setShowAllDoneModal] = useState(false);
+    const insightsLabel = Platform.OS === 'ios' ? t('Время Хобби') : t('Экранное время');
 
     const handleNavigate = (route: string) => {
         console.log('[HomeTab] handleNavigate - route:', route);
@@ -214,7 +216,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                         style={styles.screenTimeCard}
                     >
                         <View style={{ zIndex: 1 }}>
-                            <Text style={styles.smallCardTitle}>{t('Экранное время')}</Text>
+                            <Text style={styles.smallCardTitle}>{insightsLabel}</Text>
                         </View>
                         <Animated.Image
                             source={chartImage}

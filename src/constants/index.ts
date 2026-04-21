@@ -34,6 +34,9 @@ export const scale = (size: number): number => {
     return cappedScale * size;
 };
 
+export const PRIVACY_POLICY_URL = 'https://zenyth-ai-privacy.vercel.app/';
+export const TERMS_OF_USE_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+
 /**
  * Tab configuration — re-exported from config/navigation.ts (single source of truth).
  */

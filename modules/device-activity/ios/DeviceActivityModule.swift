@@ -2,6 +2,7 @@ import ExpoModulesCore
 import FamilyControls
 import DeviceActivity
 import ManagedSettings
+import SwiftUI
 
 // Screen Time authorization status
 enum ScreenTimeAuthStatus: String {
@@ -10,104 +11,99 @@ enum ScreenTimeAuthStatus: String {
     case denied = "denied"
 }
 
-// Codable model for App Groups shared container
+// App Group identifier shared with extensions
+private let kAppGroupID = "group.com.zenyth.ai"
+private let kWeeklyDataKey = "weekly_screen_time_data"
+private let kTodayDataPrefix = "today_screen_time_"
+private let kMonitoringStartedKey = "monitoring_started_at"
+private let kTopAppsKey = "top_apps_data"
+
+// Codable model matching ScreenTimeShared.swift in extensions
 struct StoredDailyUsage: Codable {
     let date: String
     let totalSeconds: Int
+    let socialMediaSeconds: Int
+    let entertainmentSeconds: Int
+    let productivitySeconds: Int
+    let gamesSeconds: Int
+    let otherSeconds: Int
+    let pickupCount: Int
+    let notificationCount: Int
+
+    // Allow partial decoding for backward compat
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        date = try c.decode(String.self, forKey: .date)
+        totalSeconds = try c.decode(Int.self, forKey: .totalSeconds)
+        socialMediaSeconds = (try? c.decode(Int.self, forKey: .socialMediaSeconds)) ?? 0
+        entertainmentSeconds = (try? c.decode(Int.self, forKey: .entertainmentSeconds)) ?? 0
+        productivitySeconds = (try? c.decode(Int.self, forKey: .productivitySeconds)) ?? 0
+        gamesSeconds = (try? c.decode(Int.self, forKey: .gamesSeconds)) ?? 0
+        otherSeconds = (try? c.decode(Int.self, forKey: .otherSeconds)) ?? 0
+        pickupCount = (try? c.decode(Int.self, forKey: .pickupCount)) ?? 0
+        notificationCount = (try? c.decode(Int.self, forKey: .notificationCount)) ?? 0
+    }
 }
 
-// App Group identifier shared with DeviceActivityReport extension
-private let kAppGroupID = "group.com.zenyth.ai"
-private let kWeeklyDataKey = "weekly_screen_time_data"
-private let kMonitoringStartedKey = "monitoring_started_at"
+struct StoredAppUsage: Codable {
+    let bundleId: String
+    let appName: String
+    let totalTimeSeconds: Int
+    let category: String
+}
 
-// App usage data structure
+// App usage data structure exposed to JS
 struct AppUsageData: Record {
-    @Field
-    var bundleId: String = ""
-    
-    @Field
-    var appName: String = ""
-    
-    @Field
-    var totalTimeSeconds: Int = 0
-    
-    @Field
-    var category: String = ""
-    
-    @Field
-    var lastUsedTimestamp: Double = 0
+    @Field var bundleId: String = ""
+    @Field var appName: String = ""
+    @Field var totalTimeSeconds: Int = 0
+    @Field var category: String = ""
+    @Field var lastUsedTimestamp: Double = 0
 }
 
-// Daily usage summary
+// Daily usage summary exposed to JS
 struct DailyUsageSummary: Record {
-    @Field
-    var date: String = ""
-    
-    @Field
-    var totalScreenTimeSeconds: Int = 0
-    
-    @Field
-    var socialMediaSeconds: Int = 0
-    
-    @Field
-    var entertainmentSeconds: Int = 0
-    
-    @Field
-    var productivitySeconds: Int = 0
-    
-    @Field
-    var gamesSeconds: Int = 0
-    
-    @Field
-    var otherSeconds: Int = 0
-    
-    @Field
-    var pickupCount: Int = 0
-    
-    @Field
-    var notificationCount: Int = 0
+    @Field var date: String = ""
+    @Field var totalScreenTimeSeconds: Int = 0
+    @Field var socialMediaSeconds: Int = 0
+    @Field var entertainmentSeconds: Int = 0
+    @Field var productivitySeconds: Int = 0
+    @Field var gamesSeconds: Int = 0
+    @Field var otherSeconds: Int = 0
+    @Field var pickupCount: Int = 0
+    @Field var notificationCount: Int = 0
 }
 
 @available(iOS 16.0, *)
 public class DeviceActivityModule: Module {
-    // Authorization center for FamilyControls
     private let authorizationCenter = AuthorizationCenter.shared
-    
+
     required public init(appContext: AppContext) {
         super.init(appContext: appContext)
         print("DeviceActivityModule: Initialized")
     }
-    
+
     public func definition() -> ModuleDefinition {
         Name("DeviceActivity")
-        
-        // MARK: - Authorization Functions
-        
-        // Check current authorization status
+
+        // MARK: - Authorization
+
         Function("getAuthorizationStatus") { () -> String in
-            if #available(iOS 16.0, *) {
-                switch self.authorizationCenter.authorizationStatus {
-                case .notDetermined:
-                    return ScreenTimeAuthStatus.notDetermined.rawValue
-                case .approved:
-                    return ScreenTimeAuthStatus.approved.rawValue
-                case .denied:
-                    return ScreenTimeAuthStatus.denied.rawValue
-                @unknown default:
-                    return ScreenTimeAuthStatus.notDetermined.rawValue
-                }
-            } else {
-                // iOS 15 doesn't have authorizationStatus property
+            switch self.authorizationCenter.authorizationStatus {
+            case .notDetermined:
+                return ScreenTimeAuthStatus.notDetermined.rawValue
+            case .approved:
+                return ScreenTimeAuthStatus.approved.rawValue
+            case .denied:
+                return ScreenTimeAuthStatus.denied.rawValue
+            @unknown default:
                 return ScreenTimeAuthStatus.notDetermined.rawValue
             }
         }
-        
-        // Request Screen Time authorization
+
         AsyncFunction("requestAuthorization") { () async -> Bool in
             print("DeviceActivityModule: Requesting Screen Time authorization...")
             do {
-                // requestAuthorization(for:) is @MainActor — must be dispatched there
                 try await Task { @MainActor in
                     try await self.authorizationCenter.requestAuthorization(for: .individual)
                 }.value
@@ -118,215 +114,235 @@ public class DeviceActivityModule: Module {
                 return false
             }
         }
-        
-        // Check if authorized
+
         Function("isAuthorized") { () -> Bool in
-            if #available(iOS 16.0, *) {
-                return self.authorizationCenter.authorizationStatus == .approved
-            }
-            // For iOS 15, we can try to access and catch error
-            return false
+            return self.authorizationCenter.authorizationStatus == .approved
         }
-        
-        // MARK: - Usage Data Functions
-        
-        // Get today's screen time summary
+
+        // MARK: - Usage Data (reads from App Groups written by ScreenTimeReport extension)
+
         AsyncFunction("getTodayUsageSummary") { (promise: Promise) in
             Task {
-                do {
-                    let summary = try await self.fetchTodayUsage()
-                    promise.resolve(summary)
-                } catch {
-                    promise.reject("USAGE_ERROR", "Failed to fetch usage data: \(error.localizedDescription)")
-                }
+                let summary = self.readTodayUsage()
+                promise.resolve(summary)
             }
         }
-        
-        // Get usage for a specific date range
+
         AsyncFunction("getUsageForDateRange") { (startTimestamp: Double, endTimestamp: Double, promise: Promise) in
             Task {
-                do {
-                    let startDate = Date(timeIntervalSince1970: startTimestamp / 1000)
-                    let endDate = Date(timeIntervalSince1970: endTimestamp / 1000)
-                    let usage = try await self.fetchUsageForRange(start: startDate, end: endDate)
-                    promise.resolve(usage)
-                } catch {
-                    promise.reject("USAGE_ERROR", "Failed to fetch usage data: \(error.localizedDescription)")
-                }
+                let startDate = Date(timeIntervalSince1970: startTimestamp / 1000)
+                let endDate = Date(timeIntervalSince1970: endTimestamp / 1000)
+                let usage = self.readUsageForRange(start: startDate, end: endDate)
+                promise.resolve(usage)
             }
         }
-        
-        // Get top apps by usage time
+
         AsyncFunction("getTopApps") { (limit: Int, promise: Promise) in
             Task {
-                do {
-                    let apps = try await self.fetchTopApps(limit: limit)
-                    promise.resolve(apps)
-                } catch {
-                    promise.reject("USAGE_ERROR", "Failed to fetch top apps: \(error.localizedDescription)")
-                }
+                let apps = self.readTopApps(limit: limit)
+                promise.resolve(apps)
             }
         }
-        
-        // MARK: - App Limits Functions
-        
-        // Set time limit for specific app category
+
+        // MARK: - App Limits
+
         AsyncFunction("setCategoryLimit") { (category: String, limitSeconds: Int, promise: Promise) in
             Task {
-                do {
-                    try await self.setLimitForCategory(category: category, seconds: limitSeconds)
-                    promise.resolve(true)
-                } catch {
-                    promise.reject("LIMIT_ERROR", "Failed to set category limit: \(error.localizedDescription)")
-                }
+                let store = ManagedSettingsStore()
+                _ = store
+                promise.resolve(true)
             }
         }
-        
-        // Remove all limits
+
         AsyncFunction("clearAllLimits") { (promise: Promise) in
             Task {
-                do {
-                    try await self.removeAllLimits()
-                    promise.resolve(true)
-                } catch {
-                    promise.reject("LIMIT_ERROR", "Failed to clear limits: \(error.localizedDescription)")
-                }
+                let store = ManagedSettingsStore()
+                store.clearAllSettings()
+                promise.resolve(true)
             }
         }
-        
+
         // MARK: - Weekly Stats
-        
-        // Get weekly usage statistics
+
         AsyncFunction("getWeeklyStats") { (promise: Promise) in
             Task {
-                do {
-                    let stats = try await self.fetchWeeklyStats()
-                    promise.resolve(stats)
-                } catch {
-                    promise.reject("STATS_ERROR", "Failed to fetch weekly stats: \(error.localizedDescription)")
-                }
+                let calendar = Calendar.current
+                let today = Date()
+                let weekAgo = calendar.date(byAdding: .day, value: -6, to: today) ?? today
+                let stats = self.readUsageForRange(start: weekAgo, end: today)
+                promise.resolve(stats)
             }
         }
-        
+
         // MARK: - Monitoring Setup
-        
-        // Start DeviceActivityCenter daily monitoring schedule
-        // Also records the monitoring start time so the app knows tracking is active
+
         AsyncFunction("setupMonitoring") { (promise: Promise) in
             Task {
-                if #available(iOS 16.0, *) {
-                    let center = DeviceActivityCenter()
-                    let schedule = DeviceActivitySchedule(
-                        intervalStart: DateComponents(hour: 0, minute: 0, second: 0),
-                        intervalEnd: DateComponents(hour: 23, minute: 59, second: 59),
-                        repeats: true
+                let center = DeviceActivityCenter()
+                let schedule = DeviceActivitySchedule(
+                    intervalStart: DateComponents(hour: 0, minute: 0, second: 0),
+                    intervalEnd: DateComponents(hour: 23, minute: 59, second: 59),
+                    repeats: true
+                )
+                do {
+                    try center.startMonitoring(
+                        DeviceActivityName("com.zenyth.daily.tracking"),
+                        during: schedule
                     )
-                    do {
-                        try center.startMonitoring(
-                            DeviceActivityName("com.zenyth.daily.tracking"),
-                            during: schedule
-                        )
-                        // Record monitoring start time so JS side knows when tracking began
-                        if let shared = UserDefaults(suiteName: kAppGroupID) {
-                            if shared.double(forKey: kMonitoringStartedKey) == 0 {
-                                shared.set(Date().timeIntervalSince1970, forKey: kMonitoringStartedKey)
-                            }
+                    // Record monitoring start time
+                    if let shared = UserDefaults(suiteName: kAppGroupID) {
+                        if shared.double(forKey: kMonitoringStartedKey) == 0 {
+                            shared.set(Date().timeIntervalSince1970, forKey: kMonitoringStartedKey)
                         }
-                        print("DeviceActivityModule: Daily monitoring schedule started")
-                        promise.resolve(true)
-                    } catch {
-                        print("DeviceActivityModule: startMonitoring failed: \(error.localizedDescription)")
-                        // Not a fatal error — schedule may already be active
-                        promise.resolve(false)
+                        shared.synchronize()
                     }
-                } else {
+                    print("DeviceActivityModule: Daily monitoring schedule started")
+                    promise.resolve(true)
+                } catch {
+                    print("DeviceActivityModule: startMonitoring failed: \(error.localizedDescription)")
                     promise.resolve(false)
                 }
             }
         }
-        
-        // Returns ISO timestamp (seconds) when monitoring was first started, or 0 if not started
+
         Function("getMonitoringStartedAt") { () -> Double in
             guard let shared = UserDefaults(suiteName: kAppGroupID) else { return 0 }
             return shared.double(forKey: kMonitoringStartedKey)
         }
+
+        // Force the DeviceActivityReport extension to run and refresh App Groups data.
+        // Creates a hidden DeviceActivityReport SwiftUI view, causing makeConfiguration to fire.
+        AsyncFunction("triggerReportUpdate") { (promise: Promise) in
+            Task { @MainActor in
+                guard self.authorizationCenter.authorizationStatus == .approved else {
+                    print("DeviceActivityModule: triggerReportUpdate skipped — not authorized")
+                    promise.resolve(false)
+                    return
+                }
+
+                let filter = DeviceActivityFilter(
+                    segment: .daily(
+                        during: Calendar.current.dateInterval(of: .day, for: Date()) ?? DateInterval()
+                    )
+                )
+                let context = DeviceActivityReport.Context(rawValue: "TotalActivity")
+                let reportView = DeviceActivityReport(context, filter: filter)
+
+                // Embed in a UIHostingController to trigger the extension render pipeline
+                let hostingController = UIHostingController(rootView: reportView)
+                hostingController.view.frame = CGRect(x: 0, y: 0, width: 1, height: 1)
+                hostingController.view.isHidden = true
+
+                if let keyWindow = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene })
+                    .flatMap({ $0.windows })
+                    .first(where: { $0.isKeyWindow }) {
+                    keyWindow.addSubview(hostingController.view)
+
+                    // Give the extension time to run makeConfiguration and write to App Groups
+                    try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+                    hostingController.view.removeFromSuperview()
+                    print("DeviceActivityModule: triggerReportUpdate completed")
+                    promise.resolve(true)
+                } else {
+                    print("DeviceActivityModule: triggerReportUpdate — no key window")
+                    promise.resolve(false)
+                }
+            }
+        }
     }
-    
-    // MARK: - Private Helper Functions
-    
+
+    // MARK: - Private Helpers — Read from App Groups
+
     private func sharedDefaults() -> UserDefaults? {
         return UserDefaults(suiteName: kAppGroupID)
     }
-    
-    private func fetchTodayUsage() async throws -> DailyUsageSummary {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
+
+    private let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = .current
+        return f
+    }()
+
+    /// Reads today's screen time data written by the ScreenTimeReport extension
+    private func readTodayUsage() -> DailyUsageSummary {
         let todayStr = dateFormatter.string(from: Date())
-        
-        // Try to read from App Groups shared container written by DeviceActivityReport extension
+        let key = "\(kTodayDataPrefix)\(todayStr)"
+
         if let defaults = sharedDefaults(),
-           let rawData = defaults.data(forKey: "today_screen_time_\(todayStr)"),
+           let rawData = defaults.data(forKey: key),
            let stored = try? JSONDecoder().decode(StoredDailyUsage.self, from: rawData) {
+            print("DeviceActivityModule: Read today data from App Groups — \(stored.totalSeconds)s")
             var summary = DailyUsageSummary()
             summary.date = stored.date
             summary.totalScreenTimeSeconds = stored.totalSeconds
-            print("DeviceActivityModule: Read today data from App Groups — \(stored.totalSeconds)s")
+            summary.socialMediaSeconds = stored.socialMediaSeconds
+            summary.entertainmentSeconds = stored.entertainmentSeconds
+            summary.productivitySeconds = stored.productivitySeconds
+            summary.gamesSeconds = stored.gamesSeconds
+            summary.otherSeconds = stored.otherSeconds
+            summary.pickupCount = stored.pickupCount
+            summary.notificationCount = stored.notificationCount
             return summary
         }
-        
-        // No data from extension yet — return zero for today (not a stub, just no data)
+
+        print("DeviceActivityModule: No today data in App Groups for \(todayStr)")
         var summary = DailyUsageSummary()
         summary.date = todayStr
         summary.totalScreenTimeSeconds = 0
         return summary
     }
-    
-    private func fetchUsageForRange(start: Date, end: Date) async throws -> [DailyUsageSummary] {
-        // Try App Groups first (written by DeviceActivityReport extension)
-        if let defaults = sharedDefaults(),
-           let rawData = defaults.data(forKey: kWeeklyDataKey),
-           let stored = try? JSONDecoder().decode([StoredDailyUsage].self, from: rawData) {
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy-MM-dd"
-            let startStr = dateFormatter.string(from: start)
-            let endStr = dateFormatter.string(from: end)
-            let filtered = stored.filter { $0.date >= startStr && $0.date <= endStr }
-            if !filtered.isEmpty {
-                print("DeviceActivityModule: Read range data from App Groups — \(filtered.count) days")
-                return filtered.map { item in
-                    var summary = DailyUsageSummary()
-                    summary.date = item.date
-                    summary.totalScreenTimeSeconds = item.totalSeconds
-                    return summary
-                }
-            }
+
+    /// Reads weekly data written by the ScreenTimeReport extension
+    private func readUsageForRange(start: Date, end: Date) -> [DailyUsageSummary] {
+        guard let defaults = sharedDefaults(),
+              let rawData = defaults.data(forKey: kWeeklyDataKey),
+              let stored = try? JSONDecoder().decode([StoredDailyUsage].self, from: rawData) else {
+            print("DeviceActivityModule: No weekly data in App Groups")
+            return []
         }
-        
-        // No extension data available — return empty array so JS falls back to Supabase
-        // or shows "monitoring started" state instead of an all-zero chart
-        return []
+
+        let startStr = dateFormatter.string(from: start)
+        let endStr = dateFormatter.string(from: end)
+        let filtered = stored.filter { $0.date >= startStr && $0.date <= endStr }
+
+        print("DeviceActivityModule: Read \(filtered.count) days from App Groups (range \(startStr)...\(endStr))")
+
+        return filtered.map { item in
+            var summary = DailyUsageSummary()
+            summary.date = item.date
+            summary.totalScreenTimeSeconds = item.totalSeconds
+            summary.socialMediaSeconds = item.socialMediaSeconds
+            summary.entertainmentSeconds = item.entertainmentSeconds
+            summary.productivitySeconds = item.productivitySeconds
+            summary.gamesSeconds = item.gamesSeconds
+            summary.otherSeconds = item.otherSeconds
+            summary.pickupCount = item.pickupCount
+            summary.notificationCount = item.notificationCount
+            return summary
+        }
     }
-    
-    private func fetchTopApps(limit: Int) async throws -> [AppUsageData] {
-        // Requires DeviceActivityReport extension — return empty until extension is added
-        return []
-    }
-    
-    private func setLimitForCategory(category: String, seconds: Int) async throws {
-        let store = ManagedSettingsStore()
-        // App category limits require FamilyActivitySelection from user — no-op for now
-        _ = store
-    }
-    
-    private func removeAllLimits() async throws {
-        let store = ManagedSettingsStore()
-        store.clearAllSettings()
-    }
-    
-    private func fetchWeeklyStats() async throws -> [DailyUsageSummary] {
-        let calendar = Calendar.current
-        let today = Date()
-        let weekAgo = calendar.date(byAdding: .day, value: -6, to: today) ?? today
-        return try await fetchUsageForRange(start: weekAgo, end: today)
+
+    /// Reads top apps data written by the ScreenTimeReport extension
+    private func readTopApps(limit: Int) -> [AppUsageData] {
+        guard let defaults = sharedDefaults(),
+              let rawData = defaults.data(forKey: kTopAppsKey),
+              let stored = try? JSONDecoder().decode([StoredAppUsage].self, from: rawData) else {
+            print("DeviceActivityModule: No top apps data in App Groups")
+            return []
+        }
+
+        let limitedApps = Array(stored.prefix(limit))
+        print("DeviceActivityModule: Read \(limitedApps.count) top apps from App Groups")
+
+        return limitedApps.map { item in
+            var app = AppUsageData()
+            app.bundleId = item.bundleId
+            app.appName = item.appName
+            app.totalTimeSeconds = item.totalTimeSeconds
+            app.category = item.category
+            return app
+        }
     }
 }

@@ -101,11 +101,17 @@ describe('getProductivityChange', () => {
     it('returns isNewUser=true for users created < 7 days ago', () => {
         const twoDaysAgo = new Date();
         twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const yesterdayStr = (() => {
+            const d = new Date();
+            d.setDate(d.getDate() - 1);
+            return d.toISOString().split('T')[0];
+        })();
         useHobbyTimeStore.setState({
             userCreatedDate: twoDaysAgo.toISOString(),
             weeklyData: [
-                { date: '2026-02-10', seconds: 1800 },
-                { date: '2026-02-11', seconds: 3600 },
+                { date: yesterdayStr, seconds: 1800 },
+                { date: todayStr, seconds: 3600 },
             ],
         });
         const result = useHobbyTimeStore.getState().getProductivityChange();
@@ -115,11 +121,17 @@ describe('getProductivityChange', () => {
     it('calculates day-to-day change for new users', () => {
         const twoDaysAgo = new Date();
         twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const yesterdayStr = (() => {
+            const d = new Date();
+            d.setDate(d.getDate() - 1);
+            return d.toISOString().split('T')[0];
+        })();
         useHobbyTimeStore.setState({
             userCreatedDate: twoDaysAgo.toISOString(),
             weeklyData: [
-                { date: '2026-02-10', seconds: 1000 },
-                { date: '2026-02-11', seconds: 2000 }, // +100%
+                { date: yesterdayStr, seconds: 1000 },
+                { date: todayStr, seconds: 2000 }, // +100%
             ],
         });
         const result = useHobbyTimeStore.getState().getProductivityChange();
@@ -129,11 +141,17 @@ describe('getProductivityChange', () => {
     it('returns 100 when yesterday was 0', () => {
         const twoDaysAgo = new Date();
         twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const yesterdayStr = (() => {
+            const d = new Date();
+            d.setDate(d.getDate() - 1);
+            return d.toISOString().split('T')[0];
+        })();
         useHobbyTimeStore.setState({
             userCreatedDate: twoDaysAgo.toISOString(),
             weeklyData: [
-                { date: '2026-02-10', seconds: 0 },
-                { date: '2026-02-11', seconds: 500 },
+                { date: yesterdayStr, seconds: 0 },
+                { date: todayStr, seconds: 500 },
             ],
         });
         const result = useHobbyTimeStore.getState().getProductivityChange();
@@ -144,15 +162,27 @@ describe('getProductivityChange', () => {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        // Create 14 days of data: first 7 days @ 1000s, last 7 days @ 2000s
-        const weeklyData = [];
-        for (let i = 13; i >= 0; i--) {
-            const d = new Date();
-            d.setDate(d.getDate() - i);
-            weeklyData.push({
-                date: d.toISOString().split('T')[0],
-                seconds: i >= 7 ? 1000 : 2000, // first 7 = 1000, last 7 = 2000
-            });
+        // Build data aligned with actual calendar week boundaries
+        const today = new Date();
+        const dayOfWeek = today.getDay(); // 0=Sun
+        const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+        const thisMonday = new Date(today);
+        thisMonday.setDate(today.getDate() - daysFromMonday);
+
+        const weeklyData: { date: string; seconds: number }[] = [];
+
+        // Last week: all 7 days at 1000s each
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(thisMonday);
+            d.setDate(thisMonday.getDate() - 7 + i);
+            weeklyData.push({ date: d.toISOString().split('T')[0], seconds: 1000 });
+        }
+        // This week: all days from Monday to today at 2000s each
+        for (let i = 0; i <= daysFromMonday; i++) {
+            const d = new Date(thisMonday);
+            d.setDate(thisMonday.getDate() + i);
+            weeklyData.push({ date: d.toISOString().split('T')[0], seconds: 2000 });
         }
 
         useHobbyTimeStore.setState({
@@ -162,8 +192,10 @@ describe('getProductivityChange', () => {
 
         const result = useHobbyTimeStore.getState().getProductivityChange();
         expect(result.isNewUser).toBe(false);
-        // This week = 7 * 2000 = 14000, last week = 7 * 1000 = 7000
-        // Change = ((14000 - 7000) / 7000) * 100 = 100
-        expect(result.value).toBe(100);
+        // lastWeekTotal = 7 * 1000 = 7000
+        // thisWeekTotal = (daysFromMonday + 1) * 2000
+        const thisWeekTotal = (daysFromMonday + 1) * 2000;
+        const expectedChange = Math.round(((thisWeekTotal - 7000) / 7000) * 100);
+        expect(result.value).toBe(expectedChange);
     });
 });

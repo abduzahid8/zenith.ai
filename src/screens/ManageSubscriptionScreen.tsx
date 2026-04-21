@@ -16,7 +16,13 @@ import { useSubscriptionStore, openManageSubscriptions } from '../store/subscrip
 import { PRODUCT_IDS, IOS_SKUS, ANDROID_SKUS } from '../services/iapService';
 import { useAppTheme } from '../theme/useAppTheme';
 import { fonts } from '../theme';
-import { scale, IS_TABLET, TABLET_SIDE_PADDING } from '../constants';
+import {
+    scale,
+    IS_TABLET,
+    TABLET_SIDE_PADDING,
+    PRIVACY_POLICY_URL,
+    TERMS_OF_USE_URL,
+} from '../constants';
 import { useT } from '../store/languageStore';
 
 // ── Premium features ─────────────────────────────────────
@@ -69,8 +75,14 @@ export const ManageSubscriptionScreen: React.FC = () => {
     };
 
     const handlePrivacy = () => {
-        Linking.openURL('https://zenyth-ai-privacy.vercel.app/').catch((err) =>
+        Linking.openURL(PRIVACY_POLICY_URL).catch((err) =>
             console.error('[ManageSubscriptionScreen] Privacy URL failed:', err)
+        );
+    };
+
+    const handleTerms = () => {
+        Linking.openURL(TERMS_OF_USE_URL).catch((err) =>
+            console.error('[ManageSubscriptionScreen] Terms URL failed:', err)
         );
     };
 
@@ -251,6 +263,32 @@ export const ManageSubscriptionScreen: React.FC = () => {
                                     <Text style={styles.actionTitle}>{t('Политика конфиденциальности')}</Text>
                                     <Text style={styles.actionSubtitle}>
                                         View our privacy policy
+                                    </Text>
+                                </View>
+                            </View>
+                            <Ionicons name="chevron-forward" size={scale(16)} color={colors.textSecondary} />
+                        </TouchableOpacity>
+
+                        <View style={styles.actionDivider} />
+
+                        {/* Terms of Use */}
+                        <TouchableOpacity
+                            style={styles.actionRow}
+                            onPress={handleTerms}
+                            activeOpacity={0.7}
+                        >
+                            <View style={styles.actionLeft}>
+                                <View style={[styles.actionIconWrap, { backgroundColor: '#5E5CE6' + '18' }]}>
+                                    <Ionicons
+                                        name="document-text-outline"
+                                        size={scale(18)}
+                                        color="#5E5CE6"
+                                    />
+                                </View>
+                                <View style={styles.actionInfo}>
+                                    <Text style={styles.actionTitle}>Terms of Use</Text>
+                                    <Text style={styles.actionSubtitle}>
+                                        View the subscription terms and EULA
                                     </Text>
                                 </View>
                             </View>

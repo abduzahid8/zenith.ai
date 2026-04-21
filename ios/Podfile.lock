@@ -1,6 +1,4 @@
 PODS:
-  - DeviceActivity (1.0.0):
-    - ExpoModulesCore
   - EXApplication (7.0.8):
     - ExpoModulesCore
   - EXConstants (18.0.13):
@@ -212,7 +210,6 @@ PODS:
     - ExpoModulesCore
   - ExpoCrypto (15.0.8):
     - ExpoModulesCore
-  - ExpoDeviceActivity (1.0.0)
   - ExpoFileSystem (19.0.21):
     - ExpoModulesCore
   - ExpoFont (14.0.11):
@@ -2271,7 +2268,6 @@ PODS:
   - Yoga (0.0.0)
 
 DEPENDENCIES:
-  - DeviceActivity (from `../modules/device-activity/ios`)
   - EXApplication (from `../node_modules/expo-auth-session/node_modules/expo-application/ios`)
   - EXConstants (from `../node_modules/expo-constants/ios`)
   - EXJSONUtils (from `../node_modules/expo-json-utils/ios`)
@@ -2285,7 +2281,6 @@ DEPENDENCIES:
   - ExpoAsset (from `../node_modules/expo-asset/ios`)
   - ExpoBlur (from `../node_modules/expo-blur/ios`)
   - ExpoCrypto (from `../node_modules/expo-crypto/ios`)
-  - ExpoDeviceActivity (from `../modules/device-activity/ios`)
   - ExpoFileSystem (from `../node_modules/expo/node_modules/expo-file-system/ios`)
   - ExpoFont (from `../node_modules/expo-font/ios`)
   - ExpoHaptics (from `../node_modules/expo-haptics/ios`)
@@ -2381,8 +2376,6 @@ SPEC REPOS:
     - openiap
 
 EXTERNAL SOURCES:
-  DeviceActivity:
-    :path: "../modules/device-activity/ios"
   EXApplication:
     :path: "../node_modules/expo-auth-session/node_modules/expo-application/ios"
   EXConstants:
@@ -2409,8 +2402,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-blur/ios"
   ExpoCrypto:
     :path: "../node_modules/expo-crypto/ios"
-  ExpoDeviceActivity:
-    :path: "../modules/device-activity/ios"
   ExpoFileSystem:
     :path: "../node_modules/expo/node_modules/expo-file-system/ios"
   ExpoFont:
@@ -2590,9 +2581,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
-  DeviceActivity: 25915722cd91873619643bc1d1687a85db44e7e3
   EXApplication: 13420f8139864183f8a04fd6099077bdf8cfb186
-  EXConstants: 5294f12d5d1cf6de63139b79056778e73a7db29f
+  EXConstants: 3feb66fd1d94202fc1f0946d74e029d8b224b60e
   EXJSONUtils: 1d3e4590438c3ee593684186007028a14b3686cd
   EXManifests: 83ef0844fcf06d6099b12a7bdbd7d36fc0e1dd16
   Expo: 7f5e64b5d18096dcec86814764b526b0cb97811c
@@ -2604,7 +2594,6 @@ SPEC CHECKSUMS:
   ExpoAsset: d999f3bbd998a750f3b74cb913229848901b926b
   ExpoBlur: 688c53d5d26575cbb6c72e7fbd4caef8d8cfadf6
   ExpoCrypto: 4d23a9ff67c25e2ed23ca792d81e58817a7ea1b9
-  ExpoDeviceActivity: 4210eb2d238c61537b0c75e7b1433f53c949cca5
   ExpoFileSystem: aefcd337b94b874f88752ebefc52813b84992fad
   ExpoFont: c625dbd97ed57e9089b172b2a7bb99003d074664
   ExpoHaptics: 7240781406f4563c3f4eb1e72864302a8c643fd0
@@ -2621,7 +2610,7 @@ SPEC CHECKSUMS:
   FBLazyVector: e95a291ad2dadb88e42b06e0c5fb8262de53ec12
   hermes-engine: 3eac92a9fab2663c1c3566084e1a9d0369adeffc
   openiap: 2825d732c9d081fd5a5d0d09b2f67c2d655f4ed4
-  RCTDeprecation: efa45c6cbba51001de7d6e0b0a0c51b967c43a34
+  RCTDeprecation: 943572d4be82d480a48f4884f670135ae30bf990
   RCTRequired: 8f3cfc90cc25cf6e420ddb3e7caaaabc57df6043
   RCTTypeSafety: 16a4144ca3f959583ab019b57d5633df10b5e97c
   React: 914f8695f9bf38e6418228c2ffb70021e559f92f
@@ -2691,10 +2680,10 @@ SPEC CHECKSUMS:
   RNGestureHandler: 6a488ce85c88e82d8610db1108daf04e9b2d5162
   RNReanimated: 43f611f1c85c90e0273df7399bf1536f8e2bd125
   RNScreens: dd61bc3a3e6f6901ad833efa411917d44827cf51
-  RNSVG: 540b2dc8fd4d90523c8962fc9de4695ce8098ae2
+  RNSVG: 1ddbd33cfa8fd5eb730f93402f6e57b6370656ae
   RNWorklets: 28ee7370ca8da356fcc914e3e68b97e9752196d2
   Yoga: 3fd22c2cae22d7a2b0f0b538f55f7c2a17dc94d5
 
 PODFILE CHECKSUM: aa446a4c884a8868090f6ef05c885d31eed4de65
 
-COCOAPODS: 1.12.1
+COCOAPODS: 1.16.2

@@ -9,19 +9,17 @@ import {
     ActivityIndicator,
     Platform,
     Linking,
-    Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LogoNew } from '../components/Logo';
 import { Button } from '../components/Button';
 import { fonts } from '../theme';
-import { scale } from '../constants';
+import { PRIVACY_POLICY_URL, scale, TERMS_OF_USE_URL } from '../constants';
 import { ROUTES } from '../config/routes';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { useSubscriptionStore } from '../store/subscriptionStore';
-import { PRODUCT_IDS, getSku, ALL_SKUS } from '../services/iapService';
+import { PRODUCT_IDS } from '../services/iapService';
 import { useAppTheme } from '../theme/useAppTheme';
 
 // ── Helpers ─────────────────────────────────────────────
@@ -30,6 +28,14 @@ import { useAppTheme } from '../theme/useAppTheme';
 function getDisplayPrice(product: any): string {
     // expo-iap Product returns displayPrice on iOS (e.g. "$2.99")
     return product?.displayPrice ?? '—';
+}
+
+async function openExternalUrl(url: string) {
+    try {
+        await Linking.openURL(url);
+    } catch (error) {
+        console.error('[SubscriptionScreen] Failed to open URL:', url, error);
+    }
 }
 
 // ── Free plan features ──────────────────────────────────
@@ -58,15 +64,11 @@ const PREMIUM_FEATURES = [
 export const SubscriptionScreen: React.FC = () => {
     const router = useRouter();
     const { completeOnboarding, subscriptionLevel } = useUserProfileStore();
-    // Capture whether the user was already active/premium when this screen mounted,
-    // so we can distinguish "redirect existing subscriber" vs "just purchased".
-    const wasActiveOnMount = useRef(false);
     // Set to true only when the user explicitly taps Buy or Restore.
     // Prevents background checkStatus() from mistakenly navigating to the main app.
     const hasPurchaseIntent = useRef(false);
     const {
         products,
-        isActive,
         isLoading,
         isPurchasing,
         isRestoring,
@@ -81,7 +83,6 @@ export const SubscriptionScreen: React.FC = () => {
     const platformMonthlyId = Platform.OS === 'ios' ? PRODUCT_IDS.IOS.MONTHLY : PRODUCT_IDS.ANDROID.MONTHLY;
     const platformAnnualId = Platform.OS === 'ios' ? PRODUCT_IDS.IOS.ANNUAL : PRODUCT_IDS.ANDROID.ANNUAL;
     const [selectedSku, setSelectedSku] = useState<string>(platformMonthlyId);
-    const [showSuccessModal, setShowSuccessModal] = useState(false);
 
     // Ensure products are loaded
     useEffect(() => {
@@ -91,21 +92,6 @@ export const SubscriptionScreen: React.FC = () => {
         }
     }, []);
 
-    // Track when isPurchasing finishes
-    const prevIsPurchasing = useRef(isPurchasing);
-    
-    useEffect(() => {
-        if (prevIsPurchasing.current && !isPurchasing) {
-            // isPurchasing just finished
-            if (isActive && hasPurchaseIntent.current && !error) {
-                console.log('[SubscriptionScreen] Purchase succeeded, showing modal');
-                completeOnboarding();
-                setShowSuccessModal(true);
-            }
-        }
-        prevIsPurchasing.current = isPurchasing;
-    }, [isPurchasing, isActive, error]);
-
     // Look up products by `id` (expo-iap Product field)
     const monthlyProduct = products.find((p) => p.id === platformMonthlyId);
     const annualProduct = products.find((p) => p.id === platformAnnualId);
@@ -114,8 +100,27 @@ export const SubscriptionScreen: React.FC = () => {
         console.log('[SubscriptionScreen] handlePurchase pressed - selectedSku:', selectedSku);
         hasPurchaseIntent.current = true;
         await purchase(selectedSku);
-        // Navigation is handled by the isActive useEffect above once the
-        // purchaseUpdatedListener fires and sets isActive=true in the store.
+
+        // Read final state directly (same pattern as handleRestore / handleSelectFree)
+        let { isActive: nowActive, error: nowError } = useSubscriptionStore.getState();
+
+        // Fallback: if purchase() resolved but isActive is still false and no error,
+        // do one final native subscription check (covers slow StoreKit propagation).
+        if (!nowActive && !nowError) {
+            console.log('[SubscriptionScreen] isActive still false after purchase — running fallback checkStatus');
+            try {
+                await useSubscriptionStore.getState().checkStatus();
+                const updated = useSubscriptionStore.getState();
+                nowActive = updated.isActive;
+                nowError = updated.error;
+            } catch {}
+        }
+
+        if (nowActive && !nowError) {
+            console.log('[SubscriptionScreen] Purchase succeeded — navigating to app');
+            completeOnboarding();
+            router.replace(ROUTES.APP as any);
+        }
     };
 
     const handleSelectFree = () => {
@@ -130,21 +135,14 @@ export const SubscriptionScreen: React.FC = () => {
         hasPurchaseIntent.current = true;
         await restore();
 
-        // If isActive was already true, the useEffect above won't trigger because the dependency
-        // didn't change. We need to manually handle success here.
         if (useSubscriptionStore.getState().isActive) {
-            console.log('[SubscriptionScreen] handleRestore fallback - isActive is true, showing success');
+            console.log('[SubscriptionScreen] Restore succeeded — navigating to app');
             completeOnboarding();
-            setShowSuccessModal(true);
+            router.replace(ROUTES.APP as any);
         }
     };
 
     const isBusy = isPurchasing || isRestoring;
-
-    const handleSuccessContinue = () => {
-        setShowSuccessModal(false);
-        router.replace(ROUTES.APP as any);
-    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -172,7 +170,7 @@ export const SubscriptionScreen: React.FC = () => {
                     style={[
                         styles.planCard,
                         styles.monthlyCard,
-                        selectedSku === platformMonthlyId && styles.planCardSelected,
+                        selectedSku === platformMonthlyId && styles.monthlyCardSelected,
                     ]}
                     onPress={() => setSelectedSku(platformMonthlyId)}
                     activeOpacity={0.9}
@@ -202,7 +200,7 @@ export const SubscriptionScreen: React.FC = () => {
                     style={[
                         styles.planCard,
                         styles.annualCard,
-                        selectedSku === platformAnnualId && styles.planCardSelected,
+                        selectedSku === platformAnnualId && styles.annualCardSelected,
                     ]}
                     onPress={() => setSelectedSku(platformAnnualId)}
                     activeOpacity={0.9}
@@ -238,9 +236,17 @@ export const SubscriptionScreen: React.FC = () => {
                         through your {Platform.OS === 'ios' ? 'App Store' : 'Google Play'} account. Manage your subscription and disable
                         auto-renewal in your {Platform.OS === 'ios' ? 'App Store' : 'Google Play'} account settings after purchase.
                     </Text>
-                    <TouchableOpacity onPress={() => Linking.openURL('https://zenyth-ai-privacy.vercel.app/')}>
-                        <Text style={styles.disclosureLink}>Privacy Policy</Text>
-                    </TouchableOpacity>
+                    <Text style={styles.disclosureHint}>
+                        By continuing, you agree to the Terms of Use and Privacy Policy.
+                    </Text>
+                    <View style={styles.disclosureLinksRow}>
+                        <TouchableOpacity onPress={() => openExternalUrl(PRIVACY_POLICY_URL)}>
+                            <Text style={styles.disclosureLink}>Privacy Policy</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => openExternalUrl(TERMS_OF_USE_URL)}>
+                            <Text style={styles.disclosureLink}>Terms of Use</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </ScrollView>
 
@@ -258,13 +264,15 @@ export const SubscriptionScreen: React.FC = () => {
                             ? 'Processing...'
                             : isLoading
                                 ? 'Loading...'
-                                : 'Get Premium'
+                                : products.length === 0
+                                    ? 'Retry Loading'
+                                    : 'Get Premium'
                     }
-                    onPress={handlePurchase}
+                    onPress={products.length === 0 && !isLoading ? () => initialize() : handlePurchase}
                     variant="primary"
                     size="large"
                     style={styles.continueButton}
-                    disabled={isBusy || isLoading || products.length === 0}
+                    disabled={isBusy || isLoading}
                 />
 
                 {/* Restore button */}
@@ -292,32 +300,6 @@ export const SubscriptionScreen: React.FC = () => {
                 </TouchableOpacity>
             </View>
 
-            {/* Success Modal */}
-            <Modal
-                visible={showSuccessModal}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={handleSuccessContinue}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalIconContainer}>
-                            <Ionicons name="star" size={scale(40)} color="#FFD700" />
-                        </View>
-                        <Text style={styles.modalTitle}>Welcome to Premium!</Text>
-                        <Text style={styles.modalText}>
-                            Your subscription is active. Get ready to unlock your full potential with unlimited features.
-                        </Text>
-                        <Button
-                            title="Start Premium"
-                            onPress={handleSuccessContinue}
-                            variant="primary"
-                            size="large"
-                            style={styles.modalButton}
-                        />
-                    </View>
-                </View>
-            </Modal>
         </SafeAreaView>
     );
 };
@@ -362,14 +344,17 @@ const createStyles = (colors: any) => StyleSheet.create({
         borderWidth: 2,
         borderColor: 'transparent',
     },
-    planCardSelected: {
-        borderColor: colors.buttonPrimary,
+    monthlyCardSelected: {
+        borderColor: '#0D2A6B',
     },
     monthlyCard: {
         backgroundColor: colors.subscription?.freeCardBg || colors.surfaceLight,
     },
     annualCard: {
         backgroundColor: colors.buttonPrimary,
+    },
+    annualCardSelected: {
+        borderColor: '#37A0EF',
     },
     planHeader: {
         flexDirection: 'row',
@@ -397,7 +382,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         color: colors.text,
     },
     premiumPrice: {
-        color: colors.subscription?.premiumAccent || '#FFD700',
+        color: '#FFFFFF',
     },
     priceContainer: {
         flexDirection: 'row',
@@ -467,6 +452,21 @@ const createStyles = (colors: any) => StyleSheet.create({
         marginTop: scale(6),
         textDecorationLine: 'underline',
     },
+    disclosureHint: {
+        fontFamily: fonts.body.regular,
+        fontSize: scale(11),
+        lineHeight: scale(16),
+        color: colors.textSecondary,
+        textAlign: 'center',
+        marginTop: scale(8),
+    },
+    disclosureLinksRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: scale(16),
+        flexWrap: 'wrap',
+    },
     buttonContainer: {
         paddingHorizontal: scale(24),
         paddingBottom: scale(10),
@@ -507,7 +507,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     discountBadge: {
         fontFamily: fonts.heading.medium,
         fontSize: scale(12),
-        color: colors.subscription?.premiumAccent || '#FFD700',
+        color: '#FFFFFF',
         textAlign: 'right',
         marginTop: scale(2),
     },

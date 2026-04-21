@@ -1,15 +1,9 @@
 {
     "platforms": [
-        "android",
-        "ios"
+        "android"
     ],
     "android": {
         "package": "expo.modules.deviceactivity",
-        "modules": [
-            "DeviceActivityModule"
-        ]
-    },
-    "ios": {
         "modules": [
             "DeviceActivityModule"
         ]

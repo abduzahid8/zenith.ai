@@ -167,13 +167,56 @@ export const useSubscriptionStore = create<SubscriptionState>()(
 
                 set({ isPurchasing: true, error: null });
 
+                // Safety net: if neither onPurchaseSuccess nor onPurchaseError fires within
+                // 130 seconds (10s beyond the iapService timeout), force-reset isPurchasing
+                // so the UI never gets permanently stuck in a loading state.
+                const safetyTimeoutId = setTimeout(() => {
+                    if (get().isPurchasing) {
+                        console.warn('[subscriptionStore] Safety timeout reached — resetting isPurchasing');
+                        set({ isPurchasing: false, error: 'Purchase timed out. Please try again.' });
+                    }
+                }, 130_000);
+
                 try {
                     await iapService.purchaseSubscription(sku);
-                    // Result comes via purchaseUpdatedListener → onPurchaseSuccess
+                    // requestPurchase resolved. If isPurchasing is still true,
+                    // the result hasn't arrived yet (expected via listener).
+                    // Poll as fallback in case the listener doesn't fire.
+                    if (get().isPurchasing) {
+                        for (let i = 0; i < 15; i++) {
+                            await new Promise(r => setTimeout(r, 3000));
+                            if (!get().isPurchasing) break; // Listener already fired
+                            try {
+                                const { isActive, productId } = await iapService.checkActiveSubscription();
+                                if (isActive) {
+                                    clearTimeout(safetyTimeoutId);
+                                    console.log('[subscriptionStore] Fallback poll found active subscription');
+                                    set({ isActive, activeProductId: productId, isPurchasing: false, error: null });
+                                    syncPremiumStatus(true);
+                                    break;
+                                }
+                            } catch { }
+                        }
+                        // If polling exhausted without finding subscription, reset isPurchasing
+                        // so the UI doesn't stay stuck on "Processing..." until safety timeout.
+                        if (get().isPurchasing) {
+                            clearTimeout(safetyTimeoutId);
+                            console.log('[subscriptionStore] Polling exhausted — resetting isPurchasing');
+                            set({ isPurchasing: false });
+                        }
+                    }
                 } catch (_err: any) {
+                    clearTimeout(safetyTimeoutId);
                     console.log('[subscriptionStore] purchase error:', _err);
                     const errorMessage = String(_err?.message || '');
-                    
+
+                    // Stale transaction was cleared — reset state silently so user can retry
+                    if (_err?.code === 'STALE_TRANSACTION') {
+                        console.log('[subscriptionStore] Stale transaction cleared, resetting for retry');
+                        set({ isPurchasing: false, error: null });
+                        return;
+                    }
+
                     // If the user already owns the subscription, process it as a successful restore
                     if (errorMessage.toLowerCase().includes('already owned') || _err?.code === 'E_ALREADY_OWNED' || _err?.code === 'already-owned') {
                         console.log('[subscriptionStore] Item already owned, triggering internal restore');
@@ -189,6 +232,12 @@ export const useSubscriptionStore = create<SubscriptionState>()(
                             syncPremiumStatus(isActive);
                             if (!isActive) {
                                 set({ isPurchasing: false, error: 'Подписка не найдена' });
+                            } else {
+                                // Add visible feedback so the user knows why it "skipped" the payment sheet
+                                Alert.alert(
+                                    'Подписка восстановлена',
+                                    'Ваш Apple ID уже имеет активную подписку. Покупка восстановлена автоматически.'
+                                );
                             }
                         } catch (restoreErr) {
                             set({ isPurchasing: false, error: 'Ошибка при восстановлении' });
@@ -196,9 +245,9 @@ export const useSubscriptionStore = create<SubscriptionState>()(
                         return;
                     }
 
-                    set({ 
-                        isPurchasing: false, 
-                        error: _err?.message || 'Не удалось начать покупку' 
+                    set({
+                        isPurchasing: false,
+                        error: _err?.message || 'Не удалось начать покупку'
                     });
                 }
             },
@@ -272,6 +321,11 @@ export const useSubscriptionStore = create<SubscriptionState>()(
 
             reset: () => {
                 console.log('[subscriptionStore] reset called');
+                // Tear down the IAP connection so the next initialize() creates a
+                // fresh StoreKit connection with new listeners.  Without this,
+                // the module-level `connected` flag stays true after sign-out and
+                // setup() short-circuits, potentially leaving a dead connection.
+                iapService.teardown().catch(() => { });
                 set(initialState);
             },
         }),

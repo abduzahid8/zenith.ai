@@ -11,6 +11,7 @@ import {
     Platform,
     Linking,
     Image,
+    AppState,
 } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { WeeklyBarChart } from '../../components/WeeklyBarChart';
@@ -21,6 +22,7 @@ import { scale, SCREEN_WIDTH } from '../../constants';
 import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useT, useLanguageStore } from '../../store/languageStore';
+import { isScreenTimeAvailable } from '../../../modules/device-activity';
 
 const WEEK_DAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEK_DAYS_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -67,6 +69,7 @@ export const ScreenTimeTab: React.FC = () => {
 
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
+    const isIosHobbyOnly = Platform.OS === 'ios' && !isScreenTimeAvailable();
 
     // Hobby time data — Mon→Sun of current week; falls back to last week if no data yet
     const hobbyChartData = useMemo(() => {
@@ -117,6 +120,9 @@ export const ScreenTimeTab: React.FC = () => {
     const { value: productivityValue, isNewUser } = useMemo(() => getProductivityChange(), [hobbyWeeklyData]);
 
     useEffect(() => {
+        if (isIosHobbyOnly) {
+            return;
+        }
         const init = async () => {
             console.log('[ScreenTimeTab] Initializing screen time data');
             const granted = await checkPermission();
@@ -127,7 +133,26 @@ export const ScreenTimeTab: React.FC = () => {
             await Promise.all([fetchWeeklyData(), fetchTodayData()]);
         };
         init();
-    }, [checkPermission, fetchWeeklyData, fetchTodayData]);
+    }, [checkPermission, fetchWeeklyData, fetchTodayData, isIosHobbyOnly]);
+
+    // Re-check permission when user returns from Settings (critical for Android)
+    useEffect(() => {
+        if (isIosHobbyOnly) {
+            return;
+        }
+        const subscription = AppState.addEventListener('change', async (nextState) => {
+            if (nextState === 'active') {
+                console.log('[ScreenTimeTab] App returned to foreground — re-checking permission');
+                const granted = await checkPermission();
+                if (granted) {
+                    setShowPermissionModal(false);
+                    setShowManualSteps(false);
+                    await Promise.all([fetchWeeklyData(), fetchTodayData()]);
+                }
+            }
+        });
+        return () => subscription.remove();
+    }, [checkPermission, fetchWeeklyData, fetchTodayData, isIosHobbyOnly]);
 
     const handleGrantAccess = async () => {
         console.log('[ScreenTimeTab] handleGrantAccess pressed - requesting permission');
@@ -180,6 +205,43 @@ export const ScreenTimeTab: React.FC = () => {
     );
     const hasAnalyticsData = hasRealData;
     const hasHobbyData = hobbyWeeklyData.length > 0;
+
+    if (isIosHobbyOnly) {
+        return (
+            <View style={styles.container}>
+                <ScrollView
+                    style={styles.page}
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    <Text style={styles.screenTitle}>{t('Время Хобби')}</Text>
+                    <HobbyTimeBarChart data={hobbyChartData} />
+
+                    <View style={styles.statCardPurple}>
+                        <Text style={styles.statCardBigText}>
+                            {productivityValue >= 0 ? '+' : ''}{productivityValue}%
+                        </Text>
+                        <Text style={styles.lastWeekText}>
+                            {isNewUser ? t('Top productivity') : t('За последнюю неделю')}
+                        </Text>
+                    </View>
+
+                    <View style={styles.statCardDarkPurple}>
+                        <Text style={styles.statCardBigText}>{hobbyTotalFormatted}</Text>
+                        <Text style={styles.screenTimeText}>{t('Spend time on Hobby')}</Text>
+                    </View>
+
+                    {!hasHobbyData && (
+                        <View style={styles.emptyHint}>
+                            <Text style={styles.emptyHintText}>
+                                Complete hobby tasks to start tracking your productive time.
+                            </Text>
+                        </View>
+                    )}
+                </ScrollView>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>

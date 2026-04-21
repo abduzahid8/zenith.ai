@@ -104,7 +104,7 @@ export const HOBBIES_DATABASE: Hobby[] = [
         id: 'chinese',
         title: 'Chinese Language',
         titleRu: 'Китайский язык',
-        emoji: '��',
+        emoji: '🇨🇳',
         category: 'intellectual',
         description: 'Изучай язык 1.4 миллиарда людей',
         whyFitsYou: [
