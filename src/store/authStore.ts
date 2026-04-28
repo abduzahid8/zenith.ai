@@ -375,7 +375,30 @@ export const useAuthStore = create<AuthState>()(
                 set({ isLoading: true, error: null });
                 await authService.deleteAccount();
                 console.log('[authStore] authService.deleteAccount() returned success! Proceeding to signOut().');
-                await get().signOut();
+
+                // After deleting the user from auth.users, server-side signOut may fail.
+                // We catch that gracefully and still clear all local state.
+                try {
+                    await get().signOut();
+                } catch (signOutError) {
+                    console.warn('[authStore] signOut() after deleteAccount failed (expected if user was removed):', signOutError);
+                    // Manually reset all stores since signOut() threw before doing it
+                    useUserProfileStore.getState().resetProfile();
+                    useTaskStore.getState().resetTasks();
+                    useHobbyTimeStore.getState().reset();
+                    useQuizStore.getState().resetQuiz();
+                    useScreenTimeStore.getState().reset();
+                    useEarningsStore.getState().reset();
+                    useContentStore.getState().reset();
+                    useDeviceScreenTimeStore.getState().reset();
+                    useSubscriptionStore.getState().reset();
+                    set({
+                        user: null,
+                        session: null,
+                        isAuthenticated: false,
+                        isLoading: false,
+                    });
+                }
                 console.log('[authStore] signOut() completed successfully.');
             } catch (error: unknown) {
                 console.error('[authStore] Delete account error caught:', error);

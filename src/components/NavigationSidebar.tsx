@@ -282,6 +282,14 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                     <Ionicons name="arrow-back-outline" size={scale(16)} color={colors.text} />
                                     <Text style={styles.logoutText}>{t('Выйти')}</Text>
                                 </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.deleteAccountButton}
+                                    onPress={handleDeleteAccount}
+                                    activeOpacity={0.7}
+                                >
+                                    <Ionicons name="trash-outline" size={scale(14)} color={colors.error} />
+                                    <Text style={styles.deleteAccountText}>{t('Удалить аккаунт')}</Text>
+                                </TouchableOpacity>
                             </View>
                         </View>
                     </View>
@@ -488,6 +496,19 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontSize: 10,
         fontWeight: '700',
         lineHeight: 22,
+        marginLeft: scale(4),
+    },
+    deleteAccountButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: scale(6),
+    },
+    deleteAccountText: {
+        color: colors.error,
+        fontFamily: fonts.heading.bold,
+        fontSize: 10,
+        fontWeight: '700',
+        lineHeight: 18,
         marginLeft: scale(4),
     },
     navigationSection: {
