@@ -64,8 +64,16 @@ export const MultipleChoiceTest: React.FC<MultipleChoiceTestProps> = ({
 
     return (
         <View style={styles.container}>
+            {/* Ambient glowing backdrops */}
+            <View style={styles.glowTopLeft} />
+            <View style={styles.glowBottomRight} />
+
             {/* Вопрос */}
             <View style={styles.questionCard}>
+                <View style={styles.cardHeader}>
+                    <View style={styles.headerDot} />
+                    <Text style={styles.headerLabel}>ТЕОРЕТИЧЕСКИЙ ТЕСТ</Text>
+                </View>
                 <Text style={styles.questionText}>{question}</Text>
             </View>
 
@@ -79,7 +87,9 @@ export const MultipleChoiceTest: React.FC<MultipleChoiceTestProps> = ({
                         disabled={answered}
                         activeOpacity={0.75}
                     >
-                        <Text style={styles.optionLabel}>{getOptionLabel(index)}</Text>
+                        <Text style={[styles.optionLabel, answered && { color: 'rgba(255, 255, 255, 0.7)' }]}>
+                            {getOptionLabel(index)}
+                        </Text>
                         <Text style={[styles.optionText, getOptionTextStyle(index)]}>
                             {option}
                         </Text>
@@ -95,77 +105,130 @@ const createStyles = (colors: any) => {
     return StyleSheet.create({
         container: {
             flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            width: '100%',
+            position: 'relative',
+        },
+        glowTopLeft: {
+            position: 'absolute',
+            top: -scale(40),
+            left: -scale(40),
+            width: scale(240),
+            height: scale(240),
+            borderRadius: scale(120),
+            backgroundColor: '#8CDEFF',
+            opacity: 0.15,
+            zIndex: -1,
+        },
+        glowBottomRight: {
+            position: 'absolute',
+            bottom: -scale(60),
+            right: -scale(40),
+            width: scale(260),
+            height: scale(260),
+            borderRadius: scale(130),
+            backgroundColor: '#F4C0FD',
+            opacity: 0.18,
+            zIndex: -1,
         },
         questionCard: {
-            backgroundColor: g.theoryCard || '#D6EEFF',
-            borderRadius: scale(16),
-            padding: scale(20),
-            marginBottom: scale(24),
-            borderWidth: 1,
-            borderColor: g.theoryCardBorder || '#B8D8F0',
+            backgroundColor: '#FFFFFF',
+            borderRadius: scale(24),
+            padding: scale(24),
+            marginBottom: scale(28),
+            borderWidth: 0,
+            width: '100%',
+            shadowColor: '#0F2147',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.04,
+            shadowRadius: 20,
+            elevation: 3,
+        },
+        cardHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: scale(6),
+            marginBottom: scale(14),
+            justifyContent: 'center',
+        },
+        headerDot: {
+            width: scale(6),
+            height: scale(6),
+            borderRadius: scale(3),
+            backgroundColor: '#37a0ef',
+        },
+        headerLabel: {
+            fontFamily: fonts.heading.bold,
+            fontSize: scale(10),
+            color: 'rgba(15, 33, 71, 0.4)',
+            letterSpacing: 1.5,
         },
         questionText: {
             fontFamily: fonts.heading.bold,
-            fontSize: scale(18),
-            lineHeight: scale(26),
-            color: colors.text || '#08132A',
+            fontSize: scale(19),
+            lineHeight: scale(28),
+            color: '#1A253C',
             textAlign: 'center',
         },
         optionsGrid: {
             flexDirection: 'row',
             flexWrap: 'wrap',
             gap: scale(12),
+            justifyContent: 'center',
+            width: '100%',
         },
         optionButton: {
-            width: '47%',
-            borderRadius: scale(16),
-            paddingVertical: scale(18),
+            width: '48%',
+            borderRadius: scale(20),
+            paddingVertical: scale(22),
             paddingHorizontal: scale(12),
             alignItems: 'center',
             justifyContent: 'center',
-            minHeight: scale(90),
-            borderWidth: 1.5,
+            minHeight: scale(100),
+            borderWidth: 0,
+            shadowColor: '#0F2147',
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.03,
+            shadowRadius: 10,
+            elevation: 2,
         },
         optionDefault: {
-            backgroundColor: g.optionDefault || '#DDE8F4',
-            borderColor: 'transparent',
+            backgroundColor: '#FFFFFF',
         },
         optionCorrect: {
-            backgroundColor: g.optionCorrect || '#4ADE80',
-            borderColor: '#22C55E',
+            backgroundColor: '#22C55E',
         },
         optionIncorrect: {
-            backgroundColor: g.optionIncorrect || '#F87171',
-            borderColor: '#EF4444',
+            backgroundColor: '#EF4444',
         },
         optionDimmed: {
-            backgroundColor: g.optionDefault || '#DDE8F4',
-            borderColor: 'transparent',
-            opacity: 0.45,
+            backgroundColor: '#FFFFFF',
+            opacity: 0.4,
         },
         optionLabel: {
             fontFamily: fonts.heading.bold,
             fontSize: scale(12),
-            color: 'rgba(8, 19, 42, 0.45)',
+            color: 'rgba(15, 33, 71, 0.35)',
             marginBottom: scale(4),
         },
         optionText: {
-            fontFamily: fonts.heading.medium,
-            fontSize: scale(14),
-            lineHeight: scale(20),
+            fontFamily: fonts.heading.bold,
+            fontSize: scale(15),
+            lineHeight: scale(22),
             textAlign: 'center',
         },
         optionTextDefault: {
-            color: g.optionDefaultText || '#08132A',
+            color: '#1A253C',
         },
         optionTextCorrect: {
-            color: g.optionCorrectText || '#065F46',
+            color: '#FFFFFF',
         },
         optionTextIncorrect: {
-            color: g.optionIncorrectText || '#FFFFFF',
+            color: '#FFFFFF',
         },
         optionTextDimmed: {
-            color: 'rgba(8, 19, 42, 0.4)',
+            color: 'rgba(15, 33, 71, 0.3)',
         },
     });
 };
