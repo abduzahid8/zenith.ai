@@ -273,25 +273,20 @@ export const LearnStep: React.FC<LearnStepProps> = ({
     // Pre-fetch all keywords in the background when the component mounts
     useEffect(() => {
         const prefetchKeywords = async () => {
-            const tempExplanations: Record<string, string> = {};
-            try {
-                // Fetch all keyword explanations in parallel
-                await Promise.all(
-                    keywords.map(async (kw) => {
-                        const prompt = `Объясни термин "${kw}" простыми словами в 2-3 предложениях.
+            for (const kw of keywords) {
+                try {
+                    const prompt = `Объясни термин "${kw}" простыми словами в 2-3 предложениях.
 Контекст: пользователь изучает "${hobbyId}" в приложении Zenyth.AI, уровень — начинающий.
 Отвечай на том же языке, на котором написан термин. Не используй разметку markdown, пиши простым и тёплым текстом с 1 смайликом.`;
-                        try {
-                            const res = await aiService.sendMessage([{ role: 'user', content: prompt }], hobbyId);
-                            tempExplanations[kw] = res;
-                        } catch (err) {
-                            console.error(`[LearnStep] Error prefetching keyword "${kw}":`, err);
-                        }
-                    })
-                );
-                setExplanations(tempExplanations);
-            } catch (err) {
-                console.error('[LearnStep] Error in keywords prefetch loop:', err);
+                    
+                    const res = await aiService.sendMessage([{ role: 'user', content: prompt }], hobbyId);
+                    setExplanations(prev => ({ ...prev, [kw]: res }));
+                    
+                    // Small delay to let the API breathe
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                } catch (err) {
+                    console.error(`[LearnStep] Error prefetching keyword "${kw}":`, err);
+                }
             }
         };
 
