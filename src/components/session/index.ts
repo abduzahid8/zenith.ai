@@ -15,3 +15,10 @@ export type { SessionSummaryViewProps } from './SessionSummaryView';
 
 export { default as TimePickerModal } from './TimePickerModal';
 export type { TimePickerModalProps } from './TimePickerModal';
+
+export { default as LearnStep } from './LearnStep';
+export { default as DoStep } from './DoStep';
+export { default as ChessBoard } from './ChessBoard';
+export { default as PythonRunner } from './PythonRunner';
+export { default as SessionCompleteStep } from './SessionCompleteStep';
+

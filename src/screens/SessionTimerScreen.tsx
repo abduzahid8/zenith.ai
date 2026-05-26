@@ -28,8 +28,17 @@ import {
     SessionSummaryView,
     TimePickerModal,
 } from '../components/session';
+import LearnStep from '../components/session/LearnStep';
+import DoStep from '../components/session/DoStep';
+import SessionCompleteStep from '../components/session/SessionCompleteStep';
+import TestStepper from '../components/session/chess/TestStepper';
+import ChessBoard from '../components/session/ChessBoard';
+
 import { BottomTabBar } from '../components/navigation/BottomTabBar';
 import { useAppTheme } from '../theme/useAppTheme';
+import { useUserProfileStore } from '../store/userProfileStore';
+import { ActivityIndicator } from 'react-native';
+
 
 export const SessionTimerScreen: React.FC = () => {
     const router = useRouter();
@@ -56,7 +65,16 @@ export const SessionTimerScreen: React.FC = () => {
         chatInput, setChatInput, messages, isAiLoading, handleSendMessage,
         // Animations
         controlsAnim, drawerAnim, backdropAnim, bottomNavVisible,
+        // Gamification
+        activeStep,
+        setActiveStep,
+        currentLesson,
+        isLoadingLesson,
+        handleStepComplete,
     } = useTimer();
+
+    const { streakDays, isPremium } = useUserProfileStore();
+
 
     const handleStop = () => {
         console.log('[SessionTimerScreen] handleStop pressed - navigating back');
@@ -105,143 +123,129 @@ export const SessionTimerScreen: React.FC = () => {
                 style={{ flex: 1 }}
                 initialPage={0}
                 ref={pagerViewRef}
+                scrollEnabled={false}
                 onPageScroll={Animated.event(
                     [{ nativeEvent: { position: mainPagerPosition, offset: mainPagerOffset } }],
                     { useNativeDriver: false }
                 )}
             >
-                {[
-                    // Page 1: Timer
+                {[                    // Page 1: Timer & Interactive Lesson
                     <View key="1" style={{ flex: 1 }}>
-                        <View style={styles.header} />
 
-                        {/* Task List Button — only when timer is active */}
-                        {timerStatus !== 'idle' && (
-                            <Animated.View style={{ opacity: controlsAnim, position: 'absolute', top: scale(20), left: scale(24), zIndex: 10 }}>
-                                <TouchableOpacity
-                                    style={styles.floatingMenu}
-                                    activeOpacity={0.7}
-                                    onPress={() => setIsTaskListVisible(true)}
-                                >
-                                    <BlurView intensity={80} tint="light" style={styles.floatingMenuGlass} />
-                                    <Image source={require('../../icons/tasks.png')} style={{ width: scale(24), height: scale(24), tintColor: '#1E1E2E', zIndex: 1 }} resizeMode="contain" />
-                                </TouchableOpacity>
-                            </Animated.View>
-                        )}
-
-                        {/* Timer Circle + Controls */}
-                        <View style={styles.content}>
-                            <TimerProgress
-                                size={scale(300)}
-                                strokeWidth={scale(25)}
-                                color={timerStatus === 'paused' ? colors.sessionTimer.pausedPrimary : colors.sessionTimer.primary}
-                                trackColor={colors.sessionTimer.primaryFaded}
-                                progress={progress}
-                            >
-                                <TouchableOpacity
-                                    activeOpacity={0.7}
-                                    onPress={() => timerStatus === 'idle' && setIsTimePickerVisible(true)}
-                                    disabled={timerStatus !== 'idle'}
-                                    style={{ justifyContent: 'center', alignItems: 'center' }}
-                                >
-                                    <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
-                                </TouchableOpacity>
-                            </TimerProgress>
-
-                            <View style={styles.controlsContainer}>
-                                {timerStatus === 'idle' ? (
-                                    <TouchableOpacity style={styles.playButton} onPress={handlePlay} activeOpacity={0.8}>
-                                        <Image source={require('../../icons/play.png')} style={{ width: scale(30), height: scale(40), tintColor: colors.buttonTextPrimary || 'white', marginLeft: scale(5) }} resizeMode="contain" />
-                                    </TouchableOpacity>
-                                ) : (
-                                    <View style={styles.activeControls}>
-                                        <Animated.View style={{ transform: [{ translateX: translateXReset }] }}>
-                                            <TouchableOpacity style={styles.secondaryControl} onPress={handleReset} activeOpacity={0.8}>
-                                                <Image
-                                                    source={require('../../icons/back.png')}
-                                                    style={{
-                                                        width: scale(34.437),
-                                                        height: scale(32.746),
-                                                        tintColor: colors.buttonTextPrimary || 'white'
-                                                    }}
-                                                    resizeMode="contain"
-                                                />
-                                            </TouchableOpacity>
-                                        </Animated.View>
-
+                        {timerStatus === 'idle' ? (
+                            <View style={{ flex: 1 }}>
+                                <View style={styles.header} />
+                                {/* Timer Circle + Controls */}
+                                <View style={styles.content}>
+                                    <TimerProgress
+                                        size={scale(300)}
+                                        strokeWidth={scale(25)}
+                                        color={colors.sessionTimer.primary}
+                                        trackColor={colors.sessionTimer.primaryFaded}
+                                        progress={progress}
+                                    >
                                         <TouchableOpacity
-                                            style={[styles.playButton, {
-                                                zIndex: 10,
-                                                backgroundColor: timerStatus === 'paused' ? colors.sessionTimer.pausedPrimary : colors.sessionTimer.primary,
-                                                shadowColor: timerStatus === 'paused' ? colors.sessionTimer.pausedPrimary : colors.sessionTimer.primary,
-                                            }]}
-                                            onPress={handlePause}
-                                            activeOpacity={0.8}
+                                            activeOpacity={0.7}
+                                            onPress={() => timerStatus === 'idle' && setIsTimePickerVisible(true)}
+                                            disabled={timerStatus !== 'idle'}
+                                            style={{ justifyContent: 'center', alignItems: 'center' }}
                                         >
-                                            <Image
-                                                source={timerStatus === 'running' ? require('../../icons/pause.png') : require('../../icons/play.png')}
-                                                style={[
-                                                    {
-                                                        tintColor: colors.buttonTextPrimary || 'white',
-                                                        marginLeft: timerStatus === 'running' ? 0 : scale(5)
-                                                    },
-                                                    timerStatus === 'running'
-                                                        ? {
-                                                            width: scale(29),
-                                                            height: scale(35),
-                                                        }
-                                                        : {
-                                                            width: scale(40),
-                                                            height: scale(40)
-                                                        }
-                                                ]}
-                                                resizeMode="contain"
-                                            />
+                                            <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
                                         </TouchableOpacity>
+                                    </TimerProgress>
 
-                                        <Animated.View style={{ transform: [{ translateX: translateXStop }] }}>
-                                            <TouchableOpacity style={styles.secondaryControl} onPress={handleStopPress} activeOpacity={0.8}>
-                                                <Image
-                                                    source={require('../../icons/stop.png')}
-                                                    style={{
-                                                        width: scale(24),
-                                                        height: scale(24),
-                                                        tintColor: colors.buttonTextPrimary || 'white',
-                                                    }}
-                                                    resizeMode="contain"
-                                                />
-                                            </TouchableOpacity>
-                                        </Animated.View>
+                                    <View style={styles.controlsContainer}>
+                                        <TouchableOpacity style={styles.playButton} onPress={handlePlay} activeOpacity={0.8}>
+                                            <Image source={require('../../icons/play.png')} style={{ width: scale(30), height: scale(40), tintColor: colors.buttonTextPrimary || 'white', marginLeft: scale(5) }} resizeMode="contain" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            </View>
+                        ) : (
+                            /* Interactive Gamification Stepper */
+                            <View style={{ flex: 1 }}>
+                                {/* Small floating active timer & stop pill */}
+                                {activeStep !== 'complete' && (
+                                    <View style={styles.activeSessionHeader}>
+                                        <View style={styles.activeSessionTimerPill}>
+                                            <Text style={styles.activeSessionTimerText}>{formatTime(timeLeft)}</Text>
+                                        </View>
+                                    </View>
+                                )}
+
+                                {isLoadingLesson ? (
+                                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                        <ActivityIndicator size="large" color="#5BA3E6" />
+                                        <Text style={{ marginTop: scale(10), color: colors.text, fontFamily: fonts.heading.bold }}>
+                                            Загрузка урока...
+                                        </Text>
+                                    </View>
+                                ) : currentLesson ? (
+                                    activeStep === 'learn' ? (
+                                        <LearnStep
+                                            hobbyId={currentLesson.hobby}
+                                            title={currentLesson.learn.title}
+                                            body={currentLesson.learn.body}
+                                            keywords={currentLesson.learn.keywords}
+                                            onNext={() => handleStepComplete('learn')}
+                                            onOpenChat={() => pagerViewRef.current?.setPage(1)}
+                                            onOpenTaskList={() => setIsTaskListVisible(true)}
+                                        />
+                                    ) : activeStep === 'tests' && currentLesson.tests ? (
+                                        <TestStepper
+                                            hobbyId={currentLesson.hobby}
+                                            tests={currentLesson.tests}
+                                            onAllTestsComplete={() => handleStepComplete('tests')}
+                                        />
+                                    ) : activeStep === 'do' ? (
+                                        currentLesson.hobby === 'chess' && currentLesson.do.type === 'chess_puzzle' ? (
+                                            <ChessBoard
+                                                fen={currentLesson.do.puzzleFen!}
+                                                puzzleMoves={currentLesson.do.puzzleMoves!}
+                                                question={currentLesson.do.prompt}
+                                                maxHints={isPremium ? 5 : 3}
+                                                onComplete={() => handleStepComplete('do', 'solved')}
+                                            />
+                                        ) : (
+                                            <DoStep
+                                                hobbyId={currentLesson.hobby}
+                                                task={currentLesson.do}
+                                                onNext={(ans, fb) => handleStepComplete('do', ans, fb)}
+                                            />
+                                        )
+                                    ) : activeStep === 'deepen1' && currentLesson.deepen1 ? (
+                                        <DoStep
+                                            hobbyId={currentLesson.hobby}
+                                            task={currentLesson.deepen1}
+                                            onNext={(ans, fb) => handleStepComplete('deepen1', ans, fb)}
+                                        />
+                                    ) : activeStep === 'deepen2' && currentLesson.deepen2 ? (
+                                        <DoStep
+                                            hobbyId={currentLesson.hobby}
+                                            task={currentLesson.deepen2}
+                                            onNext={(ans, fb) => handleStepComplete('deepen2', ans, fb)}
+                                        />
+                                    ) : (
+                                        <SessionCompleteStep
+                                            isPremium={isPremium}
+                                            streakDays={streakDays}
+                                            onExit={handleStop}
+                                        />
+                                    )
+                                ) : (
+                                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                        <Text style={{ color: colors.text, fontFamily: fonts.heading.bold }}>
+                                            Урок не найден. Попробуйте перезапустить сессию.
+                                        </Text>
                                     </View>
                                 )}
                             </View>
-                        </View>
-                    </View>,
-
-                    // Page 2: AI Chat — only when timer is active
-                    ...(timerStatus !== 'idle'
-                        ? [
-                            <SessionChat
-                                key="2"
-                                messages={messages}
-                                chatInput={chatInput}
-                                isAiLoading={isAiLoading}
-                                onChangeText={setChatInput}
-                                onSendMessage={handleSendMessage}
-                                onOpenTaskList={() => setIsTaskListVisible(true)}
-                            />,
-                        ]
-                        : []),
+                        )}
+                    </View>
                 ]}
             </PagerView>
 
-            {/* Main Session Pagination (Timer vs Chat) */}
-            {timerStatus !== 'idle' && (
-                <View style={styles.mainPaginationContainer}>
-                    <Animated.View style={[styles.mainDot, { width: timerDot1Width }]} />
-                    <Animated.View style={[styles.mainDot, { width: timerDot2Width }]} />
-                </View>
-            )}
+            {/* Main Session Pagination (Timer vs Chat) — Removed as requested */}
 
             {/* Bottom Navigation — animates out when timer is running/paused */}
             <Animated.View
@@ -400,6 +404,37 @@ const createStyles = (colors: any) => StyleSheet.create({
         left: 0,
         right: 0,
         alignItems: 'center',
+    },
+    activeSessionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: scale(20),
+        marginBottom: scale(10),
+    },
+    activeSessionTimerPill: {
+        backgroundColor: 'rgba(91, 163, 230, 0.12)',
+        borderRadius: scale(16),
+        paddingHorizontal: scale(16),
+        paddingVertical: scale(6),
+    },
+    activeSessionTimerText: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(15),
+        color: '#2B5B84',
+    },
+    stopButtonPill: {
+        backgroundColor: 'rgba(120, 144, 156, 0.12)',
+        borderRadius: scale(16),
+        paddingHorizontal: scale(12),
+        paddingVertical: scale(6),
+        borderWidth: 1,
+        borderColor: 'rgba(120, 144, 156, 0.25)',
+    },
+    stopButtonText: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(13),
+        color: '#607D8B',
     },
 });
 

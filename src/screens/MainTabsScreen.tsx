@@ -125,6 +125,23 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
                         <Text style={styles.streakNumber}>{completedTasksCount}</Text>
                         <FireIcon />
                     </View>
+                    {/* Временная кнопка дебага геймификации */}
+                    <TouchableOpacity 
+                        style={{
+                            backgroundColor: '#FF5722',
+                            padding: scale(6),
+                            borderRadius: scale(8),
+                            marginRight: scale(4)
+                        }} 
+                        onPress={() => {
+                            console.log('Navigating to gamification debug');
+                            router.push('/gamification-debug');
+                        }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={{ color: '#FFF', fontSize: scale(14), fontWeight: 'bold' }}>🛠</Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity style={styles.menuButton} onPress={() => {
                         console.log('[MainTabsScreen] Menu button pressed - opening menu');
                         setMenuVisible(true);

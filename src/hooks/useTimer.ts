@@ -11,6 +11,9 @@ import { useUserProfileStore } from '../store/userProfileStore';
 import { useHobbyTimeStore } from '../store/hobbyTimeStore';
 import { sessionService } from '../services/supabase/sessions';
 import { useT } from '../store/languageStore';
+import { useGamificationStore } from '../store/gamificationStore';
+import { HobbyId, LessonContent } from '../data/lessonContent';
+
 
 export type TimerStatus = 'idle' | 'running' | 'paused';
 
@@ -30,6 +33,101 @@ export function useTimer(options: UseTimerOptions = {}) {
     const { selectedHobby, isPremium } = useUserProfileStore();
     useHobbyTimeStore(); // subscribed for potential future reactivity; mutations use getState() directly
     const t = useT();
+
+    // --- Gamification State ---
+    const gamificationStore = useGamificationStore();
+    const [activeStep, setActiveStep] = useState<string>('learn');
+    const [currentLesson, setCurrentLesson] = useState<LessonContent | null>(null);
+    const [isLoadingLesson, setIsLoadingLesson] = useState(false);
+
+    const loadLessonForSession = useCallback(async () => {
+        const hobby = selectedHobby as HobbyId;
+        if (!hobby) return;
+
+        setIsLoadingLesson(true);
+        try {
+            const day = gamificationStore.currentDay[hobby] || 1;
+            console.log('[useTimer] Loading lesson for day:', day, 'hobby:', hobby);
+            
+            let lesson: LessonContent | undefined;
+            if (day <= 7) {
+                // Static lessons
+                const { getLessonByDay } = require('../data/lessonContent');
+                lesson = getLessonByDay(hobby, day);
+            }
+            
+            if (!lesson) {
+                // Generator lessons for Day 8+ or fallback
+                const { lessonGeneratorService } = require('../services/lessonGeneratorService');
+                const completedTopics = lessonGeneratorService.getCompletedTopics(gamificationStore.artifacts, hobby);
+                lesson = await lessonGeneratorService.generateLesson(hobby, day, completedTopics);
+            }
+
+            setCurrentLesson(lesson || null);
+        } catch (err) {
+            console.error('[useTimer] Error loading lesson:', err);
+            // Fallback lesson
+            const { lessonGeneratorService } = require('../services/lessonGeneratorService');
+            const day = gamificationStore.currentDay[hobby] || 1;
+            const fallback = lessonGeneratorService.getFallbackLesson(hobby, day);
+            setCurrentLesson(fallback);
+        } finally {
+            setIsLoadingLesson(false);
+        }
+    }, [selectedHobby, gamificationStore.currentDay, gamificationStore.artifacts]);
+
+    const handleStepComplete = useCallback((step: string, userInput?: string, aiFeedback?: string) => {
+        console.log('[useTimer] Completing step:', step);
+        
+        // Track legacy steps in gamification store
+        if (['learn', 'do', 'deepen1', 'deepen2'].includes(step)) {
+            gamificationStore.markStepComplete(step as any);
+        }
+
+        if (userInput && currentLesson) {
+            gamificationStore.saveArtifact({
+                hobbyId: currentLesson.hobby,
+                lessonId: currentLesson.id,
+                taskType: (step.startsWith('test_') ? 'do' : step) as any,
+                userInput,
+                aiFeedback: aiFeedback || '',
+            });
+        }
+
+        // Advance to the next step
+        if (step === 'learn') {
+            if (currentLesson?.hobby === 'chess' && currentLesson.tests && currentLesson.tests.length > 0) {
+                setActiveStep('tests');
+            } else {
+                setActiveStep('do');
+            }
+        } else if (step === 'tests') {
+            setActiveStep('do'); // Переходим к финальной шахматной задаче
+        } else if (step === 'do') {
+            if (currentLesson?.hobby === 'chess') {
+                gamificationStore.advanceDay(currentLesson.hobby);
+                setActiveStep('complete');
+            } else {
+                if (isPremium && currentLesson?.deepen1) {
+                    setActiveStep('deepen1');
+                } else {
+                    gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
+                    setActiveStep('complete');
+                }
+            }
+        } else if (step === 'deepen1') {
+            if (isPremium && currentLesson?.deepen2) {
+                setActiveStep('deepen2');
+            } else {
+                gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
+                setActiveStep('complete');
+            }
+        } else if (step === 'deepen2') {
+            gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
+            setActiveStep('complete');
+        }
+    }, [currentLesson, isPremium]);
+
 
     const TYPE_LABEL: Record<string, string> = {
         theory: t('Узнай'),
@@ -250,9 +348,17 @@ export function useTimer(options: UseTimerOptions = {}) {
                 index === firstIncompleteIndex ? { ...task, startedAt: now } : task
             );
         });
+
+        // Start gamification session
+        if (selectedHobby) {
+            gamificationStore.startSession(selectedHobby as HobbyId);
+            loadLessonForSession();
+            setActiveStep('learn');
+        }
         
         setTimerStatus('running');
-    }, [tasks]);
+    }, [tasks, selectedHobby, loadLessonForSession]);
+
 
     const handlePlay = useCallback(() => {
         console.log('[useTimer] handlePlay pressed');
@@ -498,6 +604,14 @@ export function useTimer(options: UseTimerOptions = {}) {
         drawerAnim,
         backdropAnim,
         bottomNavVisible,
+
+        // Gamification
+        activeStep,
+        setActiveStep,
+        currentLesson,
+        isLoadingLesson,
+        handleStepComplete,
+
 
         // Constants
         // Removed static TOTAL_TIME

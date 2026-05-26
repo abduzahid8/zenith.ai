@@ -173,6 +173,69 @@ export const lightColors = {
         shadow: '#000000',
         confirmDefault: '#E8E4DF',
     },
+
+    // Gamification — шахматные тесты и геймификация (Frames 650-660)
+    gamification: {
+        // Карточка теории (Frame 651)
+        theoryCard: '#D6EEFF',          // Голубой фон карточки теории
+        theoryCardBorder: '#B8D8F0',    // Граница карточки
+        termChip: '#C5DCEF',            // Фон капсулы термина
+        termChipText: '#08132A',        // Текст капсулы термина
+        zenythIcon: '#5BA3E6',          // Цвет иконки Zenyth.AI (звезда)
+
+        // Тест: варианты ABCD (Frame 652/655/656)
+        optionDefault: '#DDE8F4',       // Фон варианта по умолчанию (светло-голубой)
+        optionDefaultText: '#08132A',   // Текст варианта по умолчанию
+        optionCorrect: '#4ADE80',       // Зелёный при правильном ответе
+        optionCorrectText: '#065F46',   // Текст на зелёном фоне
+        optionIncorrect: '#F87171',     // Красный при неверном ответе
+        optionIncorrectText: '#FFFFFF', // Текст на красном фоне
+
+        // Тест: вставка слов (Frame 653/657/658)
+        blankSlot: '#E2E8F0',           // Пустой пропуск в тексте
+        blankSlotBorder: '#94A3B8',     // Рамка пропуска
+        wordChip: '#DDE8F4',            // Слово-чип в пуле
+        wordChipText: '#08132A',        // Текст слова-чипа
+        wordChipFilled: '#4ADE80',      // Верно вставленное слово (зелёное)
+        wordChipFilledText: '#065F46',  // Текст верного слова
+        wordChipWrong: '#F87171',       // Неверно вставленное слово (красное)
+        wordChipWrongText: '#FFFFFF',   // Текст неверного слова
+
+        // Тест: свободный ответ (Frame 654/659/660)
+        freeTextBg: '#F5F7FA',          // Фон поля ввода по умолчанию
+        freeTextBorder: '#CBD5E1',      // Рамка поля ввода
+        freeTextCorrect: '#4ADE80',     // Зелёный фон при верном ответе
+        freeTextCorrectBorder: '#22C55E',
+        freeTextIncorrect: '#F87171',   // Красный фон при неверном ответе
+        freeTextIncorrectBorder: '#EF4444',
+
+        // Баннер подбадривания
+        encourageCorrectBg: '#D1FAE5',  // Светло-зелёный
+        encourageCorrectText: '#065F46',
+        encourageIncorrectBg: '#FFF3E0', // Тёплый оранжевый
+        encourageIncorrectText: '#92400E',
+
+        // Шахматная доска (Frame 650)
+        boardLight: '#D6EEFF',          // Светлые клетки (фирменный голубой)
+        boardDark: '#5BA3E6',           // Тёмные клетки (синий)
+        boardSelected: '#FFE082',       // Выбранная клетка (золотая)
+        boardIncorrect: '#FFCDD2',      // Неверный ход (розоватый)
+        boardCorrect: '#C8E6C9',        // Верный ход (светло-зелёный)
+        boardHint: '#FFF9C4',           // Подсказка (светло-жёлтый)
+        boardBorder: 'transparent',     // Без жёсткой рамки
+
+        // Прогресс-бар тестов
+        progressActive: '#5BA3E6',      // Активная точка прогресса
+        progressDone: '#4ADE80',        // Завершённая точка
+        progressFailed: '#F87171',      // Неверно отвеченная точка
+        progressInactive: '#DDE8F4',    // Неактивная точка
+
+        // Кнопки внутри тестов
+        buttonConfirm: '#102852',       // «Подтвердить» / «Далее» (тёмно-синий)
+        buttonConfirmText: '#FFFFFF',
+        buttonConfirmDisabled: '#CBD5E1',
+        buttonConfirmDisabledText: '#94A3B8',
+    },
 };
 
 export type Colors = typeof lightColors;
