@@ -203,7 +203,8 @@ export const LearnStep: React.FC<LearnStepProps> = ({
     // AI definition modal
     const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
     const [explanation, setExplanation] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
+    const [loadingKeyword, setLoadingKeyword] = useState<string | null>(null);
+    const [explanations, setExplanations] = useState<Record<string, string>>({});
 
     // Cards data
     const cards = useMemo(() => splitTextIntoThreeCards(body, title), [body, title]);
@@ -269,11 +270,48 @@ export const LearnStep: React.FC<LearnStepProps> = ({
 
     const activeCard = cards[activeIndex];
 
+    // Pre-fetch all keywords in the background when the component mounts
+    useEffect(() => {
+        const prefetchKeywords = async () => {
+            const tempExplanations: Record<string, string> = {};
+            try {
+                // Fetch all keyword explanations in parallel
+                await Promise.all(
+                    keywords.map(async (kw) => {
+                        const prompt = `Объясни термин "${kw}" простыми словами в 2-3 предложениях.
+Контекст: пользователь изучает "${hobbyId}" в приложении Zenyth.AI, уровень — начинающий.
+Отвечай на том же языке, на котором написан термин. Не используй разметку markdown, пиши простым и тёплым текстом с 1 смайликом.`;
+                        try {
+                            const res = await aiService.sendMessage([{ role: 'user', content: prompt }], hobbyId);
+                            tempExplanations[kw] = res;
+                        } catch (err) {
+                            console.error(`[LearnStep] Error prefetching keyword "${kw}":`, err);
+                        }
+                    })
+                );
+                setExplanations(tempExplanations);
+            } catch (err) {
+                console.error('[LearnStep] Error in keywords prefetch loop:', err);
+            }
+        };
+
+        if (keywords.length > 0) {
+            prefetchKeywords();
+        }
+    }, [keywords, hobbyId]);
+
     const handleKeywordPress = async (keyword: string) => {
-        console.log('[LearnStep] Keyword pressed:', keyword);
-        setSelectedKeyword(keyword);
-        setExplanation(null);
-        setLoading(true);
+        // If already pre-fetched, open modal INSTANTLY!
+        if (explanations[keyword]) {
+            setExplanation(explanations[keyword]);
+            setSelectedKeyword(capitalize(keyword));
+            return;
+        }
+
+        // Fallback: If not pre-fetched yet, fetch on-demand
+        if (loadingKeyword) return;
+        console.log('[LearnStep] Keyword pressed (on-demand fallback):', keyword);
+        setLoadingKeyword(keyword);
 
         try {
             const prompt = `Объясни термин "${keyword}" простыми словами в 2-3 предложениях.
@@ -281,12 +319,15 @@ export const LearnStep: React.FC<LearnStepProps> = ({
 Отвечай на том же языке, на котором написан термин. Не используй разметку markdown, пиши простым и тёплым текстом с 1 смайликом.`;
 
             const res = await aiService.sendMessage([{ role: 'user', content: prompt }], hobbyId);
+            setExplanations(prev => ({ ...prev, [keyword]: res }));
             setExplanation(res);
+            setSelectedKeyword(capitalize(keyword));
         } catch (err) {
             console.error('[LearnStep] Error fetching keyword explanation:', err);
             setExplanation('Не удалось загрузить объяснение. Попробуйте ещё раз.');
+            setSelectedKeyword(capitalize(keyword));
         } finally {
-            setLoading(false);
+            setLoadingKeyword(null);
         }
     };
 
@@ -358,7 +399,7 @@ export const LearnStep: React.FC<LearnStepProps> = ({
                     { scale: 1 },
                     { translateY: 0 },
                 ],
-                backgroundColor: cardIndex === 0 ? '#CBE5FE' : cardIndex === 1 ? '#A8D4FF' : '#82BEFE',
+                backgroundColor: cardIndex === 0 ? '#8CDEFF' : cardIndex === 1 ? '#78BAFF' : '#7EB0FF',
                 zIndex: 3,
                 opacity: topCardOpacity,
                 elevation: 0,
@@ -368,7 +409,7 @@ export const LearnStep: React.FC<LearnStepProps> = ({
                     { scale: bgCard1Scale },
                     { translateY: bgCard1TranslateY },
                 ],
-                backgroundColor: cardIndex === 0 ? '#CBE5FE' : cardIndex === 1 ? '#A8D4FF' : '#82BEFE',
+                backgroundColor: cardIndex === 0 ? '#8CDEFF' : cardIndex === 1 ? '#78BAFF' : '#7EB0FF',
                 zIndex: 2,
                 opacity: bgCard1Opacity,
                 elevation: 0,
@@ -378,7 +419,7 @@ export const LearnStep: React.FC<LearnStepProps> = ({
                     { scale: bgCard2Scale },
                     { translateY: bgCard2TranslateY },
                 ],
-                backgroundColor: cardIndex === 0 ? '#CBE5FE' : cardIndex === 1 ? '#A8D4FF' : '#82BEFE',
+                backgroundColor: cardIndex === 0 ? '#8CDEFF' : cardIndex === 1 ? '#78BAFF' : '#7EB0FF',
                 zIndex: 1,
                 opacity: bgCard2Opacity,
                 elevation: 0,
@@ -464,8 +505,13 @@ export const LearnStep: React.FC<LearnStepProps> = ({
                                     style={styles.keywordBadge}
                                     onPress={() => handleKeywordPress(kw)}
                                     activeOpacity={0.7}
+                                    disabled={loadingKeyword !== null}
                                 >
-                                    <Text style={styles.keywordText}>{capitalize(kw)}</Text>
+                                    {loadingKeyword === kw ? (
+                                        <ActivityIndicator size="small" color="#0F2147" style={{ transform: [{ scale: 0.8 }] }} />
+                                    ) : (
+                                        <Text style={styles.keywordText}>{capitalize(kw)}</Text>
+                                    )}
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -502,18 +548,10 @@ export const LearnStep: React.FC<LearnStepProps> = ({
                 animationType="fade"
                 onRequestClose={() => setSelectedKeyword(null)}
             >
-                <BlurView intensity={60} tint="dark" style={styles.modalBackdrop}>
+                <BlurView intensity={40} tint="light" style={styles.modalBackdrop}>
                     <View style={styles.modalCard}>
                         <Text style={styles.modalTitle}>{selectedKeyword}</Text>
-                        
-                        {loading ? (
-                            <View style={styles.loaderContainer}>
-                                <ActivityIndicator size="large" color="#FF5722" />
-                                <Text style={styles.loadingText}>{t('AI думает...')}</Text>
-                            </View>
-                        ) : (
-                            <Text style={styles.modalBody}>{explanation}</Text>
-                        )}
+                        <Text style={styles.modalBody}>{explanation}</Text>
 
                         <TouchableOpacity
                             style={styles.modalCloseButton}
@@ -558,7 +596,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         marginBottom: scale(28),
     },
     card: {
-        backgroundColor: '#CBE5FE',
+        backgroundColor: '#8CDEFF',
         borderRadius: scale(24),
         padding: scale(24),
         borderWidth: 0,
@@ -675,41 +713,36 @@ const createStyles = (colors: any) => StyleSheet.create({
         paddingHorizontal: scale(30),
     },
     modalCard: {
-        backgroundColor: 'rgba(30, 30, 46, 0.95)',
+        backgroundColor: '#FFFFFF',
         borderRadius: scale(24),
         padding: scale(24),
         width: '100%',
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.15)',
+        borderColor: 'rgba(15, 33, 71, 0.1)',
         alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 10,
     },
     modalTitle: {
         fontFamily: fonts.heading.bold,
         fontSize: scale(20),
-        color: '#FFFFFF',
+        color: '#1A253C',
         marginBottom: scale(16),
         textAlign: 'center',
-    },
-    loaderContainer: {
-        alignItems: 'center',
-        marginVertical: scale(20),
-    },
-    loadingText: {
-        marginTop: scale(10),
-        color: 'rgba(255, 255, 255, 0.7)',
-        fontFamily: fonts.heading.light,
-        fontSize: scale(14),
     },
     modalBody: {
         fontFamily: fonts.body?.light || fonts.heading.light,
         fontSize: scale(16),
         lineHeight: scale(22),
-        color: 'rgba(255, 255, 255, 0.85)',
+        color: '#2B3E60',
         textAlign: 'center',
         marginBottom: scale(24),
     },
     modalCloseButton: {
-        backgroundColor: 'rgba(255, 255, 255, 0.15)',
+        backgroundColor: '#0F2147',
         borderRadius: scale(20),
         paddingVertical: scale(10),
         paddingHorizontal: scale(30),
