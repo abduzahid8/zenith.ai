@@ -53,13 +53,14 @@ export const aiService = {
         messages: ChatMessage[],
         hobby?: string
     ): Promise<string> => {
-        // Inject a style instruction so replies feel warm (emojis) and render
+        // Inject a style instruction so replies feel warm and render
         // cleanly on the client (no raw markdown like ** or #).
+        // Emojis are completely banned.
         const styleInstruction: ChatMessage = {
             role: 'system',
             content:
-                'Reply in the same language as the user. Keep the tone warm, friendly and encouraging, ' +
-                'and naturally sprinkle 1-3 relevant emojis per reply (e.g. 🎯 ✨ 💪 📚 🌱). ' +
+                'Reply in the same language as the user. Keep the tone warm, friendly and encouraging. ' +
+                'Do NOT use any emojis under any circumstances — only clean text. ' +
                 'Do NOT use markdown syntax — no **bold**, no ##headings, no backticks. ' +
                 'When you need a list, use short bullets prefixed with "• ". ' +
                 'Keep answers concise and skimmable.',
@@ -77,6 +78,27 @@ export const aiService = {
                 return 'Too many requests. Please wait 10-20 seconds and try again.';
             }
             return 'Sorry, I cannot answer right now. Check your connection or try again later.';
+        }
+    },
+
+    gradeAnswer: async (
+        messages: ChatMessage[],
+        hobby?: string
+    ): Promise<string> => {
+        if (USE_LOCAL_AI) {
+            return localAiService.sendMessage(messages, hobby);
+        }
+        try {
+            return await invokeAI<string>('sendMessage', { 
+                messages: messages, 
+                hobby
+            });
+        } catch {
+            return JSON.stringify({
+                status: 'incorrect',
+                title: 'Ошибка проверки',
+                explanation: 'Ошибка проверки. Попробуйте еще раз.'
+            });
         }
     },
 

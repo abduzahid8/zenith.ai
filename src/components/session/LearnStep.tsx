@@ -548,7 +548,6 @@ const createStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#EDF2F7',
-        paddingHorizontal: scale(24),
     },
     scrollView: {
         flex: 1,
@@ -558,6 +557,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         justifyContent: 'flex-start',
         paddingTop: scale(15),
         paddingBottom: scale(180),
+        paddingHorizontal: scale(24),
     },
     outerTitle: {
         fontFamily: fonts.heading.bold,

@@ -45,7 +45,7 @@ export const lessonGeneratorService = {
     completedTopics: string[],
     skillLevel: 'beginner' | 'intermediate' = 'beginner'
   ): Promise<LessonContent> => {
-    const cacheKey = `lesson_gen_${hobby}_day${dayNumber}`;
+    const cacheKey = `lesson_gen_v2_${hobby}_day${dayNumber}`;
 
     // 1. Проверяем кэш
     try {
@@ -67,13 +67,13 @@ export const lessonGeneratorService = {
 
     const messages: ChatMessage[] = [
       {
-        role: 'system',
+        role: 'user',
         content: `Ты — генератор образовательного контента для приложения Zenyth.
 Создай 1 урок по теме: "${hobbyContext}".
 День обучения пользователя: #${dayNumber}.
 Уровень: ${skillLevel === 'beginner' ? 'начинающий' : 'средний'}.
 Уже пройденные темы (НЕ ПОВТОРЯЙ): ${completedTopics.length > 0 ? completedTopics.join(', ') : 'нет данных'}.
-Выбери тип задания: "${doType}".
+${hobby === 'chess' ? 'Выбери тип задания: "chess_puzzle".' : `Выбери тип задания: "${doType}".`}
 
 ОТВЕЧАЙ СТРОГО В JSON-ФОРМАТЕ (без markdown-обёртки):
 {
@@ -83,17 +83,17 @@ export const lessonGeneratorService = {
     "keywords": ["термин1", "термин2", "термин3"]
   },
   "do": {
-    "type": "${doType}",
-    "prompt": "Чёткое задание для пользователя",
+    "type": "${hobby === 'chess' ? 'chess_puzzle' : doType}",
+    "prompt": "${hobby === 'chess' ? 'Найди лучший ход (или мат в 1/2 хода) в этой позиции.' : 'Чёткое задание для пользователя'}",
     "correctAnswer": "Правильный ответ (если применимо, иначе null)",
-    "hints": ["Подсказка 1", "Подсказка 2"]
-  }
+    "hints": ["Подсказка 1", "Подсказка 2"]${hobby === 'chess' ? ',\n    "puzzleFen": "Стартовая позиция в формате FEN (например: 6k1/8/6K1/8/8/8/8/7Q w - - 0 1)",\n    "puzzleMoves": ["Правильные ходы в формате UCI, например: [\\"h1h7\\"]"]' : ''}
+  }${hobby === 'chess' ? ',\n  "tests": [\n    {\n      "type": "multiple_choice",\n      "prompt": "Вопрос с 4 вариантами ответа",\n      "options": ["Вариант A", "Вариант B", "Вариант C", "Вариант D"],\n      "correctOptionIndex": 0\n    },\n    {\n      "type": "multiple_choice",\n      "prompt": "Второй вопрос с 4 вариантами ответа",\n      "options": ["Вариант A", "Вариант B", "Вариант C", "Вариант D"],\n      "correctOptionIndex": 1\n    },\n    {\n      "type": "fill_blank",\n      "prompt": "Задание на вставку слов",\n      "blanksText": "Текст с пропусками в виде ___",\n      "wordPool": ["слово1", "слово2", "слово3"],\n      "correctOrder": ["слово1", "слово2"]\n    },\n    {\n      "type": "fill_blank",\n      "prompt": "Второй тест на вставку слов",\n      "blanksText": "Текст с пропусками в виде ___",\n      "wordPool": ["слово1", "слово2", "слово3"],\n      "correctOrder": ["слово1", "слово2"]\n    },\n    {\n      "type": "free_text",\n      "prompt": "Открытый вопрос по теме теории",\n      "correctAnswer": "Эталонный правильный ответ"\n    }\n  ]' : ''}
 }
 
 ПРАВИЛА:
 - Давай новую тему, не из пройденных
 - Язык: русский (объяснения) + изучаемый язык (примеры)
-- Для chess_puzzle — не включай puzzleFen (его нет в AI)
+- Для chess_puzzle — сгенерируй легальный и простой puzzleFen и puzzleMoves (1-2 полухода, например, мат в 1 ход или взятие фигуры)
 - Для code — включи starterCode как часть prompt
 - Не используй markdown в body и prompt`,
       },
@@ -104,10 +104,14 @@ export const lessonGeneratorService = {
     try {
       const response = await aiService.sendMessage(messages);
 
-      // Парсим JSON из ответа (aiService может вернуть строку)
-      const raw = typeof response === 'string'
-        ? response.replace(/```json|```/g, '').trim()
-        : JSON.stringify(response);
+      // Парсим JSON из ответа более надежно с извлечением структуры {...}
+      let raw = '';
+      if (typeof response === 'string') {
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        raw = jsonMatch ? jsonMatch[0] : response.replace(/```json|```/g, '').trim();
+      } else {
+        raw = JSON.stringify(response);
+      }
 
       const parsed = JSON.parse(raw);
       generatedLesson = parsed;
@@ -131,6 +135,7 @@ export const lessonGeneratorService = {
         type: 'free_text',
         prompt: 'Напиши всё, что запомнил из прошлых уроков.',
       },
+      tests: generatedLesson.tests,
     };
 
     // 4. Кэшируем результат
@@ -187,9 +192,44 @@ export const lessonGeneratorService = {
           keywords: ['вилка', 'связка', 'открытый шах', 'двойной шах', 'тактика'],
         },
         do: {
-          type: 'free_text',
-          prompt: 'Объясни своими словами разницу между вилкой и связкой. Приведи пример каждого.',
+          type: 'chess_puzzle',
+          prompt: 'Найди вилку конём — ход, который нападает на короля И ладью одновременно.',
+          puzzleFen: '8/8/8/3r4/8/8/8/R3K1n1 b - - 0 1',
+          puzzleMoves: ['g1f3'],
         },
+        tests: [
+          {
+            type: 'multiple_choice',
+            prompt: 'Какой тактический приём нападает на две фигуры одновременно?',
+            options: ['Связка', 'Вилка', 'Открытый шах', 'Рокировка'],
+            correctOptionIndex: 1,
+          },
+          {
+            type: 'multiple_choice',
+            prompt: 'Что происходит при «пате»?',
+            options: ['Мат королю', 'У игрока нет ходов, но нет шаха (ничья)', 'Выигрыш белых', 'Потеря ферзя'],
+            correctOptionIndex: 1,
+          },
+          {
+            type: 'fill_blank',
+            prompt: 'Заполни пропуски в шахматных понятиях',
+            blanksText: 'Вилка наносит ___ удар, а ___ ограничивает движение фигуры.',
+            wordPool: ['двойной', 'связка', 'одинарный', 'мат'],
+            correctOrder: ['двойной', 'связка'],
+          },
+          {
+            type: 'fill_blank',
+            prompt: 'Вставь пропущенные слова',
+            blanksText: 'При связке фигура защищает более ___ фигуру от ___ удара.',
+            wordPool: ['ценную', 'прямого', 'дешевую', 'косого'],
+            correctOrder: ['ценную', 'прямого'],
+          },
+          {
+            type: 'free_text',
+            prompt: 'Объясни своими словами разницу между вилкой и связкой.',
+            correctAnswer: 'Вилка нападает на две фигуры сразу, а связка не дает одной фигуре отойти из-за угрозы другой',
+          },
+        ]
       },
       coding: {
         id: `coding_fallback_d${dayNumber}`,

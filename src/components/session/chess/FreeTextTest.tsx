@@ -23,7 +23,7 @@ interface FreeTextTestProps {
     hobbyId: string;
     question: string;
     correctAnswer?: string;
-    onAnswer: (isCorrect: boolean, feedback: string) => void;
+    onAnswer: (isCorrect: boolean, feedback: string, title?: string) => void;
 }
 
 export const FreeTextTest: React.FC<FreeTextTestProps> = ({
@@ -58,13 +58,21 @@ export const FreeTextTest: React.FC<FreeTextTestProps> = ({
             const checkPrompt = [
                 {
                     role: 'system' as const,
-                    content: `Ты — строгий, но справедливый проверяющий.
-Оцени ответ пользователя.
-ПРАВИЛА:
-1. Если ответ по смыслу верный (даже если есть опечатки или он написан своими словами) — начни ответ со слова "ВЕРНО:".
-2. Если ответ в корне неверный — начни ответ со слова "НЕВЕРНО:".
-3. После этого кратко (1-2 предложения) объясни почему.
-Не используй markdown.`
+                    content: `Ты — ИИ-ассистент в образовательном приложении. Твоя задача проверить ответ пользователя.
+
+ПРАВИЛА ОЦЕНКИ:
+- Если ответ правильный или хотя бы частично правильный по смыслу (даже своими словами) -> "status": "correct" (или "partial").
+- Если ответ вообще не по теме, случайный набор букв, бессмысленный или в корне неверный -> "status": "incorrect".
+
+ФОРМАТ ОТВЕТА (ТОЛЬКО JSON):
+{
+  "status": "correct" | "partial" | "incorrect",
+  "title": "Короткий заголовок (например, 'Верно', 'Почти правильно', 'Неверно')",
+  "explanation": "Один короткий абзац объяснения, максимум 300-400 символов. Без списков."
+}
+
+ВАЖНО:
+- Верни только JSON. Не используй маркдаун (\`\`\`json).`
                 },
                 {
                     role: 'user' as const,
@@ -72,23 +80,43 @@ export const FreeTextTest: React.FC<FreeTextTestProps> = ({
                 }
             ];
 
-            const feedback = await aiService.sendMessage(checkPrompt, hobbyId);
+            const feedback = await aiService.gradeAnswer(checkPrompt, hobbyId);
             
-            const isCorrect = feedback.trim().toUpperCase().startsWith('ВЕРНО:');
-            const cleanFeedback = feedback.replace(/^(ВЕРНО:|НЕВЕРНО:)/i, '').trim();
+            let isCorrect = false;
+            let cleanFeedback = '';
+            let title = '';
+
+            try {
+                const jsonMatch = feedback.match(/\{[\s\S]*\}/);
+                const jsonStr = jsonMatch ? jsonMatch[0] : feedback;
+                const parsed = JSON.parse(jsonStr);
+                
+                isCorrect = parsed.status === 'correct' || parsed.status === 'partial';
+                cleanFeedback = parsed.explanation || '';
+                title = parsed.title || (isCorrect ? 'Отлично!' : 'Неверно');
+            } catch (e) {
+                console.log('[FreeTextTest] JSON parse error, falling back to text analysis');
+                const cleanText = feedback.trim().replace(/\*/g, '');
+                const upperText = cleanText.toUpperCase();
+                const hasIncorrect = upperText.includes('НЕВЕРНО');
+                const hasCorrect = upperText.includes('ВЕРНО') && !hasIncorrect;
+                
+                isCorrect = hasCorrect;
+                cleanFeedback = cleanText.replace(/^(ВЕРНО:|ВЕРНО|НЕВЕРНО:|НЕВЕРНО)/i, '').trim();
+                if (!cleanFeedback) cleanFeedback = cleanText;
+                title = isCorrect ? 'Отлично!' : 'Неверно';
+            }
 
             setIsCorrectState(isCorrect);
             setChecked(true);
             
-            // Задержка для показа анимации/цветов перед переходом
-            setTimeout(() => onAnswer(isCorrect, cleanFeedback), 1500);
+            setTimeout(() => onAnswer(isCorrect, cleanFeedback, title), 800);
 
         } catch (e) {
             console.error('[FreeTextTest] Error checking answer:', e);
-            // Fallback: считаем верным если сервис недоступен, чтобы не блокировать флоу
-            setIsCorrectState(true);
+            setIsCorrectState(false);
             setChecked(true);
-            setTimeout(() => onAnswer(true, 'Отличный ответ!'), 1500);
+            setTimeout(() => onAnswer(false, 'Произошла ошибка при проверке ответа. Пожалуйста, попробуйте еще раз.', 'Ошибка проверки'), 800);
         } finally {
             setIsChecking(false);
         }
@@ -124,6 +152,7 @@ export const FreeTextTest: React.FC<FreeTextTestProps> = ({
                     style={inputTextStyle}
                     placeholder="Напиши свой ответ здесь..."
                     placeholderTextColor="rgba(8, 19, 42, 0.4)"
+                    selectionColor="#8CA1C1"
                     value={answer}
                     onChangeText={setAnswer}
                     multiline
@@ -137,6 +166,8 @@ export const FreeTextTest: React.FC<FreeTextTestProps> = ({
                     </View>
                 )}
             </View>
+
+
 
             {/* Кнопка */}
             {!checked && (
@@ -176,9 +207,9 @@ const createStyles = (colors: any) => {
         questionCard: {
             backgroundColor: 'transparent',
             borderRadius: 0,
-            paddingVertical: scale(20),
+            paddingVertical: scale(12),
             paddingHorizontal: scale(10),
-            marginBottom: scale(24),
+            marginBottom: scale(8),
             borderWidth: 0,
             width: '100%',
             alignItems: 'center',
@@ -215,7 +246,8 @@ const createStyles = (colors: any) => {
             borderRadius: scale(20),
             padding: scale(20),
             marginBottom: scale(24),
-            borderWidth: 0,
+            borderWidth: 2,
+            borderColor: '#E2E8F0',
             width: '100%',
             minHeight: scale(160),
             position: 'relative',
@@ -226,21 +258,59 @@ const createStyles = (colors: any) => {
             elevation: 2,
         },
         inputCardCorrect: {
-            backgroundColor: '#EBF7EE', // Soft green background
+            borderColor: '#34C759', // Crisp green border
         },
         inputCardIncorrect: {
-            backgroundColor: '#FDF2F2', // Soft red background
+            borderColor: '#FF3B30', // Crisp red border
+        },
+        feedbackCard: {
+            backgroundColor: '#FFFFFF',
+            borderRadius: scale(20),
+            padding: scale(16),
+            width: '100%',
+            marginTop: scale(-12), // Слегка притягиваем к карточке ввода
+            marginBottom: scale(20),
+            borderWidth: 1.5,
+            borderColor: '#E2E8F0',
+            shadowColor: '#0F2147',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.02,
+            shadowRadius: 8,
+            elevation: 1,
+        },
+        feedbackCardCorrect: {
+            borderColor: '#C2F0D0', // Мягкая зеленая обводка
+            backgroundColor: '#F3FBF5',
+        },
+        feedbackCardIncorrect: {
+            borderColor: '#FCA5A5', // Мягкая красная обводка
+            backgroundColor: '#FEF2F2',
+        },
+        feedbackTitle: {
+            fontFamily: fonts.heading.bold,
+            fontSize: scale(12),
+            color: '#1A253C',
+            marginBottom: scale(6),
+            textTransform: 'uppercase',
+            letterSpacing: 0.5,
+        },
+        feedbackText: {
+            fontFamily: fonts.body.regular,
+            fontSize: scale(14),
+            lineHeight: scale(20),
+            color: '#1A253C',
+            textAlign: 'left',
         },
         textInput: {
             fontFamily: fonts.body.regular,
-            fontSize: scale(16),
+            fontSize: scale(15),
             color: '#1A253C',
             minHeight: scale(120),
-            lineHeight: scale(24),
+            lineHeight: scale(20),
         },
         textInputChecked: {
             color: '#1A253C',
-            fontFamily: fonts.heading.medium,
+            fontFamily: fonts.body.regular,
         },
         checkIconContainer: {
             position: 'absolute',
@@ -265,6 +335,7 @@ const createStyles = (colors: any) => {
             justifyContent: 'center',
             alignItems: 'center',
             width: '100%',
+            marginTop: scale(16),
             shadowColor: '#102852',
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.1,

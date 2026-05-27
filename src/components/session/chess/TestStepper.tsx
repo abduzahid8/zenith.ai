@@ -14,8 +14,8 @@ import {
     Animated,
     KeyboardAvoidingView,
     Platform,
-    ScrollView,
 } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { scale, SCREEN_WIDTH } from '../../../constants';
 import { useAppTheme } from '../../../theme/useAppTheme';
 import { TaskStep } from '../../../data/lessonContent';
@@ -42,34 +42,96 @@ export const TestStepper: React.FC<TestStepperProps> = ({
     const [currentIndex, setCurrentIndex] = useState(0);
     // Массив результатов: null (не пройден), true (верно), false (неверно)
     const [results, setResults] = useState<(boolean | null)[]>(Array(tests.length).fill(null));
+    // Количество попыток для каждого шага теста (используется как часть key для сброса стейта проваленных тестов)
+    const [attempts, setAttempts] = useState<number[]>(Array(tests.length).fill(0));
     
-    // Состояние для баннера подбадривания
-    const [bannerVisible, setBannerVisible] = useState(false);
-    const [lastAnswerCorrect, setLastAnswerCorrect] = useState(false);
+    // Баннер — храним видимость, результат, отзыв и заголовок в одном state,
+    // чтобы они всегда обновлялись атомарно (без мигания)
+    const [banner, setBanner] = useState<{ visible: boolean; isCorrect: boolean; feedback?: string; title?: string }>(
+        { visible: false, isCorrect: false }
+    );
+
+    // Состояние для временного отключения скролла во время перетаскивания (drag-and-drop)
+    const [scrollEnabled, setScrollEnabled] = useState(true);
 
     // Анимация перехода между экранами
     const slideAnim = React.useRef(new Animated.Value(0)).current;
     const fadeAnim = React.useRef(new Animated.Value(1)).current;
 
-    const handleAnswer = (isCorrect: boolean, feedback?: string) => {
+    const handleAnswer = (isCorrect: boolean, feedback?: string, title?: string) => {
         // Записываем результат
         const newResults = [...results];
         newResults[currentIndex] = isCorrect;
         setResults(newResults);
 
-        // Показываем баннер
-        setLastAnswerCorrect(isCorrect);
-        setBannerVisible(true);
+        // Обновляем visible, isCorrect, feedback и title атомарно — одним вызовом
+        setBanner({ visible: true, isCorrect, feedback, title });
+    };
 
-        // Переходим к следующему шагу или завершаем
-        setTimeout(() => {
-            setBannerVisible(false); // Скрываем баннер
-            
-            if (currentIndex < tests.length - 1) {
-                // Анимация ухода влево
+    const handleNext = () => {
+        setBanner({ visible: false, isCorrect: banner.isCorrect }); // Скрываем баннер
+        
+        // Находим следующий не пройденный успешно тест (результат которого не равен true)
+        let nextIndex = currentIndex + 1;
+        while (nextIndex < tests.length && results[nextIndex] === true) {
+            nextIndex++;
+        }
+
+        if (nextIndex < tests.length) {
+            // Анимация ухода влево
+            Animated.parallel([
+                Animated.timing(slideAnim, {
+                    toValue: -SCREEN_WIDTH,
+                    duration: 250,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(fadeAnim, {
+                    toValue: 0,
+                    duration: 200,
+                    useNativeDriver: true,
+                })
+            ]).start(() => {
+                setCurrentIndex(nextIndex);
+                slideAnim.setValue(SCREEN_WIDTH);
+                
+                // Анимация появления справа
                 Animated.parallel([
                     Animated.timing(slideAnim, {
-                        toValue: -SCREEN_WIDTH,
+                        toValue: 0,
+                        duration: 300,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(fadeAnim, {
+                        toValue: 1,
+                        duration: 250,
+                        useNativeDriver: true,
+                    })
+                ]).start();
+            });
+        } else {
+            // Мы дошли до конца. Проверяем, есть ли проваленные тесты
+            const hasFailed = results.includes(false);
+            if (hasFailed) {
+                // Находим первый проваленный тест
+                const firstFailedIndex = results.indexOf(false);
+                
+                // Сбрасываем только проваленные тесты в null, чтобы их можно было пройти заново
+                const newResults = results.map(r => r === false ? null : r);
+                setResults(newResults);
+
+                // Увеличиваем счетчик попыток для проваленных тестов, чтобы сбросить их внутренний стейт при повторном рендере
+                const newAttempts = [...attempts];
+                results.forEach((r, idx) => {
+                    if (r === false) {
+                        newAttempts[idx] = newAttempts[idx] + 1;
+                    }
+                });
+                setAttempts(newAttempts);
+
+                // Анимируем переход назад к первому проваленному тесту (уезжаем вправо)
+                Animated.parallel([
+                    Animated.timing(slideAnim, {
+                        toValue: SCREEN_WIDTH,
                         duration: 250,
                         useNativeDriver: true,
                     }),
@@ -79,10 +141,10 @@ export const TestStepper: React.FC<TestStepperProps> = ({
                         useNativeDriver: true,
                     })
                 ]).start(() => {
-                    setCurrentIndex(prev => prev + 1);
-                    slideAnim.setValue(SCREEN_WIDTH);
+                    setCurrentIndex(firstFailedIndex);
+                    slideAnim.setValue(-SCREEN_WIDTH);
                     
-                    // Анимация появления справа
+                    // Анимация появления слева
                     Animated.parallel([
                         Animated.timing(slideAnim, {
                             toValue: 0,
@@ -97,10 +159,10 @@ export const TestStepper: React.FC<TestStepperProps> = ({
                     ]).start();
                 });
             } else {
-                // Все тесты завершены -> идем к шахматной доске
+                // Все тесты успешно пройдены -> идем к шахматной доске
                 onAllTestsComplete();
             }
-        }, 1500); // Баннер висит 1.5 секунды
+        }
     };
 
     const renderProgressDots = () => {
@@ -130,6 +192,7 @@ export const TestStepper: React.FC<TestStepperProps> = ({
             case 'multiple_choice':
                 return (
                     <MultipleChoiceTest
+                        key={`${currentIndex}_${attempts[currentIndex]}`}
                         question={currentTest.prompt}
                         options={currentTest.options || []}
                         correctIndex={currentTest.correctOptionIndex || 0}
@@ -139,16 +202,20 @@ export const TestStepper: React.FC<TestStepperProps> = ({
             case 'fill_blank':
                 return (
                     <FillBlankTest
+                        key={`${currentIndex}_${attempts[currentIndex]}`}
                         question={currentTest.prompt}
                         blanksText={currentTest.blanksText || ''}
                         wordPool={currentTest.wordPool || []}
                         correctOrder={currentTest.correctOrder || []}
                         onAnswer={handleAnswer}
+                        onNext={handleNext}
+                        onDragStateChange={(isDragging) => setScrollEnabled(!isDragging)}
                     />
                 );
             case 'free_text':
                 return (
                     <FreeTextTest
+                        key={`${currentIndex}_${attempts[currentIndex]}`}
                         hobbyId={hobbyId}
                         question={currentTest.prompt}
                         correctAnswer={currentTest.correctAnswer}
@@ -177,6 +244,7 @@ export const TestStepper: React.FC<TestStepperProps> = ({
                 }
             ]}>
                 <ScrollView 
+                    scrollEnabled={scrollEnabled}
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
@@ -186,8 +254,12 @@ export const TestStepper: React.FC<TestStepperProps> = ({
             </Animated.View>
 
             <EncouragementBanner
-                visible={bannerVisible}
-                isCorrect={lastAnswerCorrect}
+                visible={banner.visible}
+                isCorrect={banner.isCorrect}
+                onNext={handleNext}
+                hideButton={tests[currentIndex]?.type === 'fill_blank'}
+                feedback={banner.feedback}
+                title={banner.title}
             />
         </KeyboardAvoidingView>
     );
@@ -206,7 +278,7 @@ const createStyles = (colors: any) => {
             alignItems: 'center',
             gap: scale(8),
             paddingTop: scale(24),
-            paddingBottom: scale(16),
+            paddingBottom: scale(12),
         },
         progressDot: {
             height: scale(6),
@@ -233,10 +305,9 @@ const createStyles = (colors: any) => {
         },
         scrollContent: {
             flexGrow: 1,
-            justifyContent: 'center',
             paddingHorizontal: scale(20),
             paddingBottom: scale(40),
-            paddingTop: scale(20),
+            paddingTop: scale(36),
         },
     });
 };

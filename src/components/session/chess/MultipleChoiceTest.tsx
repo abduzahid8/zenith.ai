@@ -40,8 +40,7 @@ export const MultipleChoiceTest: React.FC<MultipleChoiceTestProps> = ({
         setSelectedIndex(index);
         setAnswered(true);
         const isCorrect = index === correctIndex;
-        // Небольшая задержка для анимации перед callback
-        setTimeout(() => onAnswer(isCorrect), 1200);
+        onAnswer(isCorrect);
     };
 
     const getOptionStyle = (index: number) => {
@@ -165,11 +164,11 @@ const createStyles = (colors: any) => {
             flexDirection: 'row',
             alignItems: 'center',
             width: '100%',
-            borderRadius: scale(20),
-            paddingVertical: scale(16),
+            borderRadius: scale(34),
+            paddingVertical: scale(14), // slightly less padding because of border
             paddingHorizontal: scale(16),
             minHeight: scale(68),
-            borderWidth: 0,
+            borderWidth: 2,
             shadowColor: '#0F2147',
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.02,
@@ -178,16 +177,20 @@ const createStyles = (colors: any) => {
         },
         optionDefault: {
             backgroundColor: '#FFFFFF',
+            borderColor: '#E2E8F0',
         },
         optionCorrect: {
-            backgroundColor: '#EBF7EE', // Мягкий премиальный зеленый фон
+            backgroundColor: '#FFFFFF', 
+            borderColor: '#34C759', // Crisp green border
         },
         optionIncorrect: {
-            backgroundColor: '#FDF2F2', // Мягкий премиальный красный фон
+            backgroundColor: '#FFFFFF', 
+            borderColor: '#FF3B30', // Crisp red border
         },
         optionDimmed: {
             backgroundColor: '#FFFFFF',
-            opacity: 0.5,
+            borderColor: '#F1F5F9',
+            opacity: 0.35,
         },
         optionLabelContainer: {
             width: scale(36),
@@ -236,12 +239,10 @@ const createStyles = (colors: any) => {
             color: '#1A253C',
         },
         optionTextCorrect: {
-            color: '#155724',
-            fontFamily: fonts.heading.bold,
+            color: '#138D4F',
         },
         optionTextIncorrect: {
             color: '#721C24',
-            fontFamily: fonts.heading.bold,
         },
         optionTextDimmed: {
             color: 'rgba(15, 33, 71, 0.3)',
