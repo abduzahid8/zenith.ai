@@ -204,37 +204,39 @@ const createStyles = (colors: any) => {
             flexDirection: 'row',
             justifyContent: 'center',
             alignItems: 'center',
-            gap: scale(10),
-            paddingVertical: scale(20),
+            gap: scale(8),
+            paddingTop: scale(24),
+            paddingBottom: scale(16),
         },
         progressDot: {
-            width: scale(12),
-            height: scale(12),
-            borderRadius: scale(6),
+            height: scale(6),
+            borderRadius: scale(3),
         },
         progressDotInactive: {
-            backgroundColor: g.progressInactive || '#DDE8F4',
+            width: scale(8),
+            backgroundColor: 'rgba(15, 33, 71, 0.1)',
         },
         progressDotActive: {
-            backgroundColor: g.progressActive || '#5BA3E6',
-            width: scale(16),
-            height: scale(16),
-            borderRadius: scale(8),
+            width: scale(28),
+            backgroundColor: '#37a0ef',
         },
         progressDotDone: {
-            backgroundColor: g.progressDone || '#4ADE80',
+            width: scale(8),
+            backgroundColor: '#34C759',
         },
         progressDotFailed: {
-            backgroundColor: g.progressFailed || '#F87171',
+            width: scale(8),
+            backgroundColor: '#FF3B30',
         },
         testContainer: {
             flex: 1,
         },
         scrollContent: {
             flexGrow: 1,
+            justifyContent: 'center',
             paddingHorizontal: scale(20),
             paddingBottom: scale(40),
-            paddingTop: scale(36),
+            paddingTop: scale(20),
         },
     });
 };

@@ -111,6 +111,10 @@ export const FreeTextTest: React.FC<FreeTextTestProps> = ({
         <View style={styles.container}>
             {/* Вопрос */}
             <View style={styles.questionCard}>
+                <View style={styles.cardHeader}>
+                    <View style={styles.headerDot} />
+                    <Text style={styles.headerLabel}>ОТКРЫТЫЙ ВОПРОС</Text>
+                </View>
                 <Text style={styles.questionText}>{question}</Text>
             </View>
 
@@ -166,55 +170,83 @@ const createStyles = (colors: any) => {
     return StyleSheet.create({
         container: {
             flex: 1,
+            alignItems: 'center',
+            width: '100%',
         },
         questionCard: {
-            backgroundColor: g.theoryCard || '#D6EEFF',
-            borderRadius: scale(16),
-            padding: scale(16),
+            backgroundColor: 'transparent',
+            borderRadius: 0,
+            paddingVertical: scale(20),
+            paddingHorizontal: scale(10),
             marginBottom: scale(24),
-            borderWidth: 1,
-            borderColor: g.theoryCardBorder || '#B8D8F0',
+            borderWidth: 0,
+            width: '100%',
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        cardHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: scale(6),
+            marginBottom: scale(12),
+            justifyContent: 'center',
+        },
+        headerDot: {
+            width: scale(6),
+            height: scale(6),
+            borderRadius: scale(3),
+            backgroundColor: '#37a0ef',
+        },
+        headerLabel: {
+            fontFamily: fonts.heading.bold,
+            fontSize: scale(11),
+            color: 'rgba(15, 33, 71, 0.4)',
+            letterSpacing: 1.5,
         },
         questionText: {
             fontFamily: fonts.heading.bold,
-            fontSize: scale(18),
-            lineHeight: scale(26),
-            color: colors.text || '#08132A',
+            fontSize: scale(22),
+            lineHeight: scale(30),
+            color: '#1A253C',
             textAlign: 'center',
         },
         inputCard: {
-            backgroundColor: g.freeTextBg || '#F5F7FA',
-            borderRadius: scale(16),
-            padding: scale(16),
+            backgroundColor: '#FFFFFF',
+            borderRadius: scale(20),
+            padding: scale(20),
             marginBottom: scale(24),
-            borderWidth: 1,
-            borderColor: g.freeTextBorder || '#CBD5E1',
-            minHeight: scale(140),
+            borderWidth: 0,
+            width: '100%',
+            minHeight: scale(160),
             position: 'relative',
+            shadowColor: '#0F2147',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.03,
+            shadowRadius: 15,
+            elevation: 2,
         },
         inputCardCorrect: {
-            backgroundColor: g.freeTextCorrect || '#4ADE80',
-            borderColor: g.freeTextCorrectBorder || '#22C55E',
+            backgroundColor: '#EBF7EE', // Soft green background
         },
         inputCardIncorrect: {
-            backgroundColor: g.freeTextIncorrect || '#F87171',
-            borderColor: g.freeTextIncorrectBorder || '#EF4444',
+            backgroundColor: '#FDF2F2', // Soft red background
         },
         textInput: {
             fontFamily: fonts.body.regular,
             fontSize: scale(16),
-            color: colors.text || '#08132A',
-            minHeight: scale(100),
+            color: '#1A253C',
+            minHeight: scale(120),
+            lineHeight: scale(24),
         },
         textInputChecked: {
-            color: '#000000', // Тёмный текст на цветном фоне для читаемости
+            color: '#1A253C',
             fontFamily: fonts.heading.medium,
         },
         checkIconContainer: {
             position: 'absolute',
-            bottom: scale(12),
+            bottom: scale(16),
             right: scale(16),
-            backgroundColor: 'rgba(255,255,255,0.3)',
+            backgroundColor: '#34C759',
             borderRadius: scale(12),
             width: scale(24),
             height: scale(24),
@@ -222,24 +254,32 @@ const createStyles = (colors: any) => {
             justifyContent: 'center',
         },
         checkIcon: {
-            color: '#065F46',
-            fontSize: scale(16),
+            color: '#FFFFFF',
+            fontSize: scale(14),
             fontWeight: 'bold',
         },
         checkButton: {
-            backgroundColor: g.buttonConfirm || '#102852',
-            borderRadius: scale(30),
+            backgroundColor: '#102852',
+            borderRadius: scale(26),
             height: scale(52),
             justifyContent: 'center',
             alignItems: 'center',
+            width: '100%',
+            shadowColor: '#102852',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.1,
+            shadowRadius: 8,
+            elevation: 2,
         },
         checkButtonDisabled: {
             backgroundColor: g.buttonConfirmDisabled || '#CBD5E1',
+            shadowOpacity: 0,
+            elevation: 0,
         },
         checkButtonText: {
             fontFamily: fonts.heading.bold,
             fontSize: scale(17),
-            color: g.buttonConfirmText || '#FFFFFF',
+            color: '#FFFFFF',
         },
         checkButtonTextDisabled: {
             color: g.buttonConfirmDisabledText || '#94A3B8',

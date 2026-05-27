@@ -51,6 +51,20 @@ export const MultipleChoiceTest: React.FC<MultipleChoiceTestProps> = ({
         return styles.optionDimmed;
     };
 
+    const getOptionLabelStyle = (index: number) => {
+        if (!answered) return styles.labelContainerDefault;
+        if (index === correctIndex) return styles.labelContainerCorrect;
+        if (index === selectedIndex && index !== correctIndex) return styles.labelContainerIncorrect;
+        return styles.labelContainerDimmed;
+    };
+
+    const getOptionLabelTextStyle = (index: number) => {
+        if (!answered) return styles.labelTextDefault;
+        if (index === correctIndex) return styles.labelTextCorrect;
+        if (index === selectedIndex && index !== correctIndex) return styles.labelTextIncorrect;
+        return styles.labelTextDimmed;
+    };
+
     const getOptionTextStyle = (index: number) => {
         if (!answered) return styles.optionTextDefault;
         if (index === correctIndex) return styles.optionTextCorrect;
@@ -73,8 +87,8 @@ export const MultipleChoiceTest: React.FC<MultipleChoiceTestProps> = ({
                 <Text style={styles.questionText}>{question}</Text>
             </View>
 
-            {/* Варианты 2×2 */}
-            <View style={styles.optionsGrid}>
+            {/* Варианты — Вертикальный стек */}
+            <View style={styles.optionsList}>
                 {options.map((option, index) => (
                     <TouchableOpacity
                         key={index}
@@ -83,9 +97,11 @@ export const MultipleChoiceTest: React.FC<MultipleChoiceTestProps> = ({
                         disabled={answered}
                         activeOpacity={0.75}
                     >
-                        <Text style={[styles.optionLabel, answered && { color: 'rgba(255, 255, 255, 0.7)' }]}>
-                            {getOptionLabel(index)}
-                        </Text>
+                        <View style={[styles.optionLabelContainer, getOptionLabelStyle(index)]}>
+                            <Text style={[styles.optionLabel, getOptionLabelTextStyle(index)]}>
+                                {getOptionLabel(index)}
+                            </Text>
+                        </View>
                         <Text style={[styles.optionText, getOptionTextStyle(index)]}>
                             {option}
                         </Text>
@@ -105,23 +121,21 @@ const createStyles = (colors: any) => {
             width: '100%',
         },
         questionCard: {
-            backgroundColor: '#FFFFFF',
-            borderRadius: scale(24),
-            padding: scale(24),
-            marginBottom: scale(28),
+            backgroundColor: 'transparent',
+            borderRadius: 0,
+            paddingVertical: scale(20),
+            paddingHorizontal: scale(10),
+            marginBottom: scale(24),
             borderWidth: 0,
             width: '100%',
-            shadowColor: '#0F2147',
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: 0.04,
-            shadowRadius: 20,
-            elevation: 3,
+            alignItems: 'center',
+            justifyContent: 'center',
         },
         cardHeader: {
             flexDirection: 'row',
             alignItems: 'center',
             gap: scale(6),
-            marginBottom: scale(14),
+            marginBottom: scale(12),
             justifyContent: 'center',
         },
         headerDot: {
@@ -132,72 +146,102 @@ const createStyles = (colors: any) => {
         },
         headerLabel: {
             fontFamily: fonts.heading.bold,
-            fontSize: scale(10),
+            fontSize: scale(11),
             color: 'rgba(15, 33, 71, 0.4)',
             letterSpacing: 1.5,
         },
         questionText: {
             fontFamily: fonts.heading.bold,
-            fontSize: scale(19),
-            lineHeight: scale(28),
+            fontSize: scale(22),
+            lineHeight: scale(30),
             color: '#1A253C',
             textAlign: 'center',
         },
-        optionsGrid: {
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            gap: scale(12),
-            justifyContent: 'center',
+        optionsList: {
             width: '100%',
+            gap: scale(12),
         },
         optionButton: {
-            width: '48%',
-            borderRadius: scale(20),
-            paddingVertical: scale(22),
-            paddingHorizontal: scale(12),
+            flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: scale(100),
+            width: '100%',
+            borderRadius: scale(20),
+            paddingVertical: scale(16),
+            paddingHorizontal: scale(16),
+            minHeight: scale(68),
             borderWidth: 0,
             shadowColor: '#0F2147',
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.03,
-            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.02,
+            shadowRadius: 8,
             elevation: 2,
         },
         optionDefault: {
             backgroundColor: '#FFFFFF',
         },
         optionCorrect: {
-            backgroundColor: '#22C55E',
+            backgroundColor: '#EBF7EE', // Мягкий премиальный зеленый фон
         },
         optionIncorrect: {
-            backgroundColor: '#EF4444',
+            backgroundColor: '#FDF2F2', // Мягкий премиальный красный фон
         },
         optionDimmed: {
             backgroundColor: '#FFFFFF',
-            opacity: 0.4,
+            opacity: 0.5,
+        },
+        optionLabelContainer: {
+            width: scale(36),
+            height: scale(36),
+            borderRadius: scale(18),
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: scale(14),
+        },
+        labelContainerDefault: {
+            backgroundColor: 'rgba(15, 33, 71, 0.05)',
+        },
+        labelContainerCorrect: {
+            backgroundColor: '#34C759', // Зеленый кружок
+        },
+        labelContainerIncorrect: {
+            backgroundColor: '#FF3B30', // Красный кружок
+        },
+        labelContainerDimmed: {
+            backgroundColor: 'rgba(15, 33, 71, 0.02)',
         },
         optionLabel: {
             fontFamily: fonts.heading.bold,
-            fontSize: scale(12),
-            color: 'rgba(15, 33, 71, 0.35)',
-            marginBottom: scale(4),
+            fontSize: scale(14),
+        },
+        labelTextDefault: {
+            color: '#1A253C',
+        },
+        labelTextCorrect: {
+            color: '#FFFFFF',
+        },
+        labelTextIncorrect: {
+            color: '#FFFFFF',
+        },
+        labelTextDimmed: {
+            color: 'rgba(15, 33, 71, 0.3)',
         },
         optionText: {
-            fontFamily: fonts.heading.bold,
+            fontFamily: fonts.body?.light || fonts.heading.bold,
             fontSize: scale(15),
             lineHeight: scale(22),
-            textAlign: 'center',
+            flex: 1,
+            textAlign: 'left',
         },
         optionTextDefault: {
             color: '#1A253C',
         },
         optionTextCorrect: {
-            color: '#FFFFFF',
+            color: '#155724',
+            fontFamily: fonts.heading.bold,
         },
         optionTextIncorrect: {
-            color: '#FFFFFF',
+            color: '#721C24',
+            fontFamily: fonts.heading.bold,
         },
         optionTextDimmed: {
             color: 'rgba(15, 33, 71, 0.3)',
