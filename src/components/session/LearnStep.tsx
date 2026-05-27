@@ -514,24 +514,6 @@ export const LearnStep: React.FC<LearnStepProps> = ({
                 )}
             </ScrollView>
 
-            {/* Floating Right Button (Zenyth AI Star SVG Logo) — No shadow, raised */}
-            {onOpenChat && (
-                <TouchableOpacity style={styles.floatingZenythBtn} onPress={onOpenChat} activeOpacity={0.7}>
-                    <Svg width={scale(28)} height={scale(28)} viewBox="0 0 474.71 474.71">
-                        <Defs>
-                            <LinearGradient id="zenyth_grad" x1="0" y1="237.35" x2="474.71" y2="237.35" gradientUnits="userSpaceOnUse">
-                                <Stop offset="0" stopColor="#37a0ef" />
-                                <Stop offset="1" stopColor="#8cdeff" />
-                            </LinearGradient>
-                        </Defs>
-                        <Path
-                            fill="url(#zenyth_grad)"
-                            d="M469.07,245.45l-123.81,45.8,36.25,78.79c3.35,7.3-4.18,14.78-11.47,11.43l-78.74-36.21-45.84,123.81c-2.75,7.53-13.4,7.53-16.2,0l-45.8-123.81-78.79,36.21c-7.3,3.35-14.82-4.13-11.47-11.43l36.25-78.79L5.64,245.45c-7.53-2.8-7.53-13.44,0-16.2l123.76-45.84-36.21-78.74c-3.35-7.3,4.18-14.82,11.47-11.47l78.79,36.25L229.26,5.64c2.8-7.53,13.44-7.53,16.2,0l45.84,123.76,78.74-36.21c7.3-3.35,14.82,4.18,11.47,11.47l-36.21,78.74,123.76,45.84c7.53,2.75,7.53,13.4,0,16.2Z"
-                        />
-                    </Svg>
-                </TouchableOpacity>
-            )}
-
             <TouchableOpacity style={styles.nextButton} onPress={onNext} activeOpacity={0.8}>
                 <Text style={styles.nextButtonText}>{t('Далее')}</Text>
             </TouchableOpacity>
