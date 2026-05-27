@@ -234,7 +234,7 @@ const createStyles = (colors: any) => {
             flexGrow: 1,
             paddingHorizontal: scale(20),
             paddingBottom: scale(40),
-            justifyContent: 'center',
+            paddingTop: scale(36),
         },
     });
 };

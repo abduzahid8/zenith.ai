@@ -64,10 +64,6 @@ export const MultipleChoiceTest: React.FC<MultipleChoiceTestProps> = ({
 
     return (
         <View style={styles.container}>
-            {/* Ambient glowing backdrops */}
-            <View style={styles.glowTopLeft} />
-            <View style={styles.glowBottomRight} />
-
             {/* Вопрос */}
             <View style={styles.questionCard}>
                 <View style={styles.cardHeader}>
@@ -105,32 +101,8 @@ const createStyles = (colors: any) => {
     return StyleSheet.create({
         container: {
             flex: 1,
-            justifyContent: 'center',
             alignItems: 'center',
             width: '100%',
-            position: 'relative',
-        },
-        glowTopLeft: {
-            position: 'absolute',
-            top: -scale(40),
-            left: -scale(40),
-            width: scale(240),
-            height: scale(240),
-            borderRadius: scale(120),
-            backgroundColor: '#8CDEFF',
-            opacity: 0.15,
-            zIndex: -1,
-        },
-        glowBottomRight: {
-            position: 'absolute',
-            bottom: -scale(60),
-            right: -scale(40),
-            width: scale(260),
-            height: scale(260),
-            borderRadius: scale(130),
-            backgroundColor: '#F4C0FD',
-            opacity: 0.18,
-            zIndex: -1,
         },
         questionCard: {
             backgroundColor: '#FFFFFF',
