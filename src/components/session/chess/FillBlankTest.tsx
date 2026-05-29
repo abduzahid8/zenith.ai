@@ -190,9 +190,10 @@ export const FillBlankTest: React.FC<FillBlankTestProps> = ({
     // Тап → вставить в первый пустой слот
     const handleWordTap = useCallback((word: string, wordIndex: number) => {
         if (checked) return;
+        const firstEmpty = filledSlots.findIndex(s => s === null);
+        if (firstEmpty === -1) return; // Нет пустых слотов, ничего не делаем
+
         setFilledSlots(prev => {
-            const firstEmpty = prev.findIndex(s => s === null);
-            if (firstEmpty === -1) return prev;
             const next = [...prev];
             next[firstEmpty] = word;
             return next;
@@ -202,7 +203,7 @@ export const FillBlankTest: React.FC<FillBlankTestProps> = ({
             next.splice(wordIndex, 1);
             return next;
         });
-    }, [checked]);
+    }, [checked, filledSlots]);
 
     // Дроп — проверяем координаты слотов
     const handleWordDrop = useCallback((word: string, wordIndex: number, absX: number, absY: number) => {
