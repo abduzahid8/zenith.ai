@@ -141,6 +141,14 @@ async function handleSendMessage(apiKey: string, body: RequestBody): Promise<str
     return callGemini(apiKey, body.messages, systemPrompt, 0.7, 500);
 }
 
+async function handleGradeAnswer(apiKey: string, body: RequestBody): Promise<string> {
+    if (!body.messages || body.messages.length === 0) throw new Error('Bad request: missing messages');
+    const systemMessage = body.messages.find(m => m.role === 'system');
+    const systemPrompt = systemMessage ? systemMessage.content : '';
+    const userMessages = body.messages.filter(m => m.role !== 'system');
+    return callGemini(apiKey, userMessages, systemPrompt, 0.2, 1000);
+}
+
 async function handleHobbyRecommendations(apiKey: string, body: RequestBody): Promise<string> {
     const prompt = `Based on the user's quiz answers, recommend 3 hobbies from the list: chess, video_editing, drawing.
 Answers: ${JSON.stringify(body.answers)}
@@ -264,6 +272,9 @@ export default {
             switch (action) {
                 case 'sendMessage':
                     result = await handleSendMessage(apiKey, body);
+                    break;
+                case 'gradeAnswer':
+                    result = await handleGradeAnswer(apiKey, body);
                     break;
                 case 'getHobbyRecommendations':
                     result = await handleHobbyRecommendations(apiKey, body);

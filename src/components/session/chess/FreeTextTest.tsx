@@ -87,22 +87,65 @@ export const FreeTextTest: React.FC<FreeTextTestProps> = ({
             let title = '';
 
             try {
-                const jsonMatch = feedback.match(/\{[\s\S]*\}/);
-                const jsonStr = jsonMatch ? jsonMatch[0] : feedback;
-                const parsed = JSON.parse(jsonStr);
-                
-                isCorrect = parsed.status === 'correct' || parsed.status === 'partial';
-                cleanFeedback = parsed.explanation || '';
-                title = parsed.title || (isCorrect ? 'Отлично!' : 'Неверно');
+                if (feedback && typeof feedback === 'object') {
+                    const parsed = feedback as any;
+                    isCorrect = parsed.status === 'correct' || parsed.status === 'partial';
+                    cleanFeedback = parsed.explanation || '';
+                    title = parsed.title || (isCorrect ? 'Отлично!' : 'Неверно');
+                } else if (typeof feedback === 'string') {
+                    const jsonMatch = feedback.match(/\{[\s\S]*\}/);
+                    const jsonStr = jsonMatch ? jsonMatch[0] : feedback;
+                    
+                    try {
+                        const parsed = JSON.parse(jsonStr);
+                        isCorrect = parsed.status === 'correct' || parsed.status === 'partial';
+                        cleanFeedback = parsed.explanation || '';
+                        title = parsed.title || (isCorrect ? 'Отлично!' : 'Неверно');
+                    } catch (parseErr) {
+                        // JSON parsing failed (possibly truncated). Let's extract values using Regex!
+                        console.log('[FreeTextTest] JSON parse failed, extracting fields via regex');
+                        
+                        const statusMatch = jsonStr.match(/"status"\s*:\s*"([^"\r\n]+)"/);
+                        const status = statusMatch ? statusMatch[1].trim() : '';
+                        isCorrect = status === 'correct' || status === 'partial';
+                        
+                        const titleMatch = jsonStr.match(/"title"\s*:\s*"([^"\r\n]+)"/);
+                        title = titleMatch ? titleMatch[1].trim() : (isCorrect ? 'Отлично!' : 'Неверно');
+                        
+                        const explanationMatch = jsonStr.match(/"explanation"\s*:\s*"([^"\r\n]+)/);
+                        if (explanationMatch) {
+                            // Strip trailing quotes, braces, commas, backticks if any
+                            cleanFeedback = explanationMatch[1].replace(/"\s*,?\s*\}?\s*$/, '').trim();
+                        } else {
+                            throw parseErr; // Fallback to raw string analysis
+                        }
+                    }
+                } else {
+                    throw new Error('Invalid feedback format');
+                }
             } catch (e) {
-                console.log('[FreeTextTest] JSON parse error, falling back to text analysis');
-                const cleanText = feedback.trim().replace(/\*/g, '');
+                console.log('[FreeTextTest] Parsing error, falling back to text analysis:', e);
+                const cleanText = typeof feedback === 'string'
+                    ? feedback.trim().replace(/\*/g, '')
+                    : JSON.stringify(feedback);
                 const upperText = cleanText.toUpperCase();
-                const hasIncorrect = upperText.includes('НЕВЕРНО');
-                const hasCorrect = upperText.includes('ВЕРНО') && !hasIncorrect;
+                
+                const hasIncorrect = upperText.includes('НЕВЕРНО') || 
+                                     upperText.includes('НЕПРАВИЛЬНО') || 
+                                     upperText.includes('ОШИБКА');
+                                     
+                const hasCorrect = (upperText.includes('ВЕРНО') || 
+                                   upperText.includes('ПРАВИЛЬНО') || 
+                                   upperText.includes('ОТЛИЧНО') || 
+                                   upperText.includes('ОТЛИЧНЫЙ') || 
+                                   upperText.includes('ХОРОШО') || 
+                                   upperText.includes('МОЛОДЕЦ') ||
+                                   upperText.includes('ВЕРНЫЙ')) && !hasIncorrect;
                 
                 isCorrect = hasCorrect;
-                cleanFeedback = cleanText.replace(/^(ВЕРНО:|ВЕРНО|НЕВЕРНО:|НЕВЕРНО)/i, '').trim();
+                cleanFeedback = typeof feedback === 'string'
+                    ? cleanText.replace(/^(ВЕРНО:|ВЕРНО|НЕВЕРНО:|НЕВЕРНО)/i, '').trim()
+                    : cleanText;
                 if (!cleanFeedback) cleanFeedback = cleanText;
                 title = isCorrect ? 'Отлично!' : 'Неверно';
             }

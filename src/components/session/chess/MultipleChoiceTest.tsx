@@ -239,7 +239,7 @@ const createStyles = (colors: any) => {
             color: '#1A253C',
         },
         optionTextCorrect: {
-            color: '#138D4F',
+            color: '#102852',
         },
         optionTextIncorrect: {
             color: '#721C24',

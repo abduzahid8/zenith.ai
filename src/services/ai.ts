@@ -30,7 +30,7 @@ async function invokeAI<T>(action: string, payload: Record<string, unknown>): Pr
 
     if (!response.ok) {
         const message = json.error ?? `Worker error ${response.status}`;
-        console.error(`[AI Service] Worker error (${action}):`, json);
+        console.warn(`[AI Service] Worker error (${action}):`, json);
         throw new Error(message);
     }
 
@@ -86,19 +86,25 @@ export const aiService = {
         hobby?: string
     ): Promise<string> => {
         if (USE_LOCAL_AI) {
-            return localAiService.sendMessage(messages, hobby);
+            return (localAiService as any).gradeAnswer(messages, hobby);
         }
         try {
-            return await invokeAI<string>('sendMessage', { 
+            return await invokeAI<string>('gradeAnswer', { 
                 messages: messages, 
                 hobby
             });
-        } catch {
-            return JSON.stringify({
-                status: 'incorrect',
-                title: 'Ошибка проверки',
-                explanation: 'Ошибка проверки. Попробуйте еще раз.'
-            });
+        } catch (error) {
+            console.warn('[AI Service] Worker gradeAnswer failed, falling back to local Gemini service:', error);
+            try {
+                return await (localAiService as any).gradeAnswer(messages, hobby);
+            } catch (fallbackError) {
+                console.error('[AI Service] Local fallback also failed:', fallbackError);
+                return JSON.stringify({
+                    status: 'incorrect',
+                    title: 'Ошибка проверки',
+                    explanation: 'Ошибка проверки. Попробуйте еще раз.'
+                });
+            }
         }
     },
 

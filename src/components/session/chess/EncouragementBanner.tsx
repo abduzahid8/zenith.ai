@@ -229,7 +229,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         textAlign: 'left',
     },
     bannerTextCorrect: {
-        color: '#138D4F',
+        color: '#102852',
     },
     bannerTextIncorrect: {
         color: '#721C24',

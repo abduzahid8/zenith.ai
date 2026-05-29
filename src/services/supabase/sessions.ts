@@ -15,7 +15,6 @@ export const sessionService = {
                 user_id: userId,
                 hobby_id: hobbyId,
                 duration_seconds: durationSeconds,
-                duration_minutes: Math.round(durationSeconds / 60),
                 focus_score: options?.focusScore,
                 notes: options?.notes,
             })

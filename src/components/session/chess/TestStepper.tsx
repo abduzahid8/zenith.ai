@@ -40,8 +40,8 @@ export const TestStepper: React.FC<TestStepperProps> = ({
     const styles = useMemo(() => createStyles(colors), [colors]);
 
     const [currentIndex, setCurrentIndex] = useState(0);
-    // Массив результатов: null (не пройден), true (верно), false (неверно)
-    const [results, setResults] = useState<(boolean | null)[]>(Array(tests.length).fill(null));
+    // Массив результатов: null (не пройден), true (верно), false (неверно), 'skipped' (пропущен после 2 попыток)
+    const [results, setResults] = useState<(boolean | 'skipped' | null)[]>(Array(tests.length).fill(null));
     // Количество попыток для каждого шага теста (используется как часть key для сброса стейта проваленных тестов)
     const [attempts, setAttempts] = useState<number[]>(Array(tests.length).fill(0));
     
@@ -61,19 +61,38 @@ export const TestStepper: React.FC<TestStepperProps> = ({
     const handleAnswer = (isCorrect: boolean, feedback?: string, title?: string) => {
         // Записываем результат
         const newResults = [...results];
-        newResults[currentIndex] = isCorrect;
+        
+        let finalIsCorrect = isCorrect;
+        let finalFeedback = feedback;
+        let finalTitle = title;
+        
+        if (!isCorrect && attempts[currentIndex] >= 1) {
+            // Это вторая попытка и ответ неверный -> пропускаем задание
+            newResults[currentIndex] = 'skipped';
+            finalTitle = 'Задание пропущено';
+            const skipNote = 'Вы исчерпали 2 попытки. Задание пропущено, давай двигаться дальше!';
+            finalFeedback = feedback ? `${feedback}\n\n${skipNote}` : skipNote;
+        } else {
+            newResults[currentIndex] = isCorrect;
+        }
+        
         setResults(newResults);
 
         // Обновляем visible, isCorrect, feedback и title атомарно — одним вызовом
-        setBanner({ visible: true, isCorrect, feedback, title });
+        setBanner({ 
+            visible: true, 
+            isCorrect: finalIsCorrect, 
+            feedback: finalFeedback, 
+            title: finalTitle 
+        });
     };
 
     const handleNext = () => {
         setBanner({ visible: false, isCorrect: banner.isCorrect }); // Скрываем баннер
         
-        // Находим следующий не пройденный успешно тест (результат которого не равен true)
+        // Находим следующий не пройденный успешно или пропущенный тест (результат которого не равен true и не 'skipped')
         let nextIndex = currentIndex + 1;
-        while (nextIndex < tests.length && results[nextIndex] === true) {
+        while (nextIndex < tests.length && (results[nextIndex] === true || results[nextIndex] === 'skipped')) {
             nextIndex++;
         }
 
@@ -159,7 +178,7 @@ export const TestStepper: React.FC<TestStepperProps> = ({
                     ]).start();
                 });
             } else {
-                // Все тесты успешно пройдены -> идем к шахматной доске
+                // Все тесты успешно пройдены или пропущены -> идем к шахматной доске
                 onAllTestsComplete();
             }
         }
@@ -174,7 +193,7 @@ export const TestStepper: React.FC<TestStepperProps> = ({
                         dotStyle = styles.progressDotActive;
                     } else if (results[idx] === true) {
                         dotStyle = styles.progressDotDone;
-                    } else if (results[idx] === false) {
+                    } else if (results[idx] === false || results[idx] === 'skipped') {
                         dotStyle = styles.progressDotFailed;
                     }
 

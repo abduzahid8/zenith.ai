@@ -104,11 +104,21 @@ ${hobby === 'chess' ? 'Выбери тип задания: "chess_puzzle".' : `�
     try {
       const response = await aiService.sendMessage(messages);
 
-      // Парсим JSON из ответа более надежно с извлечением структуры {...}
+      // Парсим JSON из ответа более надежно
       let raw = '';
       if (typeof response === 'string') {
-        const jsonMatch = response.match(/\{[\s\S]*\}/);
-        raw = jsonMatch ? jsonMatch[0] : response.replace(/```json|```/g, '').trim();
+        const mdMatch = response.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (mdMatch) {
+          raw = mdMatch[1];
+        } else {
+          const firstBrace = response.indexOf('{');
+          const lastBrace = response.lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace !== -1) {
+            raw = response.substring(firstBrace, lastBrace + 1);
+          } else {
+            raw = response;
+          }
+        }
       } else {
         raw = JSON.stringify(response);
       }
@@ -116,7 +126,7 @@ ${hobby === 'chess' ? 'Выбери тип задания: "chess_puzzle".' : `�
       const parsed = JSON.parse(raw);
       generatedLesson = parsed;
     } catch (e) {
-      console.error('[lessonGenerator] AI generation error:', e);
+      console.warn('[lessonGenerator] AI generation error:', e);
       // Fallback: возвращаем шаблонный урок
       return lessonGeneratorService.getFallbackLesson(hobby, dayNumber);
     }

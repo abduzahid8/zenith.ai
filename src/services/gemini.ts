@@ -138,6 +138,21 @@ async function handleSendMessage(messages: ChatMessage[], hobby?: string): Promi
     }
 }
 
+async function handleGradeAnswer(messages: ChatMessage[], hobby?: string): Promise<string> {
+    console.log('[Gemini] handleGradeAnswer called, hobby:', hobby);
+    const systemMessage = messages.find(m => m.role === 'system');
+    const systemPrompt = systemMessage ? systemMessage.content : '';
+    const userMessages = messages.filter(m => m.role !== 'system');
+    try {
+        const result = await callGemini(userMessages, systemPrompt, 0.2, 1000);
+        console.log('[Gemini] gradeAnswer success, result length:', result.length);
+        return result;
+    } catch (error) {
+        console.error('[Gemini] gradeAnswer error:', error);
+        throw error;
+    }
+}
+
 async function handleHobbyRecommendations(answers: Record<number, number>): Promise<string[]> {
     const prompt = `Based on the user's quiz answers, recommend 3 hobbies from the list: chess, video_editing, drawing.
 Answers: ${JSON.stringify(answers)}
@@ -340,6 +355,7 @@ Analyze and return JSON in English: {"personality_type":"","temperament":"","mot
 
 export const localAiService = {
     sendMessage: handleSendMessage,
+    gradeAnswer: handleGradeAnswer,
     getHobbyRecommendations: handleHobbyRecommendations,
     generateDailyTasks: handleDailyTasks,
     generateSubstituteContent: handleSubstituteContent,
