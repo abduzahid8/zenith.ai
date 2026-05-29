@@ -50,6 +50,7 @@ interface EncouragementBannerProps {
     hideButton?: boolean;
     feedback?: string;
     title?: string;
+    buttonText?: string;
 }
 
 export const EncouragementBanner: React.FC<EncouragementBannerProps> = ({
@@ -59,6 +60,7 @@ export const EncouragementBanner: React.FC<EncouragementBannerProps> = ({
     hideButton = false,
     feedback,
     title,
+    buttonText,
 }) => {
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
@@ -168,7 +170,7 @@ export const EncouragementBanner: React.FC<EncouragementBannerProps> = ({
                             onPress={onNext}
                             activeOpacity={0.85}
                         >
-                            <Text style={styles.nextButtonText}>Далее</Text>
+                            <Text style={styles.nextButtonText}>{buttonText || 'Далее'}</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -188,7 +190,7 @@ export const EncouragementBanner: React.FC<EncouragementBannerProps> = ({
                             onPress={onNext}
                             activeOpacity={0.85}
                         >
-                            <Text style={styles.nextButtonText}>Далее</Text>
+                            <Text style={styles.nextButtonText}>{buttonText || 'Далее'}</Text>
                         </TouchableOpacity>
                     )}
                 </>
@@ -205,7 +207,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         right: 0,
         borderTopLeftRadius: scale(24),
         borderTopRightRadius: scale(24),
-        paddingTop: scale(20),
+        paddingTop: scale(28),
         paddingBottom: scale(36), // Generous padding for iOS Safe Area
         paddingHorizontal: scale(24),
         flexDirection: 'row',

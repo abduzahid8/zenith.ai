@@ -1,6 +1,6 @@
 import React from 'react';
 
-import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Path, Defs, LinearGradient, Stop, G } from 'react-native-svg';
 
 export interface LogoNewProps {
     width?: number;
@@ -26,7 +26,7 @@ export const LogoNew: React.FC<LogoNewProps> = ({
     // So 0 0 40 40 works for the icon variant if the star is on the left.
     // Based on the user SVG, the star IS on the left.
 
-    const viewBox = variant === 'icon' ? "0 0 40 40" : "0 0 177 40";
+    const viewBox = variant === 'icon' ? "0 0 474.71 474.71" : "0 0 177 40";
 
     return (
         <Svg width={width} height={height} viewBox={viewBox} fill="none">
@@ -59,14 +59,22 @@ export const LogoNew: React.FC<LogoNewProps> = ({
                 </>
             )}
 
-            {/* Star Icon Patch - Always visible in full (as part of logo) or icon variant */}
-            {/* Using the logic: icon variant shows star. Full variant ALSO shows star (it's part of the logo). */}
-            <Path
-                d="M38.1298 20.0451L28.0658 23.7851L31.0126 30.2195C31.2849 30.8153 30.6732 31.4261 30.0801 31.1526L23.6791 28.1958L19.9527 38.3064C19.7289 38.921 18.8635 38.921 18.6359 38.3064L14.9132 28.1958L8.50853 31.1526C7.91543 31.4261 7.30368 30.8153 7.57598 30.2195L10.5228 23.7851L0.458811 20.0451C-0.152937 19.8165 -0.152937 18.9471 0.458811 18.7223L10.5191 14.9786L7.57598 8.54794C7.30368 7.95209 7.91543 7.33751 8.50853 7.61107L14.9132 10.5716L18.6359 0.460937C18.8635 -0.153646 19.7289 -0.153646 19.9527 0.460937L23.6791 10.5678L30.0801 7.61107C30.6732 7.33751 31.2849 7.95209 31.0126 8.54794L28.0695 14.9786L38.1298 18.7223C38.7416 18.9471 38.7416 19.8165 38.1298 20.0451Z"
-                fill="url(#paint0_linear_36_47)"
-            />
+            {/* Star Icon Patch - Render user's new sharp 8-point star */}
+            {variant === 'icon' ? (
+                <Path
+                    d="M469.07 245.45l-123.81 45.8 36.25 78.79c3.35 7.3-4.18 14.78-11.47 11.43l-78.74-36.21-45.84 123.81c-2.75 7.53-13.4 7.53-16.2 0l-45.8-123.81-78.79 36.21c-7.3 3.35-14.82-4.13-11.47-11.43l36.25-78.79L5.64 245.45c-7.53-2.8-7.53-13.44 0-16.2l123.76-45.84-36.21-78.74c-3.35-7.3 4.18-14.82 11.47-11.47l78.79 36.25L229.26 5.64c2.8-7.53 13.44-7.53 16.2 0l45.84 123.76 78.74-36.21c7.3-3.35 14.82 4.18 11.47 11.47l-36.21 78.74 123.76 45.84c7.53 2.75 7.53 13.4 0 16.2Z"
+                    fill="url(#paint0_linear_36_47)"
+                />
+            ) : (
+                <G transform="scale(0.084262)">
+                    <Path
+                        d="M469.07 245.45l-123.81 45.8 36.25 78.79c3.35 7.3-4.18 14.78-11.47 11.43l-78.74-36.21-45.84 123.81c-2.75 7.53-13.4 7.53-16.2 0l-45.8-123.81-78.79 36.21c-7.3 3.35-14.82-4.13-11.47-11.43l36.25-78.79L5.64 245.45c-7.53-2.8-7.53-13.44 0-16.2l123.76-45.84-36.21-78.74c-3.35-7.3 4.18-14.82 11.47-11.47l78.79 36.25L229.26 5.64c2.8-7.53 13.44-7.53 16.2 0l45.84 123.76 78.74-36.21c7.3-3.35 14.82 4.18 11.47 11.47l-36.21 78.74 123.76 45.84c7.53 2.75 7.53 13.4 0 16.2Z"
+                        fill="url(#paint0_linear_36_47)"
+                    />
+                </G>
+            )}
             <Defs>
-                <LinearGradient id="paint0_linear_36_47" x1="0" y1="19.3837" x2="38.5886" y2="19.3837" gradientUnits="userSpaceOnUse">
+                <LinearGradient id="paint0_linear_36_47" x1="0" y1="237.35" x2="474.71" y2="237.35" gradientUnits="userSpaceOnUse">
                     <Stop stopColor="#37A0EF" />
                     <Stop offset="1" stopColor="#8CDEFF" />
                 </LinearGradient>

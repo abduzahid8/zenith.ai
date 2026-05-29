@@ -82,6 +82,7 @@ export const SessionTimerScreen: React.FC = () => {
     };
 
     const [isTimePickerVisible, setIsTimePickerVisible] = React.useState(false);
+    const [skipTrigger, setSkipTrigger] = React.useState(0);
 
     // Main pager scroll animation
     const mainPagerPosition = useRef(new Animated.Value(0)).current;
@@ -144,14 +145,11 @@ export const SessionTimerScreen: React.FC = () => {
                                         trackColor={colors.sessionTimer.primaryFaded}
                                         progress={progress}
                                     >
-                                        <TouchableOpacity
-                                            activeOpacity={0.7}
-                                            onPress={() => timerStatus === 'idle' && setIsTimePickerVisible(true)}
-                                            disabled={timerStatus !== 'idle'}
+                                        <View
                                             style={{ justifyContent: 'center', alignItems: 'center' }}
                                         >
                                             <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
-                                        </TouchableOpacity>
+                                        </View>
                                     </TimerProgress>
 
                                     <View style={styles.controlsContainer}>
@@ -170,6 +168,21 @@ export const SessionTimerScreen: React.FC = () => {
                                         <View style={styles.activeSessionTimerPill}>
                                             <Text style={styles.activeSessionTimerText}>{formatTime(timeLeft)}</Text>
                                         </View>
+                                        {activeStep !== 'learn' && (
+                                            <TouchableOpacity
+                                                style={styles.skipButtonPill}
+                                                onPress={() => {
+                                                    if (activeStep === 'tests') {
+                                                        setSkipTrigger(prev => prev + 1);
+                                                    } else {
+                                                        handleStepComplete(activeStep);
+                                                    }
+                                                }}
+                                                activeOpacity={0.7}
+                                            >
+                                                <Text style={styles.skipButtonText}>Пропустить</Text>
+                                            </TouchableOpacity>
+                                        )}
                                     </View>
                                 )}
 
@@ -196,6 +209,7 @@ export const SessionTimerScreen: React.FC = () => {
                                             hobbyId={currentLesson.hobby}
                                             tests={currentLesson.tests}
                                             onAllTestsComplete={() => handleStepComplete('tests')}
+                                            skipTrigger={skipTrigger}
                                         />
                                     ) : activeStep === 'do' ? (
                                         currentLesson.hobby === 'chess' && currentLesson.do.type === 'chess_puzzle' ? (
@@ -205,12 +219,14 @@ export const SessionTimerScreen: React.FC = () => {
                                                 question={currentLesson.do.prompt}
                                                 maxHints={isPremium ? 5 : 3}
                                                 onComplete={() => handleStepComplete('do', 'solved')}
+                                                isLastStep={!(isPremium && currentLesson.deepen1)}
                                             />
                                         ) : (
                                             <DoStep
                                                 hobbyId={currentLesson.hobby}
                                                 task={currentLesson.do}
                                                 onNext={(ans, fb) => handleStepComplete('do', ans, fb)}
+                                                isLastStep={!(isPremium && currentLesson.deepen1)}
                                             />
                                         )
                                     ) : activeStep === 'deepen1' && currentLesson.deepen1 ? (
@@ -218,12 +234,14 @@ export const SessionTimerScreen: React.FC = () => {
                                             hobbyId={currentLesson.hobby}
                                             task={currentLesson.deepen1}
                                             onNext={(ans, fb) => handleStepComplete('deepen1', ans, fb)}
+                                            isLastStep={!(isPremium && currentLesson.deepen2)}
                                         />
                                     ) : activeStep === 'deepen2' && currentLesson.deepen2 ? (
                                         <DoStep
                                             hobbyId={currentLesson.hobby}
                                             task={currentLesson.deepen2}
                                             onNext={(ans, fb) => handleStepComplete('deepen2', ans, fb)}
+                                            isLastStep={true}
                                         />
                                     ) : (
                                         <SessionCompleteStep
@@ -422,6 +440,17 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontFamily: fonts.heading.bold,
         fontSize: scale(15),
         color: '#2B5B84',
+    },
+    skipButtonPill: {
+        backgroundColor: 'rgba(100, 116, 139, 0.1)',
+        borderRadius: scale(16),
+        paddingHorizontal: scale(16),
+        paddingVertical: scale(6),
+    },
+    skipButtonText: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(14),
+        color: '#64748B',
     },
     stopButtonPill: {
         backgroundColor: 'rgba(120, 144, 156, 0.12)',

@@ -10,6 +10,7 @@ import {
     KeyboardAvoidingView,
     Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { scale } from '../../constants';
 import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
@@ -23,12 +24,14 @@ interface DoStepProps {
     hobbyId: string;
     task: TaskStep;
     onNext: (userInput: string, aiFeedback: string) => void;
+    isLastStep?: boolean;
 }
 
 export const DoStep: React.FC<DoStepProps> = ({
     hobbyId,
     task,
     onNext,
+    isLastStep,
 }) => {
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
@@ -137,6 +140,7 @@ export const DoStep: React.FC<DoStepProps> = ({
                         question={task.prompt}
                         maxHints={3}
                         onComplete={handleChessComplete}
+                        isLastStep={isLastStep}
                     />
                 );
 
@@ -224,8 +228,9 @@ export const DoStep: React.FC<DoStepProps> = ({
                 {/* Hint Capsule */}
                 {hasHints && !isSolved && !isChecking && (
                     <View style={styles.hintContainer}>
+                        <Ionicons name="bulb" size={scale(16)} color={colors.text || '#08132A'} style={{marginRight: 4}} />
                         <Text style={styles.hintText}>
-                            💡 {t('Подсказка:')} {task.hints?.[0]}
+                            {t('Подсказка:')} {task.hints?.[0]}
                         </Text>
                     </View>
                 )}
@@ -315,12 +320,12 @@ const createStyles = (colors: any) => StyleSheet.create({
         textAlignVertical: 'top',
     },
     hintContainer: {
-        backgroundColor: 'rgba(255, 224, 130, 0.15)',
-        borderRadius: scale(12),
+        marginTop: scale(16),
         padding: scale(12),
-        marginBottom: scale(20),
-        borderLeftWidth: 4,
-        borderLeftColor: '#FFE082',
+        backgroundColor: colors.theoryCard || '#D6EEFF',
+        borderRadius: scale(8),
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     hintText: {
         fontFamily: fonts.body?.light || fonts.heading.light,

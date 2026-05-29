@@ -104,16 +104,11 @@ export function useTimer(options: UseTimerOptions = {}) {
         } else if (step === 'tests') {
             setActiveStep('do'); // Переходим к финальной шахматной задаче
         } else if (step === 'do') {
-            if (currentLesson?.hobby === 'chess') {
-                gamificationStore.advanceDay(currentLesson.hobby);
-                setActiveStep('complete');
+            if (isPremium && currentLesson?.deepen1) {
+                setActiveStep('deepen1');
             } else {
-                if (isPremium && currentLesson?.deepen1) {
-                    setActiveStep('deepen1');
-                } else {
-                    gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
-                    setActiveStep('complete');
-                }
+                gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
+                setActiveStep('complete');
             }
         } else if (step === 'deepen1') {
             if (isPremium && currentLesson?.deepen2) {
@@ -136,18 +131,17 @@ export function useTimer(options: UseTimerOptions = {}) {
         puzzles: t('Углуби 2'),
     };
 
-    // --- Timer state ---
-    const [totalTime, setTotalTime] = useState(30 * 60); // Default 30 minutes
+    // --- Timer state (Stopwatch count up) ---
+    const [totalTime, setTotalTime] = useState(30 * 60); // Retained for type compatibility
     const [timerStatus, setTimerStatus] = useState<TimerStatus>('idle');
-    const [timeLeft, setTimeLeft] = useState(totalTime);
-    const progress = timeLeft / totalTime;
+    const [timeLeft, setTimeLeft] = useState(0); // Starts at 0
+    const progress = (timeLeft % 60) / 60; // Animates every minute like a second hand
 
-    // Update timeLeft when totalTime changes, but only if idle
     useEffect(() => {
         if (timerStatus === 'idle') {
-            setTimeLeft(totalTime);
+            setTimeLeft(0);
         }
-    }, [totalTime, timerStatus]);
+    }, [timerStatus]);
 
     // --- Tasks derived from real store ---
     const [tasks, setTasks] = useState<SessionTask[]>([]);
@@ -237,25 +231,16 @@ export function useTimer(options: UseTimerOptions = {}) {
         return () => subscription.remove();
     }, [timerStatus]);
 
-    // --- Timer countdown ---
+    // --- Stopwatch count up ---
     useEffect(() => {
         let interval: ReturnType<typeof setInterval>;
-        if (timerStatus === 'running' && timeLeft > 0) {
+        if (timerStatus === 'running') {
             interval = setInterval(() => {
-                setTimeLeft(prev => prev - 1);
+                setTimeLeft(prev => prev + 1);
             }, 1000);
-        } else if (timeLeft === 0 && timerStatus === 'running') {
-            // Timer naturally completed — save session and show summary
-            setTimerStatus('idle');
-            saveSessionToSupabase(totalTime);
-            if (!useHobbyTimeStore.getState().userCreatedDate) {
-                useHobbyTimeStore.getState().setUserCreatedDate(new Date().toISOString());
-            }
-            useHobbyTimeStore.getState().addHobbyTime(totalTime);
-            setShowSummary(true);
         }
         return () => clearInterval(interval);
-    }, [timerStatus, timeLeft, totalTime]);
+    }, [timerStatus]);
 
     // --- Animate controls ---
     useEffect(() => {
@@ -404,7 +389,7 @@ export function useTimer(options: UseTimerOptions = {}) {
                 ? { ...task, completed: false, completedAt: null, startedAt: null }
                 : task
         ));
-        setTimeLeft(totalTime);
+        setTimeLeft(0);
         setTimerStatus('idle');
         setLockedTaskIds(new Set());
     }, [totalTime, tasks, lockedTaskIds, user]);
@@ -484,8 +469,7 @@ export function useTimer(options: UseTimerOptions = {}) {
 
     const finishSession = useCallback(() => {
         console.log('[useTimer] finishSession called');
-        const elapsed = totalTime - timeLeftRef.current;
-        const durationSeconds = elapsed > 0 ? elapsed : 0;
+        const durationSeconds = timeLeftRef.current; // Elapsed seconds
         console.log('[useTimer] Session finished - elapsed:', durationSeconds, 'seconds');
         saveSessionToSupabase(durationSeconds);
         if (durationSeconds > 0) {
@@ -502,11 +486,11 @@ export function useTimer(options: UseTimerOptions = {}) {
             console.log('[useTimer] Showing summary - newly completed tasks:', newlyCompletedTasks.length);
             setShowSummary(true);
         } else {
-            console.log('[useTimer] No new tasks completed this session - resetting timer');
-            setTimeLeft(totalTime);
+            console.log('[useTimer] No new tasks completed this session - resetting stopwatch');
+            setTimeLeft(0);
             setTimerStatus('idle');
         }
-    }, [totalTime, tasks, lockedTaskIds, saveSessionToSupabase]);
+    }, [tasks, lockedTaskIds, saveSessionToSupabase]);
 
     const handleStopPress = useCallback(() => {
         console.log('[useTimer] handleStopPress pressed');

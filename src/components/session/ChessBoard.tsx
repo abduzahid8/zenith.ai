@@ -1,16 +1,38 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     TouchableOpacity,
     Alert,
+    Image,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import type { Square, Move } from 'chess.js';
+import Chessboard from 'react-native-chessboard';
+import type { ChessboardRef } from 'react-native-chessboard';
 import { scale, SCREEN_WIDTH } from '../../constants';
 import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useT } from '../../store/languageStore';
 import lichessService from '../../services/lichessService';
+import { LogoNew } from '../Logo';
+import EncouragementBanner from './chess/EncouragementBanner';
+
+const CHESS_PIECES: Record<string, any> = {
+    br: require('react-native-chessboard/src/assets/br.png'),
+    bp: require('react-native-chessboard/src/assets/bp.png'),
+    bn: require('react-native-chessboard/src/assets/bn.png'),
+    bb: require('react-native-chessboard/src/assets/bb.png'),
+    bq: require('react-native-chessboard/src/assets/bq.png'),
+    bk: require('react-native-chessboard/src/assets/bk.png'),
+    wr: require('react-native-chessboard/src/assets/wr.png'),
+    wn: require('react-native-chessboard/src/assets/wn.png'),
+    wb: require('react-native-chessboard/src/assets/wb.png'),
+    wq: require('react-native-chessboard/src/assets/wq.png'),
+    wk: require('react-native-chessboard/src/assets/wk.png'),
+    wp: require('react-native-chessboard/src/assets/wp.png'),
+};
 
 interface ChessBoardProps {
     fen: string;
@@ -18,47 +40,7 @@ interface ChessBoardProps {
     question?: string;
     maxHints: number;
     onComplete: () => void;
-}
-
-const PIECE_UNICODE: Record<string, string> = {
-    'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
-    'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟',
-};
-
-// Convert square coords (row, col) to UCI name (e.g. 0,0 is a8, 7,7 is h1)
-function getSquareName(row: number, col: number): string {
-    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-    const ranks = ['8', '7', '6', '5', '4', '3', '2', '1'];
-    return files[col] + ranks[row];
-}
-
-// Parse UCI name to square coords
-function parseSquareName(name: string): [number, number] {
-    const file = name.charCodeAt(0) - 97; // 'a' is 97
-    const rank = 8 - parseInt(name[1], 10);
-    return [rank, file];
-}
-
-// Parse FEN into 8x8 string grid
-function parseFen(fen: string): string[][] {
-    const grid: string[][] = Array(8).fill(null).map(() => Array(8).fill(''));
-    const parts = fen.trim().split(/\s+/);
-    const rows = parts[0].split('/');
-
-    for (let r = 0; r < 8; r++) {
-        const rowStr = rows[r];
-        let c = 0;
-        for (let i = 0; i < rowStr.length; i++) {
-            const char = rowStr[i];
-            if (/[1-8]/.test(char)) {
-                c += parseInt(char, 10);
-            } else {
-                grid[r][c] = char;
-                c++;
-            }
-        }
-    }
-    return grid;
+    isLastStep?: boolean;
 }
 
 export const ChessBoard: React.FC<ChessBoardProps> = ({
@@ -67,225 +49,282 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     question,
     maxHints,
     onComplete,
+    isLastStep = true,
 }) => {
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
     const t = useT();
 
+    const chessboardRef = useRef<ChessboardRef>(null);
+
     // Game state
-    const [board, setBoard] = useState<string[][]>(() => parseFen(fen));
-    const [selectedSquare, setSelectedSquare] = useState<[number, number] | null>(null);
     const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
-    const [incorrectSquare, setIncorrectSquare] = useState<string | null>(null);
-    
+    const [incorrectMove, setIncorrectMove] = useState(false);
+    const [solved, setSolved] = useState(false);
+    const [banner, setBanner] = useState<{ visible: boolean; isCorrect: boolean }>({
+        visible: false,
+        isCorrect: true,
+    });
+
     // Hints state
     const [hintsUsed, setHintsUsed] = useState(0);
-    const [hintSquare, setHintSquare] = useState<string | null>(null);
 
-    // Sync state if FEN changes
+    // Gesture enabled state
+    const [gestureEnabled, setGestureEnabled] = useState(true);
+
+    // Track the current FEN for our own chess.js instance
+    const currentFenRef = useRef(fen);
+    const currentMoveIndexRef = useRef(0);
+    const solvedRef = useRef(false);
+
+    // Sync state if FEN changes from outside
     useEffect(() => {
-        setBoard(parseFen(fen));
-        setSelectedSquare(null);
+        currentFenRef.current = fen;
+        currentMoveIndexRef.current = 0;
+        solvedRef.current = false;
         setCurrentMoveIndex(0);
-        setIncorrectSquare(null);
-        setHintSquare(null);
+        setIncorrectMove(false);
+        setSolved(false);
+        setHintsUsed(0);
+        setGestureEnabled(true);
+
+        // Reset chessboard via ref
+        if (chessboardRef.current) {
+            chessboardRef.current.resetBoard(fen);
+        }
     }, [fen]);
 
-    const handleHint = async () => {
+    const handleHint = useCallback(async () => {
         if (hintsUsed >= maxHints) {
             Alert.alert(t('Подсказки закончились'), t('Ты исчерпал лимит подсказок для этой сессии.'));
             return;
         }
 
-        const expectedMove = puzzleMoves[currentMoveIndex];
+        const expectedMove = puzzleMoves[currentMoveIndexRef.current];
         if (!expectedMove) return;
 
-        // Показывать откуда ходить (первые 2 символа)
-        const fromSquare = expectedMove.substring(0, 2);
-        setHintSquare(fromSquare);
+        // Show where to move from (first 2 characters)
+        const fromSquare = expectedMove.substring(0, 2) as Square;
         setHintsUsed(prev => prev + 1);
-        
-        // Track hint usage silently
+
+        // Highlight the hint square on the board
+        if (chessboardRef.current) {
+            chessboardRef.current.resetAllHighlightedSquares();
+            chessboardRef.current.highlight({
+                square: fromSquare,
+                color: 'rgba(255, 249, 196, 0.8)',
+            });
+        }
+
+        // Track hint usage
         lichessService.useHint();
-    };
+    }, [hintsUsed, maxHints, puzzleMoves, t]);
 
-    const handleSquarePress = (row: number, col: number) => {
-        const squareName = getSquareName(row, col);
+    const playOpponentMove = useCallback((nextIndex: number) => {
+        // Check if there's an opponent move to auto-play
+        if (nextIndex < puzzleMoves.length && nextIndex % 2 !== 0) {
+            setGestureEnabled(false);
+            const oppMove = puzzleMoves[nextIndex];
+            const from = oppMove.substring(0, 2) as Square;
+            const to = oppMove.substring(2, 4) as Square;
 
-        // Сбросить подсказку если она показана для этой клетки
-        if (hintSquare === squareName) {
-            setHintSquare(null);
+            setTimeout(async () => {
+                // Animate the move on the board
+                if (chessboardRef.current) {
+                    await chessboardRef.current.move({ from, to });
+                }
+
+                const nextNext = nextIndex + 1;
+                currentMoveIndexRef.current = nextNext;
+                setCurrentMoveIndex(nextNext);
+
+                if (nextNext >= puzzleMoves.length) {
+                    solvedRef.current = true;
+                    setSolved(true);
+                    setGestureEnabled(false);
+                    setTimeout(() => onComplete(), 800);
+                } else {
+                    setGestureEnabled(true);
+                }
+            }, 500);
         }
+    }, [puzzleMoves, onComplete]);
 
-        // If no square is selected, select the tapped square if it has a piece
-        if (!selectedSquare) {
-            if (board[row][col] !== '') {
-                setSelectedSquare([row, col]);
-                setIncorrectSquare(null);
+    const handleMove = useCallback(({ move, state }: { move: Move; state: any }) => {
+        if (solvedRef.current) return;
+
+        // Build the UCI move string from the move object
+        const uciMove = move.from + move.to + (move.promotion || '');
+
+        const expectedMove = puzzleMoves[currentMoveIndexRef.current];
+        if (!expectedMove) return;
+
+        // Check if the move matches the expected puzzle move
+        const isCorrect =
+            uciMove === expectedMove ||
+            uciMove === expectedMove.substring(0, 4); // Without promotion suffix
+
+        if (isCorrect) {
+            // Correct move!
+            setIncorrectMove(false);
+            currentFenRef.current = state.fen;
+
+            if (chessboardRef.current) {
+                chessboardRef.current.resetAllHighlightedSquares();
             }
-            return;
-        }
 
-        // If same square tapped, deselect
-        if (selectedSquare[0] === row && selectedSquare[1] === col) {
-            setSelectedSquare(null);
-            return;
-        }
+            const nextIndex = currentMoveIndexRef.current + 1;
+            currentMoveIndexRef.current = nextIndex;
+            setCurrentMoveIndex(nextIndex);
 
-        // Make move
-        const fromSquare = selectedSquare;
-        const fromName = getSquareName(fromSquare[0], fromSquare[1]);
-        const toName = squareName;
-        let uciMove = fromName + toName;
-        
-        // Auto-promote to Queen for simplicity if it reaches the end
-        const piece = board[fromSquare[0]][fromSquare[1]];
-        if (piece === 'P' && row === 0) uciMove += 'q';
-        if (piece === 'p' && row === 7) uciMove += 'q';
-
-        const expectedMove = puzzleMoves[currentMoveIndex];
-
-        if (uciMove === expectedMove || uciMove === expectedMove.substring(0, 4)) {
-            // Correct move! Update board
-            const newBoard = board.map(r => [...r]);
-            newBoard[fromSquare[0]][fromSquare[1]] = '';
-            
-            // Handle promotion visual
-            if (uciMove.length === 5) {
-                const isWhite = piece === piece.toUpperCase();
-                newBoard[row][col] = isWhite ? 'Q' : 'q';
-            } else {
-                newBoard[row][col] = piece;
-            }
-
-            setBoard(newBoard);
-            setSelectedSquare(null);
-            setIncorrectSquare(null);
-            setHintSquare(null);
-
-            const nextIndex = currentMoveIndex + 1;
             if (nextIndex >= puzzleMoves.length) {
                 // Puzzle fully complete!
-                setTimeout(() => {
-                    onComplete();
-                }, 800);
+                solvedRef.current = true;
+                setSolved(true);
+                setGestureEnabled(false);
+                setBanner({ visible: true, isCorrect: true });
             } else {
-                setCurrentMoveIndex(nextIndex);
-                
-                // If it's opponent's turn in puzzle, auto-play it after a delay
-                if (nextIndex % 2 !== 0 && puzzleMoves[nextIndex]) {
-                    setTimeout(() => {
-                        const oppMove = puzzleMoves[nextIndex];
-                        const oppFrom = parseSquareName(oppMove.substring(0, 2));
-                        const oppTo = parseSquareName(oppMove.substring(2, 4));
-                        
-                        setBoard(prevBoard => {
-                            const b = prevBoard.map(r => [...r]);
-                            const oppPiece = b[oppFrom[0]][oppFrom[1]];
-                            b[oppFrom[0]][oppFrom[1]] = '';
-                            b[oppTo[0]][oppTo[1]] = oppMove.length === 5 ? 
-                                (oppPiece === oppPiece.toUpperCase() ? 'Q' : 'q') : oppPiece;
-                            return b;
-                        });
-                        
-                        setCurrentMoveIndex(nextIndex + 1);
-                        if (nextIndex + 1 >= puzzleMoves.length) {
-                            setTimeout(() => onComplete(), 800);
-                        }
-                    }, 500);
-                }
+                // Auto-play opponent's move if needed
+                playOpponentMove(nextIndex);
             }
         } else {
-            // Incorrect move!
-            console.log('[ChessBoard] Incorrect move:', uciMove, 'Expected:', expectedMove);
-            setIncorrectSquare(toName);
-            setSelectedSquare(null);
+            // Incorrect move — undo it
+            setIncorrectMove(true);
+            setGestureEnabled(false);
+            setBanner({ visible: true, isCorrect: false });
+            
+            setTimeout(() => {
+                if (chessboardRef.current) {
+                    chessboardRef.current.resetBoard(currentFenRef.current);
+                }
+                setGestureEnabled(true);
+                setTimeout(() => {
+                    setBanner(prev => prev.isCorrect ? prev : { ...prev, visible: false });
+                }, 1600);
+            }, 400);
         }
-    };
+    }, [puzzleMoves, onComplete, playOpponentMove]);
 
-    const boardSize = SCREEN_WIDTH - scale(40);
-    const cellSize = boardSize / 8;
+    // Calculate board size - ensure it's a multiple of 8 for clean grid
+    const boardSize = Math.floor((SCREEN_WIDTH - scale(40)) / 8) * 8;
     const remainingHints = Math.max(0, maxHints - hintsUsed);
+
+    // Determine board colors based on theme
+    const g = colors.gamification || {};
+    const boardColors = useMemo(() => ({
+        black: g.boardDark || '#87BFEA',
+        white: g.boardLight || '#E8F4FD',
+        lastMoveHighlight: 'rgba(91, 163, 230, 0.4)',
+        checkmateHighlight: '#FF6B6B',
+        promotionPieceButton: '#5BA3E6',
+    }), [g.boardDark, g.boardLight]);
+
+    const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    const numbers = ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+    const renderPiece = useCallback((piece: string) => {
+        const source = CHESS_PIECES[piece];
+        if (!source) return null;
+
+        const pieceSize = boardSize / 8;
+        const isBlack = piece.startsWith('b');
+        // Black and white pieces are the same size
+        const size = pieceSize;
+        const margin = 0;
+
+        return (
+            <Image
+                source={source}
+                style={{
+                    width: size,
+                    height: size,
+                    marginLeft: margin,
+                    marginTop: margin,
+                }}
+            />
+        );
+    }, [boardSize]);
 
     return (
         <View style={styles.container}>
             {/* Header: Hints */}
             <View style={styles.header}>
                 <Text style={styles.promptText}>
-                    {t('Ход за тобой!')}
+                    {solved ? t('Верно!') : t('Ход за тобой!')}
                 </Text>
-                <TouchableOpacity 
-                    style={[styles.hintBtn, remainingHints === 0 && styles.hintBtnDisabled]} 
+                <TouchableOpacity
+                    style={[styles.hintBtn, (remainingHints === 0 || solved) && styles.hintBtnDisabled]}
                     onPress={handleHint}
                     activeOpacity={0.7}
-                    disabled={remainingHints === 0}
+                    disabled={remainingHints === 0 || solved}
                 >
-                    <Text style={styles.hintIcon}>💡</Text>
+                    <Ionicons name="bulb" style={styles.hintIcon as any} />
                     <Text style={styles.hintText}>{remainingHints}</Text>
                 </TouchableOpacity>
             </View>
 
-            <View style={[styles.board, { width: boardSize, height: boardSize }]}>
-                {board.map((row, rIdx) => (
-                    <View key={rIdx} style={styles.row}>
-                        {row.map((piece, cIdx) => {
-                            const isDark = (rIdx + cIdx) % 2 === 1;
-                            const isSelected = selectedSquare && selectedSquare[0] === rIdx && selectedSquare[1] === cIdx;
-                            const squareName = getSquareName(rIdx, cIdx);
-                            const isIncorrect = incorrectSquare === squareName;
-                            const isHinted = hintSquare === squareName;
-
-                            let bg = isDark ? colors.gamification?.boardDark || '#5BA3E6' : colors.gamification?.boardLight || '#D6EEFF';
-                            if (isSelected) {
-                                bg = colors.gamification?.boardSelected || '#FFE082'; // Gold
-                            } else if (isHinted) {
-                                bg = colors.gamification?.boardHint || '#FFF9C4'; // Light yellow
-                            } else if (isIncorrect) {
-                                bg = colors.gamification?.boardIncorrect || '#FFCDD2'; // Red flash
-                            }
-
-                            return (
-                                <TouchableOpacity
-                                    key={cIdx}
-                                    style={[styles.cell, { width: cellSize, height: cellSize, backgroundColor: bg }]}
-                                    onPress={() => handleSquarePress(rIdx, cIdx)}
-                                    activeOpacity={0.9}
-                                >
-                                    {piece !== '' && (
-                                        <Text style={[
-                                            styles.piece,
-                                            {
-                                                fontSize: scale(36),
-                                                color: piece === piece.toUpperCase() ? '#1A1A1A' : '#000000', 
-                                            }
-                                        ]}>
-                                            {PIECE_UNICODE[piece] || piece}
-                                        </Text>
-                                    )}
-                                </TouchableOpacity>
-                            );
-                        })}
+            {/* Chess Board */}
+            <View style={styles.boardWithCoords}>
+                <View style={[styles.numbersColumn, { height: boardSize }]}>
+                    {numbers.map(n => <Text key={n} style={styles.coordText}>{n}</Text>)}
+                </View>
+                <View>
+                    <View style={[styles.boardWrapper, { width: boardSize, height: boardSize }]}>
+                        <Chessboard
+                            ref={chessboardRef}
+                            fen={fen}
+                            boardSize={boardSize}
+                            gestureEnabled={gestureEnabled && !solved}
+                            onMove={handleMove}
+                            colors={boardColors}
+                            withLetters={false}
+                            withNumbers={false}
+                            renderPiece={renderPiece as any}
+                        />
                     </View>
-                ))}
+                    <View style={[styles.lettersRow, { width: boardSize }]}>
+                        {letters.map(l => <Text key={l} style={styles.coordText}>{l}</Text>)}
+                    </View>
+                </View>
             </View>
 
             {/* AI Bubble Question */}
             {question && (
                 <View style={styles.aiBubbleContainer}>
-                    <View style={styles.aiAvatar}>
-                        <Text style={styles.aiAvatarIcon}>✦</Text>
-                    </View>
                     <View style={styles.aiBubble}>
+                        <Ionicons
+                            name="information-circle"
+                            size={scale(22)}
+                            color="#5BA3E6"
+                            style={styles.aiBubbleIcon}
+                        />
                         <Text style={styles.aiBubbleText}>{question}</Text>
                     </View>
                 </View>
             )}
 
-            {incorrectSquare && (
+            {/* Error / Success feedback */}
+            {incorrectMove && !solved && (
                 <Text style={styles.errorText}>
-                    ❌ {t('Неверный ход. Попробуй ещё раз!')}
+                    {t('Неверный ход. Попробуй ещё раз!')}
                 </Text>
             )}
+
+            {solved && (
+                <View style={styles.solvedContainer}>
+                    <Text style={styles.successText}>
+                        {t('Отлично! Задача решена!')}
+                    </Text>
+                </View>
+            )}
+
+            <EncouragementBanner
+                visible={banner.visible}
+                isCorrect={banner.isCorrect}
+                onNext={onComplete}
+                hideButton={!banner.isCorrect}
+                buttonText={isLastStep ? t('Завершить') : t('Далее')}
+            />
         </View>
     );
 };
@@ -294,8 +333,9 @@ const createStyles = (colors: any) => {
     const g = colors.gamification || {};
     return StyleSheet.create({
         container: {
+            flex: 1,
             alignItems: 'center',
-            marginVertical: scale(16),
+            paddingTop: scale(20),
             width: '100%',
         },
         header: {
@@ -303,11 +343,11 @@ const createStyles = (colors: any) => {
             justifyContent: 'space-between',
             alignItems: 'center',
             width: SCREEN_WIDTH - scale(40),
-            marginBottom: scale(16),
+            marginBottom: scale(52),
         },
         promptText: {
             fontFamily: fonts.heading.bold,
-            fontSize: scale(16),
+            fontSize: scale(24),
             color: colors.text || '#08132A',
         },
         hintBtn: {
@@ -324,7 +364,8 @@ const createStyles = (colors: any) => {
             opacity: 0.5,
         },
         hintIcon: {
-            fontSize: scale(14),
+            fontSize: scale(16),
+            color: colors.text || '#08132A',
             marginRight: scale(4),
         },
         hintText: {
@@ -332,31 +373,14 @@ const createStyles = (colors: any) => {
             fontSize: scale(14),
             color: colors.text || '#08132A',
         },
-        board: {
-            borderRadius: scale(12),
+        boardWrapper: {
+            borderRadius: scale(8),
             overflow: 'hidden',
-            backgroundColor: g.boardLight || '#D6EEFF',
             elevation: 4,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.15,
             shadowRadius: 6,
-            borderWidth: 1,
-            borderColor: 'rgba(0,0,0,0.05)',
-        },
-        row: {
-            flexDirection: 'row',
-        },
-        cell: {
-            justifyContent: 'center',
-            alignItems: 'center',
-        },
-        piece: {
-            textAlign: 'center',
-            lineHeight: scale(42),
-            textShadowColor: 'rgba(255,255,255,0.3)',
-            textShadowOffset: { width: 0, height: 1 },
-            textShadowRadius: 1,
         },
         aiBubbleContainer: {
             flexDirection: 'row',
@@ -366,37 +390,87 @@ const createStyles = (colors: any) => {
             alignItems: 'flex-start',
         },
         aiAvatar: {
-            width: scale(36),
-            height: scale(36),
-            borderRadius: scale(18),
-            backgroundColor: g.zenythIcon || '#5BA3E6',
             justifyContent: 'center',
             alignItems: 'center',
             marginRight: scale(12),
-        },
-        aiAvatarIcon: {
-            color: '#FFFFFF',
-            fontSize: scale(18),
-            fontWeight: 'bold',
+            marginTop: scale(2),
         },
         aiBubble: {
             flex: 1,
-            backgroundColor: g.theoryCard || '#D6EEFF',
+            backgroundColor: '#F0F7FF',
             borderRadius: scale(16),
-            borderTopLeftRadius: scale(4),
             padding: scale(14),
+            flexDirection: 'row',
+            alignItems: 'center',
+            borderLeftWidth: 4,
+            borderLeftColor: '#5BA3E6',
+            shadowColor: '#5BA3E6',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 1,
+        },
+        aiBubbleIcon: {
+            marginRight: scale(18),
         },
         aiBubbleText: {
             fontFamily: fonts.body.regular,
             fontSize: scale(14),
             lineHeight: scale(20),
             color: colors.text || '#08132A',
+            flex: 1,
         },
         errorText: {
             fontFamily: fonts.heading.bold,
             fontSize: scale(14),
             color: g.optionIncorrect || '#F87171',
             marginTop: scale(16),
+        },
+        successText: {
+            fontFamily: fonts.heading.bold,
+            fontSize: scale(14),
+            color: '#34C759',
+            marginTop: scale(16),
+        },
+        boardWithCoords: {
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+        },
+        numbersColumn: {
+            justifyContent: 'space-around',
+            alignItems: 'center',
+            paddingRight: scale(6),
+        },
+        lettersRow: {
+            flexDirection: 'row',
+            justifyContent: 'space-around',
+            alignItems: 'center',
+            paddingTop: scale(6),
+        },
+        coordText: {
+            fontFamily: fonts.body.regular,
+            fontSize: scale(10),
+            color: colors.text || '#08132A',
+            opacity: 0.6,
+        },
+        solvedContainer: {
+            width: SCREEN_WIDTH - scale(40),
+            alignItems: 'center',
+            marginTop: scale(80),
+        },
+        actionBtn: {
+            backgroundColor: colors.buttonPrimary || '#1E1E2E',
+            borderRadius: scale(30),
+            height: scale(56),
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginTop: scale(20),
+            width: '100%',
+        },
+        actionBtnText: {
+            fontFamily: fonts.heading.bold,
+            fontSize: scale(18),
+            color: '#FFFFFF',
         },
     });
 };

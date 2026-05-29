@@ -29,12 +29,14 @@ interface TestStepperProps {
     tests: TaskStep[];
     hobbyId: string;
     onAllTestsComplete: () => void;
+    skipTrigger?: number;
 }
 
 export const TestStepper: React.FC<TestStepperProps> = ({
     tests,
     hobbyId,
     onAllTestsComplete,
+    skipTrigger = 0,
 }) => {
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
@@ -44,6 +46,12 @@ export const TestStepper: React.FC<TestStepperProps> = ({
     const [results, setResults] = useState<(boolean | 'skipped' | null)[]>(Array(tests.length).fill(null));
     // Количество попыток для каждого шага теста (используется как часть key для сброса стейта проваленных тестов)
     const [attempts, setAttempts] = useState<number[]>(Array(tests.length).fill(0));
+
+    useEffect(() => {
+        if (skipTrigger > 0) {
+            handleSkip();
+        }
+    }, [skipTrigger]);
     
     // Баннер — храним видимость, результат, отзыв и заголовок в одном state,
     // чтобы они всегда обновлялись атомарно (без мигания)
@@ -179,6 +187,96 @@ export const TestStepper: React.FC<TestStepperProps> = ({
                 });
             } else {
                 // Все тесты успешно пройдены или пропущены -> идем к шахматной доске
+                onAllTestsComplete();
+            }
+        }
+    };
+
+    const handleSkip = () => {
+        setBanner({ visible: false, isCorrect: banner.isCorrect });
+        
+        const newResults = [...results];
+        newResults[currentIndex] = 'skipped';
+        setResults(newResults);
+        
+        let nextIndex = currentIndex + 1;
+        while (nextIndex < tests.length && (results[nextIndex] === true || results[nextIndex] === 'skipped')) {
+            nextIndex++;
+        }
+
+        if (nextIndex < tests.length) {
+            Animated.parallel([
+                Animated.timing(slideAnim, {
+                    toValue: -SCREEN_WIDTH,
+                    duration: 250,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(fadeAnim, {
+                    toValue: 0,
+                    duration: 200,
+                    useNativeDriver: true,
+                })
+            ]).start(() => {
+                setCurrentIndex(nextIndex);
+                slideAnim.setValue(SCREEN_WIDTH);
+                
+                Animated.parallel([
+                    Animated.timing(slideAnim, {
+                        toValue: 0,
+                        duration: 300,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(fadeAnim, {
+                        toValue: 1,
+                        duration: 250,
+                        useNativeDriver: true,
+                    })
+                ]).start();
+            });
+        } else {
+            const hasFailed = results.includes(false);
+            if (hasFailed) {
+                const firstFailedIndex = results.indexOf(false);
+                const newResults2 = results.map(r => r === false ? null : r);
+                setResults(newResults2);
+
+                const newAttempts = [...attempts];
+                results.forEach((r, idx) => {
+                    if (r === false) {
+                        newAttempts[idx] = newAttempts[idx] + 1;
+                    }
+                });
+                setAttempts(newAttempts);
+
+                Animated.parallel([
+                    Animated.timing(slideAnim, {
+                        toValue: SCREEN_WIDTH,
+                        duration: 250,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(fadeAnim, {
+                        toValue: 0,
+                        duration: 200,
+                        useNativeDriver: true,
+                    })
+                ]).start(() => {
+                    setCurrentIndex(firstFailedIndex);
+                    slideAnim.setValue(-SCREEN_WIDTH);
+                    
+                    Animated.parallel([
+                        Animated.timing(slideAnim, {
+                            toValue: 0,
+                            duration: 300,
+                            useNativeDriver: true,
+                        }),
+                        Animated.timing(fadeAnim, {
+                            toValue: 1,
+                            duration: 250,
+                            useNativeDriver: true,
+                        })
+                    ]).start();
+                });
+            } else {
                 onAllTestsComplete();
             }
         }
