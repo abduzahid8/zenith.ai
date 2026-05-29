@@ -500,7 +500,7 @@ const createStyles = (colors: any) => {
             color: '#1A253C',
         },
         blankTextCorrect: {
-            color: '#102852',
+            color: '#138D4F',
         },
         blankTextIncorrect: {
             color: '#721C24',
