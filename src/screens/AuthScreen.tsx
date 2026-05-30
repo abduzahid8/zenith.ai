@@ -196,7 +196,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         height: 56,
-        borderRadius: 28,
+        borderRadius: 9999,
         borderWidth: 1,
         borderColor: colors.auth?.socialBorder || colors.border,
         backgroundColor: 'transparent',

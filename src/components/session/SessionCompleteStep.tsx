@@ -269,7 +269,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     },
     exitButton: {
         backgroundColor: colors.buttonPrimary || '#1E1E2E',
-        borderRadius: scale(30),
+        borderRadius: 9999,
         height: scale(56),
         justifyContent: 'center',
         alignItems: 'center',

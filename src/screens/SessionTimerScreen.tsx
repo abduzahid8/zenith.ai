@@ -75,6 +75,62 @@ export const SessionTimerScreen: React.FC = () => {
 
     const { streakDays, isPremium } = useUserProfileStore();
 
+    React.useEffect(() => {
+        const resetEverything = async () => {
+            console.log('[RESET] Starting complete reset...');
+            try {
+                try {
+                    const { useUserProfileStore: uups } = require('../store/userProfileStore');
+                    uups.getState().resetProfile();
+                } catch(e) {}
+                try {
+                    const { useGamificationStore: ugs } = require('../store/gamificationStore');
+                    ugs.getState().resetGamification();
+                } catch(e) {}
+                try {
+                    const { useTaskStore: uts } = require('../store/taskStore');
+                    uts.getState().resetTasks();
+                } catch(e) {}
+                try {
+                    const { useHobbyTimeStore: uhts } = require('../store/hobbyTimeStore');
+                    uhts.getState().reset();
+                } catch(e) {}
+                try {
+                    const { useQuizStore: uqs } = require('../store/quizStore');
+                    uqs.getState().resetQuiz();
+                } catch(e) {}
+                try {
+                    const { useScreenTimeStore: usts } = require('../store/screenTimeStore');
+                    usts.getState().reset();
+                } catch(e) {}
+                try {
+                    const { useEarningsStore: ues } = require('../store/earningsStore');
+                    ues.getState().reset();
+                } catch(e) {}
+                try {
+                    const { useContentStore: ucs } = require('../store/contentStore');
+                    ucs.getState().reset();
+                } catch(e) {}
+                try {
+                    const { useDeviceScreenTimeStore: udsts } = require('../store/deviceScreenTimeStore');
+                    udsts.getState().reset();
+                } catch(e) {}
+                try {
+                    const { useSubscriptionStore: uss } = require('../store/subscriptionStore');
+                    uss.getState().reset();
+                } catch(e) {}
+
+                const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+                await AsyncStorage.clear();
+                console.log('[RESET] AsyncStorage cleared successfully.');
+
+                router.replace('/');
+            } catch (err) {
+                console.error('[RESET] Error during reset:', err);
+            }
+        };
+        // resetEverything(); // Раскомментируй эту строку один раз, чтобы сбросить прогресс до первого урока
+    }, []);
 
     const handleStop = () => {
         console.log('[SessionTimerScreen] handleStop pressed - navigating back');
@@ -83,6 +139,7 @@ export const SessionTimerScreen: React.FC = () => {
 
     const [isTimePickerVisible, setIsTimePickerVisible] = React.useState(false);
     const [skipTrigger, setSkipTrigger] = React.useState(0);
+    const [chessSkipTrigger, setChessSkipTrigger] = React.useState(0);
 
     // Main pager scroll animation
     const mainPagerPosition = useRef(new Animated.Value(0)).current;
@@ -174,6 +231,8 @@ export const SessionTimerScreen: React.FC = () => {
                                                 onPress={() => {
                                                     if (activeStep === 'tests') {
                                                         setSkipTrigger(prev => prev + 1);
+                                                    } else if (activeStep === 'do' && currentLesson?.hobby === 'chess' && currentLesson?.do?.type === 'chess_puzzle') {
+                                                        setChessSkipTrigger(prev => prev + 1);
                                                     } else {
                                                         handleStepComplete(activeStep);
                                                     }
@@ -216,10 +275,12 @@ export const SessionTimerScreen: React.FC = () => {
                                             <ChessBoard
                                                 fen={currentLesson.do.puzzleFen!}
                                                 puzzleMoves={currentLesson.do.puzzleMoves!}
+                                                puzzles={currentLesson.do.puzzles}
                                                 question={currentLesson.do.prompt}
                                                 maxHints={isPremium ? 5 : 3}
                                                 onComplete={() => handleStepComplete('do', 'solved')}
                                                 isLastStep={!(isPremium && currentLesson.deepen1)}
+                                                skipTrigger={chessSkipTrigger}
                                             />
                                         ) : (
                                             <DoStep

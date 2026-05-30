@@ -474,7 +474,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     },
     continueButton: {
         backgroundColor: colors.buttonPrimary,
-        borderRadius: scale(30),
+        borderRadius: 9999,
     },
     restoreLink: {
         marginTop: scale(12),

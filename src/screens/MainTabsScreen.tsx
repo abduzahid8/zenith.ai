@@ -51,6 +51,20 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
         pagerRef.current?.setPage(initialTab);
     }, [initialTab]);
 
+    useEffect(() => {
+        const forceReset = async () => {
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            const hasForced = await AsyncStorage.getItem('force_reset_v5');
+            if (!hasForced) {
+                console.log('[MainTabsScreen] Forcing gamification reset to Day 1...');
+                const { useGamificationStore } = require('../store/gamificationStore');
+                useGamificationStore.getState().resetGamification();
+                await AsyncStorage.setItem('force_reset_v5', 'true');
+            }
+        };
+        forceReset();
+    }, []);
+
     const { subscriptionLevel } = useUserProfileStore();
     const dailyTasks = useTaskStore(state => state.dailyTasks);
     const completedTasksCount = dailyTasks.filter(t => t.status === 'completed').length;

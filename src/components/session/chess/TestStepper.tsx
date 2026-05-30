@@ -14,6 +14,7 @@ import {
     Animated,
     KeyboardAvoidingView,
     Platform,
+    TouchableOpacity,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { scale, SCREEN_WIDTH } from '../../../constants';
@@ -46,6 +47,7 @@ export const TestStepper: React.FC<TestStepperProps> = ({
     const [results, setResults] = useState<(boolean | 'skipped' | null)[]>(Array(tests.length).fill(null));
     // Количество попыток для каждого шага теста (используется как часть key для сброса стейта проваленных тестов)
     const [attempts, setAttempts] = useState<number[]>(Array(tests.length).fill(0));
+    const [skipCounts, setSkipCounts] = useState<Record<number, number>>({});
 
     useEffect(() => {
         if (skipTrigger > 0) {
@@ -186,8 +188,41 @@ export const TestStepper: React.FC<TestStepperProps> = ({
                     ]).start();
                 });
             } else {
-                // Все тесты успешно пройдены или пропущены -> идем к шахматной доске
-                onAllTestsComplete();
+                const firstSkippedIndex = results.findIndex((r, idx) => r === 'skipped' && (skipCounts[idx] || 0) < 2);
+                if (firstSkippedIndex !== -1) {
+                    // Анимируем переход назад к первому пропущенному тесту (уезжаем вправо)
+                    Animated.parallel([
+                        Animated.timing(slideAnim, {
+                            toValue: SCREEN_WIDTH,
+                            duration: 250,
+                            useNativeDriver: true,
+                        }),
+                        Animated.timing(fadeAnim, {
+                            toValue: 0,
+                            duration: 200,
+                            useNativeDriver: true,
+                        })
+                    ]).start(() => {
+                        setCurrentIndex(firstSkippedIndex);
+                        slideAnim.setValue(-SCREEN_WIDTH);
+                        
+                        Animated.parallel([
+                            Animated.timing(slideAnim, {
+                                toValue: 0,
+                                duration: 300,
+                                useNativeDriver: true,
+                            }),
+                            Animated.timing(fadeAnim, {
+                                toValue: 1,
+                                duration: 250,
+                                useNativeDriver: true,
+                            })
+                        ]).start();
+                    });
+                } else {
+                    // Все тесты успешно пройдены или окончательно пропущены -> идем к шахматной доске
+                    onAllTestsComplete();
+                }
             }
         }
     };
@@ -198,6 +233,12 @@ export const TestStepper: React.FC<TestStepperProps> = ({
         const newResults = [...results];
         newResults[currentIndex] = 'skipped';
         setResults(newResults);
+
+        const newSkipCounts = {
+            ...skipCounts,
+            [currentIndex]: (skipCounts[currentIndex] || 0) + 1
+        };
+        setSkipCounts(newSkipCounts);
         
         let nextIndex = currentIndex + 1;
         while (nextIndex < tests.length && (results[nextIndex] === true || results[nextIndex] === 'skipped')) {
@@ -277,7 +318,40 @@ export const TestStepper: React.FC<TestStepperProps> = ({
                     ]).start();
                 });
             } else {
-                onAllTestsComplete();
+                const firstSkippedIndex = newResults.findIndex((r, idx) => r === 'skipped' && (newSkipCounts[idx] || 0) < 2);
+                if (firstSkippedIndex !== -1) {
+                    // Анимируем переход назад к первому пропущенному тесту (уезжаем вправо)
+                    Animated.parallel([
+                        Animated.timing(slideAnim, {
+                            toValue: SCREEN_WIDTH,
+                            duration: 250,
+                            useNativeDriver: true,
+                        }),
+                        Animated.timing(fadeAnim, {
+                            toValue: 0,
+                            duration: 200,
+                            useNativeDriver: true,
+                        })
+                    ]).start(() => {
+                        setCurrentIndex(firstSkippedIndex);
+                        slideAnim.setValue(-SCREEN_WIDTH);
+                        
+                        Animated.parallel([
+                            Animated.timing(slideAnim, {
+                                toValue: 0,
+                                duration: 300,
+                                useNativeDriver: true,
+                            }),
+                            Animated.timing(fadeAnim, {
+                                toValue: 1,
+                                duration: 250,
+                                useNativeDriver: true,
+                            })
+                        ]).start();
+                    });
+                } else {
+                    onAllTestsComplete();
+                }
             }
         }
     };
@@ -287,12 +361,59 @@ export const TestStepper: React.FC<TestStepperProps> = ({
             <View style={styles.progressContainer}>
                 {tests.map((_, idx) => {
                     let dotStyle = styles.progressDotInactive;
+                    const isSkipped = results[idx] === 'skipped';
                     if (idx === currentIndex) {
                         dotStyle = styles.progressDotActive;
                     } else if (results[idx] === true) {
                         dotStyle = styles.progressDotDone;
-                    } else if (results[idx] === false || results[idx] === 'skipped') {
+                    } else if (results[idx] === false) {
                         dotStyle = styles.progressDotFailed;
+                    } else if (isSkipped) {
+                        dotStyle = styles.progressDotSkipped;
+                    }
+
+                    const dotElement = <View style={[styles.progressDot, dotStyle]} />;
+
+                    if (isSkipped) {
+                        return (
+                            <TouchableOpacity
+                                key={idx}
+                                onPress={() => {
+                                    const toLeft = idx > currentIndex;
+                                    Animated.parallel([
+                                        Animated.timing(slideAnim, {
+                                            toValue: toLeft ? -SCREEN_WIDTH : SCREEN_WIDTH,
+                                            duration: 250,
+                                            useNativeDriver: true,
+                                        }),
+                                        Animated.timing(fadeAnim, {
+                                            toValue: 0,
+                                            duration: 200,
+                                            useNativeDriver: true,
+                                        })
+                                    ]).start(() => {
+                                        setCurrentIndex(idx);
+                                        slideAnim.setValue(toLeft ? SCREEN_WIDTH : -SCREEN_WIDTH);
+                                        
+                                        Animated.parallel([
+                                            Animated.timing(slideAnim, {
+                                                toValue: 0,
+                                                duration: 300,
+                                                useNativeDriver: true,
+                                            }),
+                                            Animated.timing(fadeAnim, {
+                                                toValue: 1,
+                                                duration: 250,
+                                                useNativeDriver: true,
+                                            })
+                                        ]).start();
+                                    });
+                                }}
+                                activeOpacity={0.7}
+                            >
+                                {dotElement}
+                            </TouchableOpacity>
+                        );
                     }
 
                     return <View key={idx} style={[styles.progressDot, dotStyle]} />;
@@ -416,6 +537,10 @@ const createStyles = (colors: any) => {
         progressDotFailed: {
             width: scale(8),
             backgroundColor: '#FF3B30',
+        },
+        progressDotSkipped: {
+            width: scale(8),
+            backgroundColor: '#8E8E93',
         },
         testContainer: {
             flex: 1,

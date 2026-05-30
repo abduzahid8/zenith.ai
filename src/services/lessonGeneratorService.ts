@@ -204,7 +204,7 @@ ${hobby === 'chess' ? 'Выбери тип задания: "chess_puzzle".' : `�
         do: {
           type: 'chess_puzzle',
           prompt: 'Найди вилку конём — ход, который нападает на короля И ладью одновременно.',
-          puzzleFen: '8/8/8/3r4/8/8/8/R3K1n1 b - - 0 1',
+          puzzleFen: 'k7/8/8/8/3R4/8/8/4K1n1 b - - 0 1',
           puzzleMoves: ['g1f3'],
         },
         tests: [

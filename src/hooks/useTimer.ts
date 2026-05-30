@@ -63,6 +63,23 @@ export function useTimer(options: UseTimerOptions = {}) {
                 lesson = await lessonGeneratorService.generateLesson(hobby, day, completedTopics);
             }
 
+            if (lesson && hobby === 'chess') {
+                // Загружаем 8 тематических шахматных задач для доски (do step)
+                const { getThematicPuzzles } = require('../data/chessPuzzlesBank');
+                const puzzles = getThematicPuzzles(day);
+                if (lesson.do) {
+                    lesson.do.type = 'chess_puzzle';
+                    lesson.do.puzzleFen = puzzles[0].fen;
+                    lesson.do.puzzleMoves = puzzles[0].puzzleMoves;
+                    lesson.do.puzzles = puzzles.map((p: any, index: number) => ({
+                        fen: p.fen,
+                        moves: p.puzzleMoves,
+                        prompt: p.prompt,
+                        hints: p.hints || ['Подумай над лучшим ходом!']
+                    }));
+                }
+            }
+
             setCurrentLesson(lesson || null);
         } catch (err) {
             console.error('[useTimer] Error loading lesson:', err);
@@ -104,10 +121,15 @@ export function useTimer(options: UseTimerOptions = {}) {
         } else if (step === 'tests') {
             setActiveStep('do'); // Переходим к финальной шахматной задаче
         } else if (step === 'do') {
-            if (isPremium && currentLesson?.deepen1) {
+            if (currentLesson?.hobby === 'chess') {
+                gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
+                gamificationStore.incrementSessionsCompleted();
+                setActiveStep('complete');
+            } else if (isPremium && currentLesson?.deepen1) {
                 setActiveStep('deepen1');
             } else {
                 gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
+                gamificationStore.incrementSessionsCompleted();
                 setActiveStep('complete');
             }
         } else if (step === 'deepen1') {
@@ -115,10 +137,12 @@ export function useTimer(options: UseTimerOptions = {}) {
                 setActiveStep('deepen2');
             } else {
                 gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
+                gamificationStore.incrementSessionsCompleted();
                 setActiveStep('complete');
             }
         } else if (step === 'deepen2') {
             gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
+            gamificationStore.incrementSessionsCompleted();
             setActiveStep('complete');
         }
     }, [currentLesson, isPremium]);
@@ -200,6 +224,8 @@ export function useTimer(options: UseTimerOptions = {}) {
     useEffect(() => {
         setStartTime(Date.now());
     }, []);
+
+
 
     // --- Persist timer across app background ---
     const timeLeftRef = useRef(timeLeft);
@@ -362,6 +388,14 @@ export function useTimer(options: UseTimerOptions = {}) {
 
         startSession();
     }, [tasks, onAllTasksDone, startSession]);
+
+    // --- Automatically start session on mount to skip the idle timer screen ---
+    useEffect(() => {
+        if (selectedHobby && tasks.length >= 0 && timerStatus === 'idle') {
+            console.log('[useTimer] Automatically starting session on mount');
+            startSession();
+        }
+    }, [selectedHobby, tasks, timerStatus, startSession]);
 
     const handlePause = useCallback(() => {
         console.log('[useTimer] handlePause pressed - current status will toggle');

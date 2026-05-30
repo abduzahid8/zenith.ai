@@ -1,9 +1,24 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { StyleSheet, View, Text, ActivityIndicator, AppState, Platform } from 'react-native';
+import { StyleSheet, View, Text, ActivityIndicator, AppState, Platform, LogBox, NativeModules, UIManager, Animated } from 'react-native';
 import * as Linking from 'expo-linking';
+import * as SplashScreen from 'expo-splash-screen';
+let VideoComponent: any = null;
+let ResizeModeEnum: any = null;
+
+try {
+    const ExpoAV = require('expo-av');
+    VideoComponent = ExpoAV.Video;
+    ResizeModeEnum = ExpoAV.ResizeMode;
+} catch {
+    // Graceful fallback if native module is not compiled yet
+}
+
+LogBox.ignoreLogs([
+    '[Reanimated] Reading from `value` during component render',
+]);
 import { useAuthStore } from '../src/store/authStore';
 import { useTaskStore } from '../src/store/taskStore';
 import { useUserProfileStore } from '../src/store/userProfileStore';
@@ -25,6 +40,9 @@ if (Platform.OS !== 'web') {
 
 export default function RootLayout() {
     const [appIsReady, setAppIsReady] = useState(false);
+    const [minimumTimeElapsed, setMinimumTimeElapsed] = useState(false);
+    const [loadingVisible, setLoadingVisible] = useState(true);
+    const loadingOpacity = useRef(new Animated.Value(1)).current;
     const { isAuthenticated, initialize, isLoading, isResettingPassword } = useAuthStore();
     const { hasCompletedOnboarding, _hasHydrated } = useUserProfileStore();
     const segments = useSegments();
@@ -49,6 +67,21 @@ export default function RootLayout() {
         initialize();
     }, []);
 
+    // Hide native splash screen immediately to show our custom loading video/animation
+    useEffect(() => {
+        SplashScreen.hideAsync().catch(err => {
+            console.warn('[RootLayout] Failed to hide native splash screen:', err);
+        });
+    }, []);
+
+    // Enforce a minimum loading time of 2.0 seconds to allow the video animation to play beautifully
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setMinimumTimeElapsed(true);
+        }, 2000);
+        return () => clearTimeout(timer);
+    }, []);
+
     // Initialize IAP subscription system
     useEffect(() => {
         useSubscriptionStore.getState().initialize();
@@ -58,10 +91,10 @@ export default function RootLayout() {
     }, []);
 
     useEffect(() => {
-        if (fontsLoaded || fontError) {
+        if ((fontsLoaded || fontError) && minimumTimeElapsed) {
             setAppIsReady(true);
         }
-    }, [fontsLoaded, fontError]);
+    }, [fontsLoaded, fontError, minimumTimeElapsed]);
 
     // Safety timeout: unblock after 3s if fonts stall on web
     useEffect(() => {
@@ -69,6 +102,19 @@ export default function RootLayout() {
         const timer = setTimeout(() => setAppIsReady(true), 3000);
         return () => clearTimeout(timer);
     }, []);
+
+    // Animate fade-out of the loading screen once the app is fully ready
+    useEffect(() => {
+        if (appIsReady) {
+            Animated.timing(loadingOpacity, {
+                toValue: 0,
+                duration: 350,
+                useNativeDriver: true,
+            }).start(() => {
+                setLoadingVisible(false);
+            });
+        }
+    }, [appIsReady]);
 
     // Handle app state changes for midnight reset
     useEffect(() => {
@@ -184,15 +230,6 @@ export default function RootLayout() {
         }
     }, [isAuthenticated, segments, isLoading, appIsReady, hasCompletedOnboarding, isResettingPassword, _hasHydrated]);
 
-    // Show loading screen only until fonts/app are ready (NOT blocked on auth)
-    if (!appIsReady) {
-        return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
-            </View>
-        );
-    }
-
     // Show error if fonts failed
     if (fontError) {
         console.error('Font loading error:', fontError);
@@ -202,39 +239,76 @@ export default function RootLayout() {
         <RootView style={styles.container}>
             <ErrorBoundary>
                 <SafeAreaProvider>
-                    <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-                        <Stack.Screen name="(auth)" />
-                        <Stack.Screen name="(app)" />
-                        <Stack.Screen name="auth-callback" />
-                        <Stack.Screen name="privacy" options={{ presentation: 'modal' }} />
-                        <Stack.Screen name="quiz-intro" />
-                        <Stack.Screen name="quiz" />
+                    {appIsReady && (
+                        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+                            <Stack.Screen name="(auth)" />
+                            <Stack.Screen name="(app)" />
+                            <Stack.Screen name="auth-callback" />
+                            <Stack.Screen name="privacy" options={{ presentation: 'modal' }} />
+                            <Stack.Screen name="quiz-intro" />
+                            <Stack.Screen name="quiz" />
 
-                        <Stack.Screen name="hobby-selection" />
-                        <Stack.Screen name="subscription" />
-                        <Stack.Screen name="manage-subscription" />
-                        <Stack.Screen
-                            name="session-timer"
-                            options={{
-                                animation: 'slide_from_bottom',
-                            }}
-                        />
-                        <Stack.Screen
-                            name="your-tasks"
-                            options={{
-                                presentation: 'card',
-                                animation: 'slide_from_right',
-                            }}
-                        />
-                        <Stack.Screen
-                            name="category/[id]"
-                            options={{
-                                presentation: 'card',
-                                animation: 'slide_from_right',
-                                title: ''
-                            }}
-                        />
-                    </Stack>
+                            <Stack.Screen name="hobby-selection" />
+                            <Stack.Screen name="subscription" />
+                            <Stack.Screen name="manage-subscription" />
+                            <Stack.Screen
+                                name="session-timer"
+                                options={{
+                                    animation: 'slide_from_bottom',
+                                }}
+                            />
+                            <Stack.Screen
+                                name="your-tasks"
+                                options={{
+                                    presentation: 'card',
+                                    animation: 'slide_from_right',
+                                }}
+                            />
+                            <Stack.Screen
+                                name="category/[id]"
+                                options={{
+                                    presentation: 'card',
+                                    animation: 'slide_from_right',
+                                    title: ''
+                                }}
+                            />
+                        </Stack>
+                    )}
+
+                    {loadingVisible && (
+                        <Animated.View style={[
+                            StyleSheet.absoluteFill,
+                            styles.loadingContainer,
+                            { opacity: loadingOpacity }
+                        ]}>
+                            {Platform.OS === 'web' ? (
+                                <video
+                                    src={require('../assets/app-animation.mp4')}
+                                    autoPlay
+                                    playsInline
+                                    style={{
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'contain',
+                                    }}
+                                />
+                            ) : (VideoComponent && ResizeModeEnum) ? (
+                                <VideoComponent
+                                    source={require('../assets/app-animation.mp4')}
+                                    rate={1.0}
+                                    volume={1.0}
+                                    isMuted={false}
+                                    resizeMode={ResizeModeEnum.CONTAIN}
+                                    shouldPlay
+                                    isLooping={false}
+                                    useNativeControls={false}
+                                    style={styles.video}
+                                />
+                            ) : (
+                                <ActivityIndicator size="large" color={colors.primary} />
+                            )}
+                        </Animated.View>
+                    )}
                 </SafeAreaProvider>
             </ErrorBoundary>
         </RootView>
@@ -249,11 +323,16 @@ const createStyles = (colors: any) => StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: colors.background,
+        backgroundColor: '#ebf0f6',
     },
     loadingText: {
         marginTop: 16,
         fontSize: 16,
         color: colors.text,
+    },
+    video: {
+        width: '100%',
+        height: '100%',
+        position: 'absolute',
     },
 });

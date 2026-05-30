@@ -96,7 +96,7 @@ export const Button: React.FC<ButtonProps> = ({
 const createStyles = (colors: any) => StyleSheet.create({
     button: {
         height: 56,
-        borderRadius: 28,
+        borderRadius: 100,
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 32,

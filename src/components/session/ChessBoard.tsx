@@ -5,7 +5,6 @@ import {
     StyleSheet,
     TouchableOpacity,
     Alert,
-    Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Square, Move } from 'chess.js';
@@ -16,40 +15,33 @@ import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useT } from '../../store/languageStore';
 import lichessService from '../../services/lichessService';
-import { LogoNew } from '../Logo';
 import EncouragementBanner from './chess/EncouragementBanner';
-
-const CHESS_PIECES: Record<string, any> = {
-    br: require('react-native-chessboard/src/assets/br.png'),
-    bp: require('react-native-chessboard/src/assets/bp.png'),
-    bn: require('react-native-chessboard/src/assets/bn.png'),
-    bb: require('react-native-chessboard/src/assets/bb.png'),
-    bq: require('react-native-chessboard/src/assets/bq.png'),
-    bk: require('react-native-chessboard/src/assets/bk.png'),
-    wr: require('react-native-chessboard/src/assets/wr.png'),
-    wn: require('react-native-chessboard/src/assets/wn.png'),
-    wb: require('react-native-chessboard/src/assets/wb.png'),
-    wq: require('react-native-chessboard/src/assets/wq.png'),
-    wk: require('react-native-chessboard/src/assets/wk.png'),
-    wp: require('react-native-chessboard/src/assets/wp.png'),
-};
 
 interface ChessBoardProps {
     fen: string;
     puzzleMoves: string[]; // e.g. ["h1h7"]
+    puzzles?: {
+        fen: string;
+        moves: string[];
+        prompt: string;
+        hints?: string[];
+    }[];
     question?: string;
     maxHints: number;
     onComplete: () => void;
     isLastStep?: boolean;
+    skipTrigger?: number;
 }
 
 export const ChessBoard: React.FC<ChessBoardProps> = ({
     fen,
     puzzleMoves,
+    puzzles,
     question,
     maxHints,
     onComplete,
     isLastStep = true,
+    skipTrigger = 0,
 }) => {
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
@@ -57,10 +49,22 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
 
     const chessboardRef = useRef<ChessboardRef>(null);
 
+    // Multi-puzzle and Active puzzle states
+    const [currentPuzzleIndex, setCurrentPuzzleIndex] = useState(0);
+
+    const activePuzzle = useMemo(() => {
+        if (puzzles && puzzles.length > 0) {
+            return puzzles[currentPuzzleIndex];
+        }
+        return { fen, moves: puzzleMoves, prompt: question, hints: [] };
+    }, [puzzles, currentPuzzleIndex, fen, puzzleMoves, question]);
+
     // Game state
     const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
     const [incorrectMove, setIncorrectMove] = useState(false);
     const [solved, setSolved] = useState(false);
+    const [puzzleResults, setPuzzleResults] = useState<('completed'|'skipped')[]>([]);
+    const [skipCounts, setSkipCounts] = useState<Record<number, number>>({});
     const [banner, setBanner] = useState<{ visible: boolean; isCorrect: boolean }>({
         visible: false,
         isCorrect: true,
@@ -73,13 +77,22 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     const [gestureEnabled, setGestureEnabled] = useState(true);
 
     // Track the current FEN for our own chess.js instance
-    const currentFenRef = useRef(fen);
+    const currentFenRef = useRef(activePuzzle.fen);
     const currentMoveIndexRef = useRef(0);
     const solvedRef = useRef(false);
+    const lastProcessedTriggerRef = useRef(0);
 
     // Sync state if FEN changes from outside
     useEffect(() => {
-        currentFenRef.current = fen;
+        setCurrentPuzzleIndex(0);
+        setPuzzleResults([]);
+        setSkipCounts({});
+    }, [fen]);
+
+    // Sync state when active puzzle changes
+    useEffect(() => {
+        const activeFen = activePuzzle.fen;
+        currentFenRef.current = activeFen;
         currentMoveIndexRef.current = 0;
         solvedRef.current = false;
         setCurrentMoveIndex(0);
@@ -87,12 +100,57 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         setSolved(false);
         setHintsUsed(0);
         setGestureEnabled(true);
+        setBanner({ visible: false, isCorrect: true });
 
         // Reset chessboard via ref
         if (chessboardRef.current) {
-            chessboardRef.current.resetBoard(fen);
+            chessboardRef.current.resetBoard(activeFen);
         }
-    }, [fen]);
+    }, [activePuzzle]);
+
+    const handleSkipPuzzle = useCallback(() => {
+        setBanner({ visible: false, isCorrect: true });
+        setPuzzleResults(prev => {
+            const next = [...prev];
+            next[currentPuzzleIndex] = 'skipped';
+            return next;
+        });
+
+        const newSkipCounts = {
+            ...skipCounts,
+            [currentPuzzleIndex]: (skipCounts[currentPuzzleIndex] || 0) + 1
+        };
+        setSkipCounts(newSkipCounts);
+
+        let nextIndex = currentPuzzleIndex + 1;
+        while (puzzles && nextIndex < puzzles.length && (puzzleResults[nextIndex] === 'completed' || puzzleResults[nextIndex] === 'skipped')) {
+            nextIndex++;
+        }
+
+        if (puzzles && nextIndex < puzzles.length) {
+            setCurrentPuzzleIndex(nextIndex);
+        } else {
+            const firstSkipped = puzzles ? puzzles.findIndex((_, idx) => {
+                const isCurrentlySkipped = idx === currentPuzzleIndex ? true : (puzzleResults[idx] === 'skipped');
+                const count = newSkipCounts[idx] || 0;
+                return isCurrentlySkipped && count < 2;
+            }) : -1;
+
+            if (firstSkipped !== -1) {
+                setCurrentPuzzleIndex(firstSkipped);
+            } else {
+                onComplete();
+            }
+        }
+    }, [puzzles, currentPuzzleIndex, puzzleResults, skipCounts, onComplete]);
+
+    // Handle external skip trigger
+    useEffect(() => {
+        if (skipTrigger > 0 && skipTrigger > lastProcessedTriggerRef.current) {
+            lastProcessedTriggerRef.current = skipTrigger;
+            handleSkipPuzzle();
+        }
+    }, [skipTrigger, handleSkipPuzzle]);
 
     const handleHint = useCallback(async () => {
         if (hintsUsed >= maxHints) {
@@ -100,7 +158,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             return;
         }
 
-        const expectedMove = puzzleMoves[currentMoveIndexRef.current];
+        const expectedMove = activePuzzle.moves[currentMoveIndexRef.current];
         if (!expectedMove) return;
 
         // Show where to move from (first 2 characters)
@@ -118,13 +176,13 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
 
         // Track hint usage
         lichessService.useHint();
-    }, [hintsUsed, maxHints, puzzleMoves, t]);
+    }, [hintsUsed, maxHints, activePuzzle.moves, t]);
 
     const playOpponentMove = useCallback((nextIndex: number) => {
         // Check if there's an opponent move to auto-play
-        if (nextIndex < puzzleMoves.length && nextIndex % 2 !== 0) {
+        if (nextIndex < activePuzzle.moves.length && nextIndex % 2 !== 0) {
             setGestureEnabled(false);
-            const oppMove = puzzleMoves[nextIndex];
+            const oppMove = activePuzzle.moves[nextIndex];
             const from = oppMove.substring(0, 2) as Square;
             const to = oppMove.substring(2, 4) as Square;
 
@@ -138,17 +196,42 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 currentMoveIndexRef.current = nextNext;
                 setCurrentMoveIndex(nextNext);
 
-                if (nextNext >= puzzleMoves.length) {
+                if (nextNext >= activePuzzle.moves.length) {
                     solvedRef.current = true;
                     setSolved(true);
+                    setPuzzleResults(prev => {
+                        const next = [...prev];
+                        next[currentPuzzleIndex] = 'completed';
+                        return next;
+                    });
                     setGestureEnabled(false);
-                    setTimeout(() => onComplete(), 800);
+                    setTimeout(() => {
+                        let nextIndex = currentPuzzleIndex + 1;
+                        while (puzzles && nextIndex < puzzles.length && (puzzleResults[nextIndex] === 'completed' || puzzleResults[nextIndex] === 'skipped')) {
+                            nextIndex++;
+                        }
+                        if (puzzles && nextIndex < puzzles.length) {
+                            setCurrentPuzzleIndex(nextIndex);
+                        } else {
+                            const firstSkipped = puzzles ? puzzles.findIndex((_, idx) => {
+                                const result = puzzleResults[idx];
+                                const count = skipCounts[idx] || 0;
+                                return result === 'skipped' && count < 2;
+                            }) : -1;
+
+                            if (firstSkipped !== -1) {
+                                setCurrentPuzzleIndex(firstSkipped);
+                            } else {
+                                onComplete();
+                            }
+                        }
+                    }, 800);
                 } else {
                     setGestureEnabled(true);
                 }
             }, 500);
         }
-    }, [puzzleMoves, onComplete]);
+    }, [activePuzzle.moves, puzzles, currentPuzzleIndex, onComplete]);
 
     const handleMove = useCallback(({ move, state }: { move: Move; state: any }) => {
         if (solvedRef.current) return;
@@ -156,7 +239,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         // Build the UCI move string from the move object
         const uciMove = move.from + move.to + (move.promotion || '');
 
-        const expectedMove = puzzleMoves[currentMoveIndexRef.current];
+        const expectedMove = activePuzzle.moves[currentMoveIndexRef.current];
         if (!expectedMove) return;
 
         // Check if the move matches the expected puzzle move
@@ -177,10 +260,15 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             currentMoveIndexRef.current = nextIndex;
             setCurrentMoveIndex(nextIndex);
 
-            if (nextIndex >= puzzleMoves.length) {
+            if (nextIndex >= activePuzzle.moves.length) {
                 // Puzzle fully complete!
                 solvedRef.current = true;
                 setSolved(true);
+                setPuzzleResults(prev => {
+                    const next = [...prev];
+                    next[currentPuzzleIndex] = 'completed';
+                    return next;
+                });
                 setGestureEnabled(false);
                 setBanner({ visible: true, isCorrect: true });
             } else {
@@ -203,9 +291,34 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 }, 1600);
             }, 400);
         }
-    }, [puzzleMoves, onComplete, playOpponentMove]);
+    }, [activePuzzle.moves, playOpponentMove]);
 
-    // Calculate board size - ensure it's a multiple of 8 for clean grid
+    const handleNextPuzzle = useCallback(() => {
+        setBanner(prev => ({ ...prev, visible: false }));
+        
+        let nextIndex = currentPuzzleIndex + 1;
+        while (puzzles && nextIndex < puzzles.length && (puzzleResults[nextIndex] === 'completed' || puzzleResults[nextIndex] === 'skipped')) {
+            nextIndex++;
+        }
+
+        if (puzzles && nextIndex < puzzles.length) {
+            setCurrentPuzzleIndex(nextIndex);
+        } else {
+            const firstSkipped = puzzles ? puzzles.findIndex((_, idx) => {
+                const result = puzzleResults[idx];
+                const count = skipCounts[idx] || 0;
+                return result === 'skipped' && count < 2;
+            }) : -1;
+
+            if (firstSkipped !== -1) {
+                setCurrentPuzzleIndex(firstSkipped);
+            } else {
+                onComplete();
+            }
+        }
+    }, [puzzles, currentPuzzleIndex, puzzleResults, skipCounts, onComplete]);
+
+    // Calculate dimensions dynamically
     const boardSize = Math.floor((SCREEN_WIDTH - scale(40)) / 8) * 8;
     const remainingHints = Math.max(0, maxHints - hintsUsed);
 
@@ -219,31 +332,18 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         promotionPieceButton: '#5BA3E6',
     }), [g.boardDark, g.boardLight]);
 
-    const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-    const numbers = ['8', '7', '6', '5', '4', '3', '2', '1'];
+    const isBlackActive = useMemo(() => {
+        if (!activePuzzle?.fen) return false;
+        const parts = activePuzzle.fen.split(' ');
+        return parts[1] === 'b';
+    }, [activePuzzle?.fen]);
 
-    const renderPiece = useCallback((piece: string) => {
-        const source = CHESS_PIECES[piece];
-        if (!source) return null;
-
-        const pieceSize = boardSize / 8;
-        const isBlack = piece.startsWith('b');
-        // Black and white pieces are the same size
-        const size = pieceSize;
-        const margin = 0;
-
-        return (
-            <Image
-                source={source}
-                style={{
-                    width: size,
-                    height: size,
-                    marginLeft: margin,
-                    marginTop: margin,
-                }}
-            />
-        );
-    }, [boardSize]);
+    const letters = isBlackActive
+        ? ['h', 'g', 'f', 'e', 'd', 'c', 'b', 'a']
+        : ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    const numbers = isBlackActive
+        ? ['1', '2', '3', '4', '5', '6', '7', '8']
+        : ['8', '7', '6', '5', '4', '3', '2', '1'];
 
     return (
         <View style={styles.container}>
@@ -263,6 +363,46 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 </TouchableOpacity>
             </View>
 
+            {/* Segmented Progress Bar */}
+            {puzzles && puzzles.length > 1 && (
+                <View style={styles.pillsContainer}>
+                    {puzzles.map((_, idx) => {
+                        const result = puzzleResults[idx];
+                        const isCompleted = result === 'completed';
+                        const isSkipped = result === 'skipped';
+                        const isActive = idx === currentPuzzleIndex;
+                        const pillElement = (
+                            <View
+                                key={idx}
+                                style={[
+                                    styles.pill,
+                                    isCompleted && styles.pillCompleted,
+                                    isSkipped && styles.pillSkipped,
+                                    isActive && styles.pillActive,
+                                ]}
+                            />
+                        );
+
+                        if (isSkipped) {
+                            return (
+                                <TouchableOpacity
+                                    key={idx}
+                                    style={{ flex: 1 }}
+                                    onPress={() => {
+                                        setCurrentPuzzleIndex(idx);
+                                    }}
+                                    activeOpacity={0.7}
+                                >
+                                    {pillElement}
+                                </TouchableOpacity>
+                            );
+                        }
+
+                        return pillElement;
+                    })}
+                </View>
+            )}
+
             {/* Chess Board */}
             <View style={styles.boardWithCoords}>
                 <View style={[styles.numbersColumn, { height: boardSize }]}>
@@ -272,14 +412,14 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                     <View style={[styles.boardWrapper, { width: boardSize, height: boardSize }]}>
                         <Chessboard
                             ref={chessboardRef}
-                            fen={fen}
+                            fen={activePuzzle.fen}
                             boardSize={boardSize}
                             gestureEnabled={gestureEnabled && !solved}
                             onMove={handleMove}
                             colors={boardColors}
                             withLetters={false}
                             withNumbers={false}
-                            renderPiece={renderPiece as any}
+                            boardOrientation={isBlackActive ? 'black' : 'white'}
                         />
                     </View>
                     <View style={[styles.lettersRow, { width: boardSize }]}>
@@ -289,7 +429,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             </View>
 
             {/* AI Bubble Question */}
-            {question && (
+            {activePuzzle.prompt && (
                 <View style={styles.aiBubbleContainer}>
                     <View style={styles.aiBubble}>
                         <Ionicons
@@ -298,7 +438,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                             color="#5BA3E6"
                             style={styles.aiBubbleIcon}
                         />
-                        <Text style={styles.aiBubbleText}>{question}</Text>
+                        <Text style={styles.aiBubbleText}>{activePuzzle.prompt}</Text>
                     </View>
                 </View>
             )}
@@ -310,20 +450,14 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 </Text>
             )}
 
-            {solved && (
-                <View style={styles.solvedContainer}>
-                    <Text style={styles.successText}>
-                        {t('Отлично! Задача решена!')}
-                    </Text>
-                </View>
-            )}
+
 
             <EncouragementBanner
                 visible={banner.visible}
                 isCorrect={banner.isCorrect}
-                onNext={onComplete}
+                onNext={handleNextPuzzle}
                 hideButton={!banner.isCorrect}
-                buttonText={isLastStep ? t('Завершить') : t('Далее')}
+                buttonText={puzzles && currentPuzzleIndex < puzzles.length - 1 ? t('Следующая задача') : (isLastStep ? t('Завершить') : t('Далее'))}
             />
         </View>
     );
@@ -343,7 +477,30 @@ const createStyles = (colors: any) => {
             justifyContent: 'space-between',
             alignItems: 'center',
             width: SCREEN_WIDTH - scale(40),
-            marginBottom: scale(52),
+            marginBottom: scale(24),
+        },
+        pillsContainer: {
+            flexDirection: 'row',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: scale(6),
+            marginBottom: scale(24),
+            width: SCREEN_WIDTH - scale(40),
+        },
+        pill: {
+            height: scale(6),
+            flex: 1,
+            borderRadius: scale(3),
+            backgroundColor: 'rgba(100, 116, 139, 0.15)',
+        },
+        pillCompleted: {
+            backgroundColor: '#34C759',
+        },
+        pillSkipped: {
+            backgroundColor: '#8E8E93',
+        },
+        pillActive: {
+            backgroundColor: '#5BA3E6',
         },
         promptText: {
             fontFamily: fonts.heading.bold,
@@ -388,12 +545,6 @@ const createStyles = (colors: any) => {
             paddingHorizontal: scale(20),
             width: '100%',
             alignItems: 'flex-start',
-        },
-        aiAvatar: {
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginRight: scale(12),
-            marginTop: scale(2),
         },
         aiBubble: {
             flex: 1,
@@ -457,20 +608,6 @@ const createStyles = (colors: any) => {
             width: SCREEN_WIDTH - scale(40),
             alignItems: 'center',
             marginTop: scale(80),
-        },
-        actionBtn: {
-            backgroundColor: colors.buttonPrimary || '#1E1E2E',
-            borderRadius: scale(30),
-            height: scale(56),
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginTop: scale(20),
-            width: '100%',
-        },
-        actionBtnText: {
-            fontFamily: fonts.heading.bold,
-            fontSize: scale(18),
-            color: '#FFFFFF',
         },
     });
 };

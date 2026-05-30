@@ -375,7 +375,7 @@ export const LearnStep: React.FC<LearnStepProps> = ({
                 <View style={{ flex: 1, justifyContent: 'center' }}>
                     <Text style={styles.cardSubtitle}>{cardItem.subtitle}</Text>
                     <Text style={styles.cardText}>{cardItem.text}</Text>
-                    <Text style={styles.swipeHint}>
+                    <Text style={[styles.swipeHint, { opacity: isTop ? 1 : 0 }]}>
                         Свайп для следующей карты ➔
                     </Text>
                 </View>
@@ -569,15 +569,15 @@ const createStyles = (colors: any) => StyleSheet.create({
     },
     stackContainer: {
         position: 'relative',
-        minHeight: scale(240),
+        height: scale(245),
         marginBottom: scale(28),
     },
     card: {
         backgroundColor: '#8CDEFF',
         borderRadius: scale(24),
-        padding: scale(24),
+        padding: scale(20),
         borderWidth: 0,
-        minHeight: scale(190),
+        height: scale(215),
         justifyContent: 'center',
     },
     cardBehind: {
@@ -591,7 +591,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontSize: scale(19),
         lineHeight: scale(24),
         color: '#1A253C',
-        marginBottom: scale(10),
+        marginBottom: scale(8),
     },
     cardText: {
         fontFamily: fonts.body?.light || fonts.heading.light,
@@ -604,7 +604,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontSize: scale(11),
         color: 'rgba(43, 62, 96, 0.4)',
         textAlign: 'right',
-        marginTop: scale(12),
+        marginTop: scale(8),
         textTransform: 'uppercase',
         letterSpacing: 1,
     },
@@ -672,7 +672,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         left: scale(24),
         right: scale(24),
         backgroundColor: '#0F2147',
-        borderRadius: scale(30),
+        borderRadius: 9999,
         height: scale(56),
         justifyContent: 'center',
         alignItems: 'center',

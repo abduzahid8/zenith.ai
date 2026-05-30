@@ -20,6 +20,8 @@ import { useAppTheme } from '../../theme/useAppTheme';
 import { useT } from '../../store/languageStore';
 import { useTaskStore } from '../../store/taskStore';
 import { TaskType } from '../../services/supabase/types';
+import { useGamificationStore } from '../../store/gamificationStore';
+import { useUserProfileStore } from '../../store/userProfileStore';
 
 const booksImage = require('../../../assets/images/home-books.png');
 const targetImage = require('../../../assets/images/home-target.png');
@@ -56,6 +58,20 @@ const HomeTab: React.FC<HomeTabProps> = ({
     };
 
     const handleStartLesson = () => {
+        const gamificationStore = useGamificationStore.getState();
+        const { isPremium } = useUserProfileStore.getState();
+        
+        if (!gamificationStore.canStartSession(isPremium)) {
+            Alert.alert(
+                t('Лимит сессий'),
+                isPremium 
+                    ? t('Вы выполнили дневной лимит (3 сессии). Возвращайтесь завтра!')
+                    : t('Вы выполнили дневной лимит (1 сессия). Перейдите на Premium, чтобы выполнять больше сессий, или возвращайтесь завтра!'),
+                [{ text: 'ОК' }]
+            );
+            return;
+        }
+
         console.log('[HomeTab] handleStartLesson pressed');
         console.log('[HomeTab] dailyTasks total:', dailyTasks.length);
         const engineTasks = dailyTasks.filter(t => ENGINE_TYPES.includes(t.type as TaskType));

@@ -137,6 +137,7 @@ export const DoStep: React.FC<DoStepProps> = ({
                     <ChessBoard
                         fen={task.puzzleFen || ''}
                         puzzleMoves={task.puzzleMoves || []}
+                        puzzles={task.puzzles}
                         question={task.prompt}
                         maxHints={3}
                         onComplete={handleChessComplete}
@@ -335,7 +336,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     },
     submitButton: {
         backgroundColor: '#FF5722',
-        borderRadius: scale(30),
+        borderRadius: 9999,
         height: scale(56),
         justifyContent: 'center',
         alignItems: 'center',
@@ -375,7 +376,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     },
     continueButton: {
         backgroundColor: colors.buttonPrimary || '#1E1E2E',
-        borderRadius: scale(30),
+        borderRadius: 9999,
         height: scale(56),
         justifyContent: 'center',
         alignItems: 'center',

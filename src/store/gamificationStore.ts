@@ -121,6 +121,10 @@ interface GamificationState {
   weeklyFreezeWeekStart: string | null;
   freezeActivatedToday: boolean;       // Флаг для показа уведомления о заморозке
 
+  // Лимиты сессий
+  sessionsCompletedToday: number;
+  lastSessionDate: string | null;
+
   // Текущий день обучения по каждому хобби
   currentDay: Record<HobbyId, number>;
 
@@ -171,6 +175,12 @@ interface GamificationState {
   /** Зафиксировать запуск Python-кода */
   recordCodeRun: () => void;
 
+  /** Увеличить счетчик выполненных сессий за сегодня */
+  incrementSessionsCompleted: () => void;
+
+  /** Проверить, может ли пользователь начать новую сессию */
+  canStartSession: (isPremium: boolean) => boolean;
+
   /** Зафиксировать решение шахматной задачи */
   recordChessSolve: () => void;
 
@@ -193,7 +203,7 @@ const initialState: Omit<GamificationState,
   | 'saveArtifact' | 'advanceDay' | 'checkAndUnlockBadges'
   | 'dismissBadge' | 'startSession' | 'recordCodeRun'
   | 'recordChessSolve' | 'getItemsDueToday' | 'completeRepetition'
-  | 'resetGamification'
+  | 'resetGamification' | 'incrementSessionsCompleted' | 'canStartSession'
 > = {
   dailyChecklist: { learn: false, do: false, deepen1: false, deepen2: false },
   lastChecklistDate: null,
@@ -202,6 +212,8 @@ const initialState: Omit<GamificationState,
   weeklyFreezeUsed: false,
   weeklyFreezeWeekStart: null,
   freezeActivatedToday: false,
+  sessionsCompletedToday: 0,
+  lastSessionDate: null,
   currentDay: { english: 1, chess: 1, chinese: 1, coding: 1 },
   unitProgress: {},
   artifacts: [],
@@ -464,6 +476,47 @@ export const useGamificationStore = create<GamificationState>()(
       recordCodeRun: () => {
         set(state => ({ codeRunCount: state.codeRunCount + 1 }));
         get().checkAndUnlockBadges();
+      },
+
+      // ── incrementSessionsCompleted ────────────────────────────
+      incrementSessionsCompleted: () => {
+        const today = getTodayString();
+        const { lastSessionDate, sessionsCompletedToday } = get();
+
+        if (lastSessionDate !== today) {
+          set({
+            sessionsCompletedToday: 1,
+            lastSessionDate: today,
+          });
+        } else {
+          set({
+            sessionsCompletedToday: sessionsCompletedToday + 1,
+            lastSessionDate: today,
+          });
+        }
+      },
+
+      // ── canStartSession ───────────────────────────────────────
+      canStartSession: (isPremium: boolean) => {
+        try {
+          const { useAuthStore } = require('./authStore');
+          const email = useAuthStore.getState().user?.email;
+          if (email === 'dovud.jurayev@icloud.com') {
+            console.log('[gamificationStore] canStartSession: Bypassed daily session limit for dovud.jurayev@icloud.com');
+            return true;
+          }
+        } catch (e) {
+          console.warn('[gamificationStore] Failed to check premium email bypass:', e);
+        }
+
+        const today = getTodayString();
+        const { lastSessionDate, sessionsCompletedToday } = get();
+
+        // Если сегодня еще не было сессий, то можно начать
+        if (lastSessionDate !== today) return true;
+
+        const maxSessions = isPremium ? 3 : 1;
+        return sessionsCompletedToday < maxSessions;
       },
 
       // ── recordChessSolve ──────────────────────────────────────

@@ -71,17 +71,12 @@ export default function HobbySelectionScreen() {
             console.log('[HobbySelectionScreen] Saving hobby:', selectedId, 'for user:', user.id);
             await dbService.saveHobby(user.id, selectedId, true);
             console.log('[HobbySelectionScreen] Hobby saved successfully');
+        } catch (e: unknown) {
+            console.log('[HobbySelectionScreen] Error saving hobby (proceeding offline/locally):', e);
+        } finally {
             resetTasks(); // Clear stale task cache from previous hobby
             setSelectedHobby(selectedId);
             router.push('/subscription');
-        } catch (e: unknown) {
-            console.log('[HobbySelectionScreen] Error saving hobby:', e);
-            setSaving(false);
-            Alert.alert(
-                'Ошибка',
-                e instanceof Error ? e.message : 'Не удалось сохранить выбор. Проверьте интернет и попробуйте снова.',
-                [{ text: 'OK' }]
-            );
         }
     };
 
@@ -224,7 +219,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     continueButton: {
         width: scale(315),
         height: scale(60),
-        borderRadius: scale(30),
+        borderRadius: 9999,
         backgroundColor: colors.buttonPrimary,
         justifyContent: 'center',
         alignItems: 'center',

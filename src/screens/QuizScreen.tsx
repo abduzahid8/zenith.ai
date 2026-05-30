@@ -47,15 +47,8 @@ export default function QuizScreen() {
                 try {
                     await dbService.saveQuizAnswers(user.id, answers);
                     console.log('[QuizScreen] Quiz answers saved successfully');
-                } catch (e: unknown) {
-                    console.log('[QuizScreen] Error saving quiz answers:', e);
-                    setSaving(false);
-                    Alert.alert(
-                        'Error',
-                        e instanceof Error ? e.message : 'Failed to save answers. Check your internet and try again.',
-                        [{ text: 'OK' }]
-                    );
-                    return;
+                } catch (e: any) {
+                    console.log('[QuizScreen] Error saving quiz answers (proceeding offline/locally):', e);
                 }
             }
             console.log('[QuizScreen] Completing quiz - navigating to /hobby-selection');

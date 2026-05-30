@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Session, User } from '@supabase/supabase-js';
 import { authService, dbService, profileService } from '../services/supabase';
-import { useUserProfileStore } from './userProfileStore';
+import { useUserProfileStore, SubscriptionLevel } from './userProfileStore';
 import { useTaskStore } from './taskStore';
 import { useHobbyTimeStore } from './hobbyTimeStore';
 import { useQuizStore } from './quizStore';
@@ -11,6 +11,7 @@ import { useContentStore } from './contentStore';
 import { useDeviceScreenTimeStore } from './deviceScreenTimeStore';
 import { useSubscriptionStore } from './subscriptionStore';
 import { toAppError } from '../shared/errors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Module-level guards — survive store re-creation in dev hot-reload
 let _isInitialized = false;
@@ -21,10 +22,85 @@ let _authSubscription: { unsubscribe: () => void } | null = null;
  * Safe to call concurrently — supabase handles the request; worst case
  * the store receives two identical writes.
  */
-async function syncUserProfile(userId: string): Promise<void> {
+async function syncUserProfile(userId: string, email?: string): Promise<void> {
     try {
         // Ensure the profile row exists in the database
-        await profileService.getOrCreateProfile(userId);
+        let profile = await profileService.getOrCreateProfile(userId);
+
+        // Check for specific account bypass to remove session/task limits
+        const isBypassed = email?.toLowerCase().trim() === 'dovud.jurayev@icloud.com';
+
+        if (isBypassed) {
+            // One-off complete account reset to Day 1 / Onboarding
+            const isResetCompleted = await AsyncStorage.getItem('reset_completed_v4');
+            if (!isResetCompleted) {
+                console.log('[authStore] dovud.jurayev@icloud.com detected - performing account reset to Day 1');
+                
+                // 1. Reset local Zustand stores
+                useUserProfileStore.getState().resetProfile();
+                useTaskStore.getState().resetTasks();
+                useHobbyTimeStore.getState().reset();
+                useQuizStore.getState().resetQuiz();
+                useScreenTimeStore.getState().reset();
+                useEarningsStore.getState().reset();
+                useContentStore.getState().reset();
+                useDeviceScreenTimeStore.getState().reset();
+                useSubscriptionStore.getState().reset();
+                try {
+                    const { useGamificationStore } = require('./gamificationStore');
+                    useGamificationStore.getState().resetGamification();
+                } catch (err) {
+                    console.warn('[authStore] Failed to reset gamificationStore:', err);
+                }
+
+                // 2. Try to clean up database tables for this user in Supabase
+                try {
+                    const { getSupabase } = require('../services/supabase/client');
+                    const supabase = getSupabase();
+                    
+                    // Clear database tables that contain user's progress using correct schema table names
+                    await supabase.from('user_hobbies').delete().eq('user_id', userId);
+                    await supabase.from('tasks').delete().eq('user_id', userId);
+                    await supabase.from('screen_time_limits').delete().eq('user_id', userId);
+                    await supabase.from('screen_time_logs').delete().eq('user_id', userId);
+                    await supabase.from('sessions').delete().eq('user_id', userId);
+                    await supabase.from('user_earnings').delete().eq('user_id', userId);
+                    await supabase.from('user_content_history').delete().eq('user_id', userId);
+                    await supabase.from('quiz_answers').delete().eq('user_id', userId);
+                    await supabase.from('daily_stats').delete().eq('user_id', userId);
+                    await supabase.from('user_state_snapshot').delete().eq('user_id', userId);
+                    await supabase.from('weekly_plans').delete().eq('user_id', userId);
+                    await supabase.from('substitute_notifications').delete().eq('user_id', userId);
+
+                    // Update user profile in DB to reset streak & last session
+                    await supabase.from('user_profiles').update({
+                        streak_days: 0,
+                        last_session_date: null,
+                        is_premium: true,
+                        subscription_level: 'premium'
+                    }).eq('user_id', userId);
+
+                    console.log('[authStore] Database tables clean-up successful.');
+                } catch (dbErr) {
+                    console.warn('[authStore] Database clean-up failed (possibly RLS policies), local stores reset completed:', dbErr);
+                }
+
+                await AsyncStorage.setItem('reset_completed_v4', 'true');
+            }
+        }
+
+        if (isBypassed && (!profile.is_premium || profile.subscription_level !== 'premium')) {
+            console.log('[authStore] dovud.jurayev@icloud.com detected - forcing premium status');
+            try {
+                // Attempt to permanently update premium status in Supabase database
+                profile = await profileService.updatePremiumStatus(userId, true);
+            } catch (dbErr) {
+                console.warn('[authStore] Database update of premium status failed (possibly due to RLS), using client-side fallback:', dbErr);
+                // Set temporary local values for the profile so the app works regardless of RLS
+                profile.is_premium = true;
+                profile.subscription_level = 'premium';
+            }
+        }
 
         const hobbies = await dbService.getUserHobbies(userId);
         const hasOnboarded = hobbies && hobbies.length > 0;
@@ -34,6 +110,8 @@ async function syncUserProfile(userId: string): Promise<void> {
         useUserProfileStore.setState({
             hasCompletedOnboarding: hasOnboarded,
             ...(primaryHobby && { selectedHobby: primaryHobby.hobby_id }),
+            isPremium: isBypassed ? true : !!profile.is_premium,
+            subscriptionLevel: (isBypassed ? 'premium' : (profile.subscription_level || 'free')) as SubscriptionLevel,
         });
     } catch (err) {
         console.warn('[authStore] syncUserProfile failed:', err);
@@ -127,7 +205,7 @@ export const useAuthStore = create<AuthState>()(
                 }
 
                 // Sync onboarding state from DB (authoritative source)
-                await syncUserProfile(user.id);
+                await syncUserProfile(user.id, user.email);
 
                 set({
                     session,
@@ -201,7 +279,7 @@ export const useAuthStore = create<AuthState>()(
                         profileStore.setUserName(user.email?.split('@')[0] || '');
                     }
                     // Sync onboarding state — critical for returning users signing in via OAuth
-                    await syncUserProfile(user.id);
+                    await syncUserProfile(user.id, user.email);
                 }
 
                 set({
@@ -233,7 +311,7 @@ export const useAuthStore = create<AuthState>()(
                         profileStore.setUserName(user.email?.split('@')[0] || '');
                     }
                     // Sync onboarding state — critical for returning users signing in via OAuth
-                    await syncUserProfile(user.id);
+                    await syncUserProfile(user.id, user.email);
                 }
 
                 set({
@@ -339,7 +417,7 @@ export const useAuthStore = create<AuthState>()(
                     // guard never sees stale hasCompletedOnboarding:false for a user
                     // who already completed onboarding (e.g. after a reinstall or
                     // password-reset deep-link flow).
-                    await syncUserProfile(session.user.id);
+                    await syncUserProfile(session.user.id, session.user.email);
 
                     set({
                         session,

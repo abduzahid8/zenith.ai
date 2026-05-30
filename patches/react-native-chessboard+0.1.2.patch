@@ -1,0 +1,296 @@
+diff --git a/node_modules/react-native-chessboard/lib/typescript/context/props-context/index.d.ts b/node_modules/react-native-chessboard/lib/typescript/context/props-context/index.d.ts
+index 42e9bea..12e69db 100644
+--- a/node_modules/react-native-chessboard/lib/typescript/context/props-context/index.d.ts
++++ b/node_modules/react-native-chessboard/lib/typescript/context/props-context/index.d.ts
+@@ -58,8 +58,9 @@ declare type ChessboardProps = {
+      * Useful if you want to customise the default durations used in the chessboard (in milliseconds).
+      */
+     durations?: ChessboardDurationsType;
++    boardOrientation?: 'white' | 'black';
+ };
+-declare type ChessboardContextType = ChessboardProps & Required<Pick<ChessboardProps, 'gestureEnabled' | 'withLetters' | 'withNumbers' | 'boardSize'>> & {
++declare type ChessboardContextType = ChessboardProps & Required<Pick<ChessboardProps, 'gestureEnabled' | 'withLetters' | 'withNumbers' | 'boardSize' | 'boardOrientation'>> & {
+     pieceSize: number;
+ } & {
+     colors: Required<ChessboardColorsType>;
+diff --git a/node_modules/react-native-chessboard/src/components/piece/index.tsx b/node_modules/react-native-chessboard/src/components/piece/index.tsx
+index bbbd539..cede9cb 100644
+--- a/node_modules/react-native-chessboard/src/components/piece/index.tsx
++++ b/node_modules/react-native-chessboard/src/components/piece/index.tsx
+@@ -43,6 +43,7 @@ const Piece = React.memo(
+       const {
+         durations: { move: moveDuration },
+         gestureEnabled: gestureEnabledFromChessboardProps,
++        boardOrientation,
+       } = useChessboardProps();
+ 
+       const gestureEnabled = useDerivedValue(
+@@ -57,8 +58,9 @@ const Piece = React.memo(
+       const offsetY = useSharedValue(0);
+       const scale = useSharedValue(1);
+ 
+-      const translateX = useSharedValue(startPosition.x * size);
+-      const translateY = useSharedValue(startPosition.y * size);
++      const isFlipped = boardOrientation === 'black';
++      const translateX = useSharedValue((isFlipped ? 7 - startPosition.x : startPosition.x) * size);
++      const translateY = useSharedValue((isFlipped ? 7 - startPosition.y : startPosition.y) * size);
+ 
+       const validateMove = useCallback(
+         (from: Square, to: Square) => {
+@@ -80,6 +82,18 @@ const Piece = React.memo(
+         (from: Square, to: Square) => {
+           return new Promise<Move | undefined>((resolve) => {
+             const move = validateMove(from, to);
++            if (move && (move.flags.includes('c') || move.flags.includes('e'))) {
++              let capturedSquare = move.to;
++              if (move.flags.includes('e')) {
++                const file = move.to[0];
++                const rank = move.color === 'w' ? '5' : '4';
++                capturedSquare = `${file}${rank}` as Square;
++              }
++              const capturedPieceRef = refs?.current?.[capturedSquare]?.current;
++              if (capturedPieceRef) {
++                capturedPieceRef.enable(false);
++              }
++            }
+             const { x, y } = toTranslation(move ? move.to : from);
+             translateX.value = withTiming(x, { duration: moveDuration }, () => {
+               offsetX.value = translateX.value;
+@@ -116,6 +130,7 @@ const Piece = React.memo(
+           translateY,
+           validateMove,
+           wrappedOnMoveForJSThread,
++          refs,
+         ]
+       );
+ 
+@@ -177,7 +192,7 @@ const Piece = React.memo(
+           return;
+         }
+         if (!gestureEnabled.value) return;
+-        scale.value = withTiming(1.2);
++        scale.value = withTiming(1);
+         onStartTap(square);
+       }, [
+         gestureEnabled.value,
+@@ -221,12 +236,12 @@ const Piece = React.memo(
+       const style = useAnimatedStyle(() => {
+         return {
+           position: 'absolute',
+-          opacity: withTiming(pieceEnabled.value ? 1 : 0),
++          opacity: withTiming(pieceEnabled.value ? 1 : 0, { duration: moveDuration }),
+           zIndex: isGestureActive.value ? 100 : 10,
+           transform: [
+             { translateX: translateX.value },
+             { translateY: translateY.value },
+-            { scale: scale.value },
++            { scale: withTiming(pieceEnabled.value ? scale.value : 0, { duration: moveDuration }) },
+           ],
+         };
+       });
+@@ -243,9 +258,7 @@ const Piece = React.memo(
+           height: size * 2,
+           borderRadius: size,
+           zIndex: 0,
+-          backgroundColor: isGestureActive.value
+-            ? 'rgba(0, 0, 0, 0.1)'
+-            : 'transparent',
++          backgroundColor: 'transparent',
+           transform: [
+             { translateX: translation.x - size / 2 },
+             { translateY: translation.y - size / 2 },
+diff --git a/node_modules/react-native-chessboard/src/components/pieces.tsx b/node_modules/react-native-chessboard/src/components/pieces.tsx
+index 5410d88..c2b05b1 100644
+--- a/node_modules/react-native-chessboard/src/components/pieces.tsx
++++ b/node_modules/react-native-chessboard/src/components/pieces.tsx
+@@ -18,15 +18,14 @@ const Pieces = React.memo(() => {
+       {board.map((row, y) =>
+         row.map((piece, x) => {
+           if (piece !== null) {
+-            const square = toPosition({
+-              x: x * pieceSize,
+-              y: y * pieceSize,
+-            });
++            const col = String.fromCharCode(97 + x);
++            const row = `${8 - y}`;
++            const square = `${col}${row}` as Square;
+ 
+             return (
+               <Piece
+                 ref={refs?.current?.[square]}
+-                key={`${x}-${y}`}
++                key={`${x}-${y}-${piece.color}${piece.type}`}
+                 id={`${piece.color}${piece.type}` as const}
+                 startPosition={{ x, y }}
+                 square={square}
+diff --git a/node_modules/react-native-chessboard/src/context/board-operations-context/index.tsx b/node_modules/react-native-chessboard/src/context/board-operations-context/index.tsx
+index 2fc9565..78a9489 100644
+--- a/node_modules/react-native-chessboard/src/context/board-operations-context/index.tsx
++++ b/node_modules/react-native-chessboard/src/context/board-operations-context/index.tsx
+@@ -134,6 +134,27 @@ const BoardOperationsContextProviderComponent = React.forwardRef<
+         },
+       });
+ 
++      let rookFrom: Square | undefined;
++      let rookTo: Square | undefined;
++
++      if (move.flags.includes('k')) {
++        rookFrom = move.color === 'w' ? 'h1' : 'h8';
++        rookTo = move.color === 'w' ? 'f1' : 'f8';
++      } else if (move.flags.includes('q')) {
++        rookFrom = move.color === 'w' ? 'a1' : 'a8';
++        rookTo = move.color === 'w' ? 'd1' : 'd8';
++      }
++
++      if (rookFrom && rookTo) {
++        const rookRef = pieceRefs?.current?.[rookFrom]?.current;
++        if (rookRef) {
++          rookRef.moveTo(rookTo).then(() => {
++            setBoard(chess.board());
++          });
++          return;
++        }
++      }
++
+       setBoard(chess.board());
+     },
+     [
+@@ -144,6 +165,7 @@ const BoardOperationsContextProviderComponent = React.forwardRef<
+       onChessboardMoveCallback,
+       setBoard,
+       turn,
++      pieceRefs,
+     ]
+   );
+ 
+@@ -189,13 +211,22 @@ const BoardOperationsContextProviderComponent = React.forwardRef<
+ 
+       const validSquares = (chess.moves({
+         square,
+-      }) ?? []) as Square[];
++      }) ?? []) as string[];
++
++      const turnColor = chess.turn();
+ 
+       // eslint-disable-next-line no-shadow
+-      selectableSquares.value = validSquares.map((square) => {
+-        const splittedSquare = square.split('x');
++      selectableSquares.value = validSquares.map((move) => {
++        if (move.startsWith('O-O-O')) {
++          return (turnColor === 'w' ? 'O-O-O c1' : 'O-O-O c8') as Square;
++        }
++        if (move.startsWith('O-O')) {
++          return (turnColor === 'w' ? 'O-O g1' : 'O-O g8') as Square;
++        }
++
++        const splittedSquare = move.split('x');
+         if (splittedSquare.length === 0) {
+-          return square;
++          return move as Square;
+         }
+ 
+         return splittedSquare[splittedSquare.length - 1] as Square;
+diff --git a/node_modules/react-native-chessboard/src/context/board-promotion-context/dialog/index.tsx b/node_modules/react-native-chessboard/src/context/board-promotion-context/dialog/index.tsx
+index 481593d..7b54c4c 100644
+--- a/node_modules/react-native-chessboard/src/context/board-promotion-context/dialog/index.tsx
++++ b/node_modules/react-native-chessboard/src/context/board-promotion-context/dialog/index.tsx
+@@ -20,6 +20,8 @@ const PromotionDialog: React.FC<Required<BoardPromotionContextState>> =
+         style={[
+           {
+             width: boardSize / 3,
++            top: boardSize / 3,
++            left: boardSize / 3,
+           },
+           styles.container,
+         ]}
+diff --git a/node_modules/react-native-chessboard/src/context/props-context/index.tsx b/node_modules/react-native-chessboard/src/context/props-context/index.tsx
+index 448aa9c..51198a1 100644
+--- a/node_modules/react-native-chessboard/src/context/props-context/index.tsx
++++ b/node_modules/react-native-chessboard/src/context/props-context/index.tsx
+@@ -62,13 +62,17 @@ type ChessboardProps = {
+    * Useful if you want to customise the default durations used in the chessboard (in milliseconds).
+    */
+   durations?: ChessboardDurationsType;
++  /**
++   * Orientation of the board ('white' or 'black').
++   */
++  boardOrientation?: 'white' | 'black';
+ };
+ 
+ type ChessboardContextType = ChessboardProps &
+   Required<
+     Pick<
+       ChessboardProps,
+-      'gestureEnabled' | 'withLetters' | 'withNumbers' | 'boardSize'
++      'gestureEnabled' | 'withLetters' | 'withNumbers' | 'boardSize' | 'boardOrientation'
+     >
+   > & { pieceSize: number } & {
+     colors: Required<ChessboardColorsType>;
+@@ -80,6 +84,7 @@ const DEFAULT_BOARD_SIZE = Math.floor(SCREEN_WIDTH / 8) * 8;
+ 
+ const defaultChessboardProps: ChessboardContextType = {
+   gestureEnabled: true,
++  boardOrientation: 'white',
+   colors: {
+     black: '#62B1A8',
+     white: '#D9FDF8',
+diff --git a/node_modules/react-native-chessboard/src/notation.ts b/node_modules/react-native-chessboard/src/notation.ts
+index 1484f29..c3ffca1 100644
+--- a/node_modules/react-native-chessboard/src/notation.ts
++++ b/node_modules/react-native-chessboard/src/notation.ts
+@@ -5,7 +5,7 @@ import { useChessboardProps } from './context/props-context/hooks';
+ import type { Vector } from './types';
+ 
+ const useReversePiecePosition = () => {
+-  const { pieceSize } = useChessboardProps();
++  const { pieceSize, boardOrientation } = useChessboardProps();
+ 
+   const toTranslation = useCallback(
+     (to: Square) => {
+@@ -16,26 +16,36 @@ const useReversePiecePosition = () => {
+       if (!col || !row) {
+         throw new Error('Invalid notation: ' + to);
+       }
+-      const indexes = {
+-        x: col.charCodeAt(0) - 'a'.charCodeAt(0),
+-        y: parseInt(row, 10) - 1,
+-      };
++      const isFlipped = boardOrientation === 'black';
++      let indexX = col.charCodeAt(0) - 'a'.charCodeAt(0);
++      let indexY = parseInt(row, 10) - 1;
++      if (isFlipped) {
++        indexX = 7 - indexX;
++        indexY = 7 - indexY;
++      }
+       return {
+-        x: indexes.x * pieceSize,
+-        y: 7 * pieceSize - indexes.y * pieceSize,
++        x: indexX * pieceSize,
++        y: 7 * pieceSize - indexY * pieceSize,
+       };
+     },
+-    [pieceSize]
++    [pieceSize, boardOrientation]
+   );
+ 
+   const toPosition = useCallback(
+     ({ x, y }: Vector) => {
+       'worklet';
+-      const col = String.fromCharCode(97 + Math.round(x / pieceSize));
+-      const row = `${8 - Math.round(y / pieceSize)}`;
++      const isFlipped = boardOrientation === 'black';
++      let colIndex = Math.round(x / pieceSize);
++      let rowIndex = Math.round(y / pieceSize);
++      if (isFlipped) {
++        colIndex = 7 - colIndex;
++        rowIndex = 7 - rowIndex;
++      }
++      const col = String.fromCharCode(97 + colIndex);
++      const row = `${8 - rowIndex}`;
+       return `${col}${row}` as Square;
+     },
+-    [pieceSize]
++    [pieceSize, boardOrientation]
+   );
+ 
+   return { toPosition, toTranslation };
