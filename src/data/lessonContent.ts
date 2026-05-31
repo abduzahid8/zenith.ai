@@ -5,6 +5,8 @@
  * После 7-го дня контент генерируется через lessonGeneratorService.
  */
 
+import { ChessPuzzleMove } from './chessPuzzlesBank';
+
 export type HobbyId = 'english' | 'chess' | 'chinese' | 'coding';
 
 export type TaskType =
@@ -32,7 +34,10 @@ export interface TaskStep {
   puzzleMoves?: string[];     // Правильные ходы UCI
   puzzles?: {
     fen: string;
-    moves: string[];
+    moves?: string[];
+    solution?: ChessPuzzleMove[];
+    successExplanation?: string;
+    failureExplanation?: string;
     prompt: string;
     hints?: string[];
   }[];

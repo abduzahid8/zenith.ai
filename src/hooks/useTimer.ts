@@ -74,6 +74,9 @@ export function useTimer(options: UseTimerOptions = {}) {
                     lesson.do.puzzles = puzzles.map((p: any, index: number) => ({
                         fen: p.fen,
                         moves: p.puzzleMoves,
+                        solution: p.solution,
+                        successExplanation: p.successExplanation,
+                        failureExplanation: p.failureExplanation,
                         prompt: p.prompt,
                         hints: p.hints || ['Подумай над лучшим ходом!']
                     }));

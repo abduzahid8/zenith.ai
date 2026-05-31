@@ -1,21 +1,43 @@
 import { Chess } from 'chess.js';
 
+export interface ChessPuzzleMove {
+  userMove: string;
+  opponentMove?: string | null;
+  explanation?: string;
+}
+
 export interface ChessPuzzle {
+  id?: string;
+  day?: number;
+  topic?: string;
+  skill?: string;
+  goalType?: string;
   fen: string;       // Позиция на доске в FEN
-  moves: string[];   // Правильные ходы в UCI-формате, например ["e2e4"]
+  sideToMove?: 'w' | 'b';
+  solution?: ChessPuzzleMove[];
+  moves?: string[];   // Правильные ходы в UCI-формате, например ["e2e4"] (для обратной совместимости)
   prompt: string;    // Текст задания для пользователя
-  hints?: string[];  // Подсказки при нажатии на кнопку лампочки
+  hints?: string[] | { soft: string; medium: string; strong: string };  // Подсказки при нажатии на кнопку лампочки
+  successExplanation?: string;
+  failureExplanation?: string;
+  learningPoint?: string;
+  tags?: string[];
+  metadata?: Record<string, any>;
 }
 
 export interface ChessPuzzleTask {
   id: string;
   fen: string;
   puzzleMoves: string[];
+  solution?: ChessPuzzleMove[];
+  successExplanation?: string;
+  failureExplanation?: string;
   rating: number;
   themes: string[];
   prompt: string;
   hints: string[];
 }
+
 
 export const chessLessonPuzzles: Record<string, ChessPuzzle[]> = {
   day1_piece_movement: [
@@ -185,6 +207,31 @@ export const chessLessonPuzzles: Record<string, ChessPuzzle[]> = {
   ],
 
   day3_opening_principles: [
+    {
+      id: "chess_puzzle_day3_test_v2",
+      fen: "5r1k/5ppp/8/8/8/8/3Q4/3R2K1 w - - 0 1",
+      moves: ["d2d8", "f8d8", "d1d8"],
+      solution: [
+        {
+          userMove: "d2d8",
+          opponentMove: "f8d8",
+          explanation: "Отличная жертва ферзя! Теперь ладья черных вынуждена совершить взятие."
+        },
+        {
+          userMove: "d1d8",
+          opponentMove: null,
+          explanation: "Шах и мат! Линейный мат успешно поставлен."
+        }
+      ],
+      prompt: "[ТЕСТ V2] Поставь мат в 2 хода (линейный мат на последней горизонтали). Начни с жертвы ферзя на d8!",
+      hints: [
+        "Первый ход — жертва самой сильной фигуры на d8.",
+        "Сделай ход ферзем d2-d8.",
+        "После взятия ладьей, нанеси решающий удар ладьей с d1 на d8."
+      ],
+      successExplanation: "Великолепно! Ты успешно поставил линейный мат, пожертвовав ферзя.",
+      failureExplanation: "Неверный ход. Попробуй отыскать идею линейного мата с жертвой ферзя."
+    },
     {
       fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
       moves: ["e2e4"],
@@ -613,13 +660,20 @@ export const getThematicPuzzles = (day: number): ChessPuzzleTask[] => {
   const key = keys[day - 1] || 'day1_piece_movement';
   const puzzles = chessLessonPuzzles[key] || [];
   return puzzles.map((p, idx) => ({
-    id: `chess_puzzle_${day}_${idx + 1}`,
+    id: p.id || `chess_puzzle_${day}_${idx + 1}`,
     fen: p.fen,
-    puzzleMoves: p.moves,
+    puzzleMoves: p.moves || [],
+    solution: p.solution,
+    successExplanation: p.successExplanation,
+    failureExplanation: p.failureExplanation,
     rating: 1000,
     themes: [],
     prompt: p.prompt,
-    hints: p.hints || ['Подумай над лучшим ходом!']
+    hints: Array.isArray(p.hints)
+      ? p.hints
+      : p.hints && typeof p.hints === 'object'
+        ? [p.hints.soft, p.hints.medium, p.hints.strong].filter(Boolean) as string[]
+        : ['Подумай над лучшим ходом!']
   }));
 };
 

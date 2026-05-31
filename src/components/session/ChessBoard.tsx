@@ -7,6 +7,7 @@ import {
     Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Chess } from 'chess.js';
 import type { Square, Move } from 'chess.js';
 import Chessboard from 'react-native-chessboard';
 import type { ChessboardRef } from 'react-native-chessboard';
@@ -16,16 +17,47 @@ import { useAppTheme } from '../../theme/useAppTheme';
 import { useT } from '../../store/languageStore';
 import lichessService from '../../services/lichessService';
 import EncouragementBanner from './chess/EncouragementBanner';
+import type { ChessPuzzle } from '../../data/chessPuzzlesBank';
+
+// --- ChessPuzzle V2 Helper Functions ---
+const getExpectedUserMove = (activePuzzle: any, stepIndex: number): string | null => {
+    if (activePuzzle.solution && activePuzzle.solution.length > 0) {
+        return activePuzzle.solution[stepIndex]?.userMove || null;
+    }
+    return activePuzzle.moves ? activePuzzle.moves[stepIndex] || null : null;
+};
+
+const getOpponentMove = (activePuzzle: any, stepIndex: number): string | null => {
+    if (activePuzzle.solution && activePuzzle.solution.length > 0) {
+        return activePuzzle.solution[stepIndex]?.opponentMove || null;
+    }
+    if (activePuzzle.moves) {
+        const nextIndex = stepIndex + 1;
+        if (nextIndex < activePuzzle.moves.length && nextIndex % 2 !== 0) {
+            return activePuzzle.moves[nextIndex];
+        }
+    }
+    return null;
+};
+
+const getMoveExplanation = (activePuzzle: any, stepIndex: number): string | null => {
+    if (activePuzzle.solution && activePuzzle.solution.length > 0) {
+        return activePuzzle.solution[stepIndex]?.explanation || null;
+    }
+    return null;
+};
+
+const getTotalUserSteps = (activePuzzle: any): number => {
+    if (activePuzzle.solution && activePuzzle.solution.length > 0) {
+        return activePuzzle.solution.length;
+    }
+    return activePuzzle.moves ? activePuzzle.moves.length : 0;
+};
 
 interface ChessBoardProps {
     fen: string;
     puzzleMoves: string[]; // e.g. ["h1h7"]
-    puzzles?: {
-        fen: string;
-        moves: string[];
-        prompt: string;
-        hints?: string[];
-    }[];
+    puzzles?: ChessPuzzle[];
     question?: string;
     maxHints: number;
     onComplete: () => void;
@@ -52,11 +84,11 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     // Multi-puzzle and Active puzzle states
     const [currentPuzzleIndex, setCurrentPuzzleIndex] = useState(0);
 
-    const activePuzzle = useMemo(() => {
+    const activePuzzle = useMemo((): ChessPuzzle => {
         if (puzzles && puzzles.length > 0) {
             return puzzles[currentPuzzleIndex];
         }
-        return { fen, moves: puzzleMoves, prompt: question, hints: [] };
+        return { fen, moves: puzzleMoves, prompt: question || '', hints: [] };
     }, [puzzles, currentPuzzleIndex, fen, puzzleMoves, question]);
 
     // Game state
@@ -65,9 +97,10 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     const [solved, setSolved] = useState(false);
     const [puzzleResults, setPuzzleResults] = useState<('completed'|'skipped')[]>([]);
     const [skipCounts, setSkipCounts] = useState<Record<number, number>>({});
-    const [banner, setBanner] = useState<{ visible: boolean; isCorrect: boolean }>({
+    const [banner, setBanner] = useState<{ visible: boolean; isCorrect: boolean; feedback?: string }>({
         visible: false,
         isCorrect: true,
+        feedback: undefined,
     });
 
     // Hints state
@@ -76,7 +109,9 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     // Gesture enabled state
     const [gestureEnabled, setGestureEnabled] = useState(true);
 
-    // Track the current FEN for our own chess.js instance
+    // Track the current FEN and chess.js state
+    const [resetCounter, setResetCounter] = useState(0);
+    const chessRef = useRef<Chess | null>(null);
     const currentFenRef = useRef(activePuzzle.fen);
     const currentMoveIndexRef = useRef(0);
     const solvedRef = useRef(false);
@@ -92,6 +127,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     // Sync state when active puzzle changes
     useEffect(() => {
         const activeFen = activePuzzle.fen;
+        chessRef.current = new Chess(activeFen);
         currentFenRef.current = activeFen;
         currentMoveIndexRef.current = 0;
         solvedRef.current = false;
@@ -101,11 +137,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         setHintsUsed(0);
         setGestureEnabled(true);
         setBanner({ visible: false, isCorrect: true });
-
-        // Reset chessboard via ref
-        if (chessboardRef.current) {
-            chessboardRef.current.resetBoard(activeFen);
-        }
+        setResetCounter(prev => prev + 1);
     }, [activePuzzle]);
 
     const handleSkipPuzzle = useCallback(() => {
@@ -158,7 +190,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             return;
         }
 
-        const expectedMove = activePuzzle.moves[currentMoveIndexRef.current];
+        const expectedMove = getExpectedUserMove(activePuzzle, currentMoveIndexRef.current);
         if (!expectedMove) return;
 
         // Show where to move from (first 2 characters)
@@ -176,27 +208,39 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
 
         // Track hint usage
         lichessService.useHint();
-    }, [hintsUsed, maxHints, activePuzzle.moves, t]);
+    }, [hintsUsed, maxHints, activePuzzle, t]);
 
-    const playOpponentMove = useCallback((nextIndex: number) => {
-        // Check if there's an opponent move to auto-play
-        if (nextIndex < activePuzzle.moves.length && nextIndex % 2 !== 0) {
+    const playOpponentMove = useCallback((currentStepIndex: number) => {
+        const oppMove = getOpponentMove(activePuzzle, currentStepIndex);
+        if (oppMove) {
             setGestureEnabled(false);
-            const oppMove = activePuzzle.moves[nextIndex];
             const from = oppMove.substring(0, 2) as Square;
             const to = oppMove.substring(2, 4) as Square;
 
             setTimeout(async () => {
+                const localChess = chessRef.current;
+                if (localChess) {
+                    try {
+                        localChess.move({ from, to });
+                    } catch (e) {
+                        console.warn('[ChessBoard] Opponent move illegal in chess.js:', oppMove);
+                    }
+                    currentFenRef.current = localChess.fen();
+                }
+
                 // Animate the move on the board
                 if (chessboardRef.current) {
                     await chessboardRef.current.move({ from, to });
                 }
 
-                const nextNext = nextIndex + 1;
-                currentMoveIndexRef.current = nextNext;
-                setCurrentMoveIndex(nextNext);
+                const hasSolution = activePuzzle.solution && activePuzzle.solution.length > 0;
+                const nextStepIndex = hasSolution ? currentStepIndex + 1 : currentStepIndex + 2;
 
-                if (nextNext >= activePuzzle.moves.length) {
+                currentMoveIndexRef.current = nextStepIndex;
+                setCurrentMoveIndex(nextStepIndex);
+
+                const totalSteps = getTotalUserSteps(activePuzzle);
+                if (nextStepIndex >= totalSteps) {
                     solvedRef.current = true;
                     setSolved(true);
                     setPuzzleResults(prev => {
@@ -231,67 +275,119 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 }
             }, 500);
         }
-    }, [activePuzzle.moves, puzzles, currentPuzzleIndex, onComplete]);
+    }, [activePuzzle, puzzles, currentPuzzleIndex, onComplete]);
 
     const handleMove = useCallback(({ move, state }: { move: Move; state: any }) => {
-        if (solvedRef.current) return;
+        if (solvedRef.current || !gestureEnabled) return;
 
         // Build the UCI move string from the move object
         const uciMove = move.from + move.to + (move.promotion || '');
 
-        const expectedMove = activePuzzle.moves[currentMoveIndexRef.current];
-        if (!expectedMove) return;
+        const localChess = chessRef.current;
+        if (!localChess) return;
+
+        const currentStepIndex = currentMoveIndexRef.current;
+        const expectedMoveTemp = getExpectedUserMove(activePuzzle, currentStepIndex);
+
+        // 1. Проверяем ход через наш chess.js на легальность в шахматах
+        let isMoveLegal = false;
+        let playedMove: any = null;
+        try {
+            playedMove = localChess.move({
+                from: move.from,
+                to: move.to,
+                promotion: move.promotion || undefined
+            });
+            if (playedMove) {
+                isMoveLegal = true;
+            }
+        } catch (e) {
+            isMoveLegal = false;
+        }
+
+        // 3. Если ход нелегален:
+        if (!isMoveLegal) {
+            setIncorrectMove(true);
+            setGestureEnabled(false);
+            
+            setTimeout(() => {
+                // Принудительно возвращаем доску на исходный FEN
+                setResetCounter(prev => prev + 1);
+                setGestureEnabled(true);
+            }, 200);
+            return;
+        }
+
+        // 4. Если ход легален, проверяем правильность для задачи
+        const expectedMove = expectedMoveTemp;
+        if (!expectedMove) {
+            localChess.undo();
+            return;
+        }
 
         // Check if the move matches the expected puzzle move
         const isCorrect =
             uciMove === expectedMove ||
             uciMove === expectedMove.substring(0, 4); // Without promotion suffix
 
+        const hasSolution = activePuzzle.solution && activePuzzle.solution.length > 0;
+        const oppMove = getOpponentMove(activePuzzle, currentStepIndex);
+
         if (isCorrect) {
             // Correct move!
             setIncorrectMove(false);
-            currentFenRef.current = state.fen;
+            currentFenRef.current = localChess.fen();
 
             if (chessboardRef.current) {
                 chessboardRef.current.resetAllHighlightedSquares();
             }
 
-            const nextIndex = currentMoveIndexRef.current + 1;
-            currentMoveIndexRef.current = nextIndex;
-            setCurrentMoveIndex(nextIndex);
+            const explanation = getMoveExplanation(activePuzzle, currentStepIndex) || activePuzzle.successExplanation;
 
-            if (nextIndex >= activePuzzle.moves.length) {
-                // Puzzle fully complete!
-                solvedRef.current = true;
-                setSolved(true);
-                setPuzzleResults(prev => {
-                    const next = [...prev];
-                    next[currentPuzzleIndex] = 'completed';
-                    return next;
-                });
-                setGestureEnabled(false);
-                setBanner({ visible: true, isCorrect: true });
+            if (oppMove) {
+                // Auto-play opponent's move if needed (plays and handles transition/solved internally)
+                playOpponentMove(currentStepIndex);
             } else {
-                // Auto-play opponent's move if needed
-                playOpponentMove(nextIndex);
+                const nextStepIndex = currentStepIndex + 1;
+                currentMoveIndexRef.current = nextStepIndex;
+                setCurrentMoveIndex(nextStepIndex);
+
+                const totalSteps = getTotalUserSteps(activePuzzle);
+                if (nextStepIndex >= totalSteps) {
+                    // Puzzle fully complete!
+                    solvedRef.current = true;
+                    setSolved(true);
+                    setPuzzleResults(prev => {
+                        const next = [...prev];
+                        next[currentPuzzleIndex] = 'completed';
+                        return next;
+                    });
+                    setGestureEnabled(false);
+                    setBanner({ visible: true, isCorrect: true, feedback: explanation || undefined });
+                } else {
+                    setGestureEnabled(true);
+                }
             }
         } else {
-            // Incorrect move — undo it
+            // Incorrect move (legal but incorrect) — undo in chess.js
+            localChess.undo();
+            
             setIncorrectMove(true);
             setGestureEnabled(false);
-            setBanner({ visible: true, isCorrect: false });
+            
+            const explanation = activePuzzle.failureExplanation;
+            setBanner({ visible: true, isCorrect: false, feedback: explanation || undefined });
             
             setTimeout(() => {
-                if (chessboardRef.current) {
-                    chessboardRef.current.resetBoard(currentFenRef.current);
-                }
+                // Восстанавливаем визуальную доску с актуальным FEN из chess.js
+                setResetCounter(prev => prev + 1);
                 setGestureEnabled(true);
                 setTimeout(() => {
-                    setBanner(prev => prev.isCorrect ? prev : { ...prev, visible: false });
+                    setBanner(prev => prev.isCorrect ? prev : { ...prev, visible: false, feedback: undefined });
                 }, 1600);
             }, 400);
         }
-    }, [activePuzzle.moves, playOpponentMove]);
+    }, [activePuzzle, playOpponentMove, currentPuzzleIndex]);
 
     const handleNextPuzzle = useCallback(() => {
         setBanner(prev => ({ ...prev, visible: false }));
@@ -411,6 +507,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 <View>
                     <View style={[styles.boardWrapper, { width: boardSize, height: boardSize }]}>
                         <Chessboard
+                            key={`${currentPuzzleIndex}-${resetCounter}`}
                             ref={chessboardRef}
                             fen={activePuzzle.fen}
                             boardSize={boardSize}
@@ -455,6 +552,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             <EncouragementBanner
                 visible={banner.visible}
                 isCorrect={banner.isCorrect}
+                feedback={banner.feedback}
                 onNext={handleNextPuzzle}
                 hideButton={!banner.isCorrect}
                 buttonText={puzzles && currentPuzzleIndex < puzzles.length - 1 ? t('Следующая задача') : (isLastStep ? t('Завершить') : t('Далее'))}

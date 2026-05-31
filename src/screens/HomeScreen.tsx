@@ -61,7 +61,7 @@ export const HomeScreen: React.FC = () => {
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
                     </View>
-                    {/* 🛠 DEBUG: временная кнопка для тестирования геймификации */}
+                    {/* 🛠 DEBUG: временная кнопка для тестирования геймификации (скрыта)
                     <TouchableOpacity
                         style={styles.debugButton}
                         onPress={() => router.push('/gamification-debug')}
@@ -69,6 +69,7 @@ export const HomeScreen: React.FC = () => {
                     >
                         <Text style={styles.debugButtonText}>🛠</Text>
                     </TouchableOpacity>
+                    */}
                     <TouchableOpacity style={styles.menuButton} onPress={() => {
                         console.log('[HomeScreen] Menu button pressed - opening menu');
                         setMenuVisible(true);
