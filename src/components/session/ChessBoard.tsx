@@ -92,6 +92,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     }, [puzzles, currentPuzzleIndex, fen, puzzleMoves, question]);
 
     // Game state
+    const [currentFen, setCurrentFen] = useState(activePuzzle.fen);
     const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
     const [incorrectMove, setIncorrectMove] = useState(false);
     const [solved, setSolved] = useState(false);
@@ -116,6 +117,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     const currentMoveIndexRef = useRef(0);
     const solvedRef = useRef(false);
     const lastProcessedTriggerRef = useRef(0);
+    const isOpponentMovingRef = useRef(false);
 
     // Sync state if FEN changes from outside
     useEffect(() => {
@@ -129,6 +131,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         const activeFen = activePuzzle.fen;
         chessRef.current = new Chess(activeFen);
         currentFenRef.current = activeFen;
+        setCurrentFen(activeFen);
         currentMoveIndexRef.current = 0;
         solvedRef.current = false;
         setCurrentMoveIndex(0);
@@ -213,6 +216,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     const playOpponentMove = useCallback((currentStepIndex: number) => {
         const oppMove = getOpponentMove(activePuzzle, currentStepIndex);
         if (oppMove) {
+            isOpponentMovingRef.current = true;
             setGestureEnabled(false);
             const from = oppMove.substring(0, 2) as Square;
             const to = oppMove.substring(2, 4) as Square;
@@ -225,7 +229,9 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                     } catch (e) {
                         console.warn('[ChessBoard] Opponent move illegal in chess.js:', oppMove);
                     }
-                    currentFenRef.current = localChess.fen();
+                    const newFen = localChess.fen();
+                    currentFenRef.current = newFen;
+                    setCurrentFen(newFen);
                 }
 
                 // Animate the move on the board
@@ -271,14 +277,17 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                         }
                     }, 800);
                 } else {
-                    setGestureEnabled(true);
+                    setTimeout(() => {
+                        isOpponentMovingRef.current = false;
+                        setGestureEnabled(true);
+                    }, 100);
                 }
             }, 500);
         }
     }, [activePuzzle, puzzles, currentPuzzleIndex, onComplete]);
 
     const handleMove = useCallback(({ move, state }: { move: Move; state: any }) => {
-        if (solvedRef.current || !gestureEnabled) return;
+        if (solvedRef.current || !gestureEnabled || isOpponentMovingRef.current) return;
 
         // Build the UCI move string from the move object
         const uciMove = move.from + move.to + (move.promotion || '');
@@ -330,13 +339,26 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             uciMove === expectedMove ||
             uciMove === expectedMove.substring(0, 4); // Without promotion suffix
 
+        const isUsingSolution = !!(activePuzzle.solution && activePuzzle.solution.length > 0);
+        console.log('[ChessBoard handleMove Debug]', {
+            isUsingSolution,
+            userMove: uciMove,
+            expectedMove,
+            isCorrect,
+            feedbackBefore: incorrectMove ? 'failure' : 'success/none',
+            activeCodePath: isUsingSolution ? 'V2 solution' : 'V1 moves',
+            currentStep: currentStepIndex
+        });
+
         const hasSolution = activePuzzle.solution && activePuzzle.solution.length > 0;
         const oppMove = getOpponentMove(activePuzzle, currentStepIndex);
 
         if (isCorrect) {
             // Correct move!
             setIncorrectMove(false);
-            currentFenRef.current = localChess.fen();
+            const newFen = localChess.fen();
+            currentFenRef.current = newFen;
+            setCurrentFen(newFen);
 
             if (chessboardRef.current) {
                 chessboardRef.current.resetAllHighlightedSquares();
@@ -369,8 +391,26 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 }
             }
         } else {
+            const stepBefore = currentMoveIndexRef.current;
+            const expectedBefore = getExpectedUserMove(activePuzzle, stepBefore);
+            const fenBefore = localChess.fen();
+
             // Incorrect move (legal but incorrect) — undo in chess.js
             localChess.undo();
+            
+            const revertedFen = localChess.fen();
+            currentFenRef.current = revertedFen;
+            setCurrentFen(revertedFen);
+
+            console.log('[ChessBoard Rollback Debug]', {
+                currentStepBefore: stepBefore,
+                expectedMove: expectedBefore,
+                userMove: uciMove,
+                fenBeforeAttempt: fenBefore,
+                fenAfterRollback: revertedFen,
+                currentStepAfter: currentMoveIndexRef.current,
+                nextExpectedMove: getExpectedUserMove(activePuzzle, currentMoveIndexRef.current)
+            });
             
             setIncorrectMove(true);
             setGestureEnabled(false);
@@ -509,7 +549,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                         <Chessboard
                             key={`${currentPuzzleIndex}-${resetCounter}`}
                             ref={chessboardRef}
-                            fen={activePuzzle.fen}
+                            fen={currentFen}
                             boardSize={boardSize}
                             gestureEnabled={gestureEnabled && !solved}
                             onMove={handleMove}

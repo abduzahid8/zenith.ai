@@ -36,90 +36,186 @@ export interface ChessPuzzleTask {
   themes: string[];
   prompt: string;
   hints: string[];
+  sideToMove?: 'w' | 'b';
+  metadata?: Record<string, any>;
+  day?: number;
+  topic?: string;
 }
 
 
 export const chessLessonPuzzles: Record<string, ChessPuzzle[]> = {
-  day1_piece_movement: [
+  day1_board_geometry: [
     {
-      fen: "4k3/8/8/8/8/8/8/4K3 w - - 0 1",
-      moves: ["e1e2"],
-      prompt: "Король — самая важная фигура, но ходит медленно, всего на одну клетку в любую сторону. Сделай шаг королем вперед.",
-      hints: [
-        "Король может переместиться на любую соседнюю клетку.",
-        "Посмотри на клетку прямо перед белым королем.",
-        "Сделай ход с e1 на e2."
-      ]
-    },
-    {
-      fen: "4k3/r7/8/8/8/8/8/R3K3 w - - 0 1",
-      moves: ["a1a7"],
-      prompt: "Ладья передвигается по прямой — по горизонтали и вертикали. Черная ладья подставилась под удар. Забери ее!",
-      hints: [
-        "Ладья на a1 может пойти вверх по всей вертикали 'a'.",
-        "Найди черную фигуру на этой вертикали.",
-        "Сыграй ладьей с a1 на a7, чтобы совершить взятие."
-      ]
-    },
-    {
-      fen: "4k3/8/8/6n1/8/8/8/2B1K3 w - - 0 1",
-      moves: ["c1g5"],
-      prompt: "Слон ходит только по диагоналям своего цвета. Твой слон — белопольный. Найди и забери незащищенного черного коня.",
-      hints: [
-        "Посмотри, какая черная фигура стоит на одной диагонали со слоном c1.",
-        "Диагональ тянется от c1 до самого королевского фланга.",
-        "Сделай ход слоном с c1 на g5."
-      ]
-    },
-    {
-      fen: "4k3/8/8/7p/8/8/8/3QK3 w - - 0 1",
+      id: "day1_geometry_p1",
+      day: 1,
+      topic: "day1_board_geometry",
+      skill: "Взятие без защиты",
+      goalType: "win_material",
+      fen: "4k3/8/8/7n/8/8/8/3QK3 w - - 0 1",
+      sideToMove: "w",
       moves: ["d1h5"],
-      prompt: "Ферзь — самая мощная фигура. Он сочетает силу ладьи и слона. Забери черную пешку на краю доски.",
-      hints: [
-        "Ферзь на d1 может пойти по диагонали вправо и вверх.",
-        "В конце этой диагонали стоит одинокая черная пешка.",
-        "Сделай ход ферзем с d1 на h5."
-      ]
+      solution: [
+        {
+          userMove: "d1h5",
+          opponentMove: null,
+          explanation: "Отлично! Незащищенный конь взят."
+        }
+      ],
+      prompt: "Соперник допустил грубую ошибку. Используй уязвимость в его позиции.",
+      hints: {
+        soft: "Обрати внимание на дальние фланги.",
+        medium: "Один из коней противника остался совсем один.",
+        strong: "Используй диагональный удар ферзя, чтобы выиграть оставленного без присмотра коня."
+      },
+      successExplanation: "Отлично! Незащищенный конь взят.",
+      failureExplanation: "Попробуй найти самую уязвимую фигуру на краю доски.",
+      learningPoint: "Обнаружение незащищенных фигур на краях доски.",
+      metadata: { moveCount: 1 }
     },
     {
-      fen: "4k3/8/8/8/8/8/8/4K1N1 w - - 0 1",
-      moves: ["g1f3"],
-      prompt: "Конь передвигается необычно — буквой «Г» (две клетки в одну сторону и одна в бок). Сделай развивающий ход конем в центр.",
-      hints: [
-        "Из угла конь на g1 может прыгнуть на f3 или h3.",
-        "Ход ближе к центру (на f3) считается более активным.",
-        "Прыгни конем на f3."
-      ]
+      id: "day1_geometry_p2",
+      day: 1,
+      topic: "day1_board_geometry",
+      skill: "Отступление",
+      goalType: "save_piece",
+      fen: "4r1k1/ppp3pp/5p2/8/4N3/2P3P1/P2P1P1P/6K1 w - - 0 1",
+      sideToMove: "w",
+      moves: ["e4c5"],
+      solution: [
+        {
+          userMove: "e4c5",
+          opponentMove: null,
+          explanation: "Отлично. Конь спасен от линейной атаки ладьи и занял безопасное поле."
+        }
+      ],
+      prompt: "Твой конь оказался под прямой атакой вражеской ладьи. Найди единственное безопасное поле для отступления.",
+      hints: {
+        soft: "Тяжелая фигура соперника простреливает вертикаль, на которой стоит твой конь.",
+        medium: "Большинство полей для отхода коня либо заняты твоими собственными пешками, либо находятся под прицелом соперника.",
+        strong: "Сделай прыжок конем на левый фланг на пятую горизонталь, где он будет полностью недосягаем."
+      },
+      successExplanation: "Отлично. Конь спасен от линейной атаки ладьи и занял безопасное поле.",
+      failureExplanation: "Конь остался под ударом ладьи или отступил на небезопасное поле. Попробуй еще раз.",
+      learningPoint: "Нахождение единственного безопасного поля для отступления фигуры при плотном контроле доски.",
+      metadata: { moveCount: 1 }
     },
     {
-      fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-      moves: ["e2e4"],
-      prompt: "Пешка ходит только вперед. Но со стартовой позиции она может прыгнуть сразу на две клетки. Захвати центр королевской пешкой!",
-      hints: [
-        "Ход e2-e4 открывает дорогу твоему слону и ферзю.",
-        "Сделай широкий шаг этой пешкой на два поля вперед.",
-        "Сыграй e2-e4."
-      ]
+      id: "day1_geometry_p3",
+      day: 1,
+      topic: "day1_board_geometry",
+      skill: "Оцени риски",
+      goalType: "best_move",
+      fen: "4r1k1/6n1/8/3p4/4p3/8/8/3QK3 w - - 0 1",
+      sideToMove: "w",
+      moves: ["d1d5"],
+      solution: [
+        {
+          userMove: "d1d5",
+          opponentMove: null,
+          explanation: "Прекрасно! Ты выбрал безопасное продолжение и выиграл пешку."
+        }
+      ],
+      prompt: "Позиция выглядит заманчиво, но таит скрытые риски. Прими верное решение.",
+      hints: {
+        soft: "У тебя есть выбор между взятием двух разных пешек.",
+        medium: "Одна из пешек находится под защитой ладьи. Другая — беззащитна.",
+        strong: "Выбери для взятия ту пешку, которую не защищает тяжелая фигура черных."
+      },
+      successExplanation: "Прекрасно! Ты выбрал безопасное продолжение и выиграл пешку.",
+      failureExplanation: "Взятие защищенной пешки привело к потере сильнейшей фигуры. Будь внимательнее.",
+      learningPoint: "Оценка безопасности взятий и распознавание защищенных фигур противника.",
+      metadata: { moveCount: 1 }
     },
     {
-      fen: "4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1",
-      moves: ["e4d5"],
-      prompt: "Пешка ходит прямо, но бьет по диагонали на одну клетку. Забери черную пешку, которая преграждает путь.",
-      hints: [
-        "Твоя пешка стоит на e4, а черная на d5.",
-        "Диагональный шаг вправо-вверх позволяет совершить взятие.",
-        "Побей пешку: e4-d5."
-      ]
+      id: "day1_geometry_p4",
+      day: 1,
+      topic: "day1_board_geometry",
+      skill: "Дальнобойное зрение",
+      goalType: "win_material",
+      fen: "4k1r1/8/8/8/8/8/B7/4K3 w - - 0 1",
+      sideToMove: "w",
+      moves: ["a2g8"],
+      solution: [
+        {
+          userMove: "a2g8",
+          opponentMove: null,
+          explanation: "Отлично! Ты заметил дальнобойную угрозу слона и выиграл ладью."
+        }
+      ],
+      prompt: "Оборона противника растянута по всей доске. Найди слабое звено.",
+      hints: {
+        soft: "Посмотри на дальнобойные возможности твоего слона.",
+        medium: "На большой диагонали слона стоит незащищенная тяжелая фигура черных.",
+        strong: "Сделай взятие слоном на самом конце длинной белой диагонали."
+      },
+      successExplanation: "Отлично! Ты заметил дальнобойную угрозу слона и выиграл ладью.",
+      failureExplanation: "Слон не сделал взятие. Проверь всю диагональ слона до самого конца.",
+      learningPoint: "Видение длинных диагоналей и скрытых дальнобойных угроз.",
+      metadata: { moveCount: 1 }
     },
     {
-      fen: "4k3/8/8/8/8/8/3p4/1N2K3 w - - 0 1",
-      moves: ["b1d2"],
-      prompt: "Конь — единственная фигура, которая умеет перепрыгивать через другие. Черная пешка объявила шах королю. Забери ее конем!",
-      hints: [
-        "Твой король в опасности из-за пешки на d2.",
-        "Конь на b1 может перепрыгнуть на d2 и спасти короля.",
-        "Забери пешку ходом коня: b1-d2."
-      ]
+      id: "day1_geometry_p5",
+      day: 1,
+      topic: "day1_board_geometry",
+      skill: "Промежуточный темп",
+      goalType: "tactical_sequence",
+      fen: "3qk3/5p2/8/8/2B5/8/8/3QK3 w - - 0 1",
+      sideToMove: "w",
+      moves: ["c4f7", "d1d8"],
+      solution: [
+        {
+          userMove: "c4f7",
+          opponentMove: "e8f7",
+          explanation: "Отличный ход! Шах слоном отвлекает короля соперника от защиты ферзя."
+        },
+        {
+          userMove: "d1d8",
+          opponentMove: null,
+          explanation: "Великолепно! Ферзь соперника выигран благодаря промежуточному шаху."
+        }
+      ],
+      prompt: "Попытка немедленного взятия ни к чему не приведет. Найди обходной путь.",
+      hints: {
+        soft: "Черный король защищает своего ферзя.",
+        medium: "Найди способ объявить шах и отвлечь короля соперника от защиты.",
+        strong: "Сделай промежуточный ход слоном с нападением на короля, чтобы отвлечь его от защиты ферзя."
+      },
+      successExplanation: "Потрясающе! Ты применил промежуточный шах и выиграл ферзя.",
+      failureExplanation: "Прямой размен ферзей не приносит выгоды. Ищи форсированный промежуточный шах.",
+      learningPoint: "Использование промежуточного шаха для отвлечения защитников противника.",
+      metadata: { moveCount: 2 }
+    },
+    {
+      id: "day1_geometry_p6",
+      day: 1,
+      topic: "day1_board_geometry",
+      skill: "Вынужденное отступление",
+      goalType: "tactical_sequence",
+      fen: "6k1/4nppp/8/2B4Q/8/8/8/4K2R w - - 0 1",
+      sideToMove: "w",
+      moves: ["h5h7", "h7h8"],
+      solution: [
+        {
+          userMove: "h5h7",
+          opponentMove: "g8f8",
+          explanation: "Отличный ход! Шах ферзем заставляет короля соперника покинуть его укрытие."
+        },
+        {
+          userMove: "h7h8",
+          opponentMove: null,
+          explanation: "Шах и мат! Защита соперника полностью разрушена."
+        }
+      ],
+      prompt: "Король соперника лишился своего прикрытия. Пользуйся моментом, пока он уязвим.",
+      hints: {
+        soft: "Король соперника защищен пешечным щитом, но ферзь и ладья готовы к совместной атаке.",
+        medium: "Используй открытую крайнюю вертикаль для первой атаки ферзем.",
+        strong: "Начни атаку со взятия крайней пешки у короля с шахом, а после его вынужденного отступления объяви мат ферзем на последней горизонтали."
+      },
+      successExplanation: "Великолепно! Ты выманил короля из укрытия и поставил мат.",
+      failureExplanation: "Король соперника смог спастись. Просчитай точную матовую линию.",
+      learningPoint: "Координация ферзя и ладьи для проведения форсированной матовой атаки.",
+      metadata: { moveCount: 2 }
     }
   ],
 
@@ -649,7 +745,7 @@ export const chessLessonPuzzles: Record<string, ChessPuzzle[]> = {
 
 export const getThematicPuzzles = (day: number): ChessPuzzleTask[] => {
   const keys = [
-    'day1_piece_movement',
+    'day1_board_geometry',
     'day2_piece_value',
     'day3_opening_principles',
     'day4_castling',
@@ -657,7 +753,7 @@ export const getThematicPuzzles = (day: number): ChessPuzzleTask[] => {
     'day6_fork_double_attack',
     'day7_review_mixed'
   ];
-  const key = keys[day - 1] || 'day1_piece_movement';
+  const key = keys[day - 1] || 'day1_board_geometry';
   const puzzles = chessLessonPuzzles[key] || [];
   return puzzles.map((p, idx) => ({
     id: p.id || `chess_puzzle_${day}_${idx + 1}`,
@@ -673,7 +769,11 @@ export const getThematicPuzzles = (day: number): ChessPuzzleTask[] => {
       ? p.hints
       : p.hints && typeof p.hints === 'object'
         ? [p.hints.soft, p.hints.medium, p.hints.strong].filter(Boolean) as string[]
-        : ['Подумай над лучшим ходом!']
+        : ['Подумай над лучшим ходом!'],
+    sideToMove: p.sideToMove,
+    metadata: p.metadata,
+    day: p.day || day,
+    topic: p.topic || key,
   }));
 };
 
@@ -682,40 +782,122 @@ export const ACTIVE_CHESS_PUZZLES: ChessPuzzleTask[] = getThematicPuzzles(1);
 export function validateChessPuzzles(puzzles: ChessPuzzleTask[]) {
   const fens = new Set<string>();
   puzzles.forEach((puzzle, index) => {
-    const { fen, puzzleMoves, prompt } = puzzle;
+    const { id, fen, puzzleMoves, solution, prompt, hints, sideToMove, metadata, day, topic } = puzzle;
     let chess: Chess;
     try {
       chess = new Chess(fen);
     } catch (e: any) {
-      console.warn(`[Chess Validation Warning] Puzzle #${index} failed to load FEN: "${fen}". Error: ${e.message}`);
+      console.warn(`[Chess Validation Error] Puzzle "${id}" (index ${index}) failed to load FEN: "${fen}". Error: ${e.message}`);
       return;
     }
 
     if (fens.has(fen)) {
-      console.warn(`[Chess Validation Warning] Puzzle #${index} has duplicate FEN: "${fen}"`);
+      console.warn(`[Chess Validation Warning] Puzzle "${id}" has duplicate FEN: "${fen}"`);
     }
     fens.add(fen);
 
-    if (puzzleMoves.length === 0) {
-      console.warn(`[Chess Validation Warning] Puzzle #${index} has no moves defined.`);
-      return;
+    // Static text validation: prompt must not contain coordinates like e4, f7, a1
+    const coordRegex = /\b[a-h][1-8]\b/i;
+    if (coordRegex.test(prompt)) {
+      console.warn(`[Chess Validation Error] Puzzle "${id}" (Day ${day}, Topic: "${topic}"): prompt "${prompt}" contains single coordinates.`);
     }
 
-    let tempChess = new Chess(fen);
-    for (let i = 0; i < puzzleMoves.length; i++) {
-      const moveUci = puzzleMoves[i];
-      const from = moveUci.slice(0, 2);
-      const to = moveUci.slice(2, 4);
-      const promotion = moveUci.slice(4) || undefined;
+    // soft and medium hints must not contain coordinates
+    if (hints) {
+      if (hints[0] && coordRegex.test(hints[0])) {
+        console.warn(`[Chess Validation Error] Puzzle "${id}" (Day ${day}, Topic: "${topic}"): soft hint "${hints[0]}" contains single coordinates.`);
+      }
+      if (hints[1] && coordRegex.test(hints[1])) {
+        console.warn(`[Chess Validation Error] Puzzle "${id}" (Day ${day}, Topic: "${topic}"): medium hint "${hints[1]}" contains single coordinates.`);
+      }
+    }
 
-      try {
-        const result = tempChess.move({ from, to, promotion });
-        if (!result) {
-          throw new Error(`Move returned null`);
+    // prompt must not contain direct commands
+    const forbiddenPhrases = ["сыграй", "ходом", "сделай ход", "перемести", "побей на"];
+    const lowerPrompt = prompt.toLowerCase();
+    for (const phrase of forbiddenPhrases) {
+      if (lowerPrompt.includes(phrase)) {
+        console.warn(`[Chess Validation Error] Puzzle "${id}" (Day ${day}, Topic: "${topic}"): prompt contains forbidden phrase "${phrase}".`);
+      }
+    }
+
+    // Determine if V2 solution or V1 moves should be validated
+    if (solution && solution.length > 0) {
+      // Validation for V2 task with solution[]
+      
+      // 2. sideToMove matches the active side in FEN
+      if (sideToMove) {
+        const activeColor = chess.turn(); // 'w' or 'b'
+        if (sideToMove !== activeColor) {
+          console.warn(`[Chess Validation Error] Puzzle "${id}" (Day ${day}, Topic: "${topic}"): sideToMove "${sideToMove}" does not match active color "${activeColor}" in FEN.`);
         }
-      } catch (e: any) {
-        console.warn(`[Chess Validation Warning] Puzzle #${index + 1} ("${prompt.slice(0, 30)}..."): Move #${i + 1} ("${moveUci}") is illegal. Current FEN: "${tempChess.fen()}". Error: ${e.message}`);
-        break;
+      }
+
+      // 7. metadata.moveCount must match solution.length
+      if (metadata && metadata.moveCount !== undefined) {
+        if (metadata.moveCount !== solution.length) {
+          console.warn(`[Chess Validation Error] Puzzle "${id}" (Day ${day}, Topic: "${topic}"): metadata.moveCount (${metadata.moveCount}) does not match solution.length (${solution.length}).`);
+        }
+      }
+
+      // Validate each step in the solution
+      let tempChess = new Chess(fen);
+      for (let i = 0; i < solution.length; i++) {
+        const step = solution[i];
+        
+        // 4. Each solution[i].userMove is legal in the current position
+        const userMove = step.userMove;
+        const fromUser = userMove.slice(0, 2);
+        const toUser = userMove.slice(2, 4);
+        const promotionUser = userMove.slice(4) || undefined;
+        
+        try {
+          const result = tempChess.move({ from: fromUser, to: toUser, promotion: promotionUser });
+          if (!result) throw new Error("Move returned null");
+        } catch (e: any) {
+          console.warn(`[Chess Validation Error] Puzzle "${id}" (Day ${day}, Topic: "${topic}"): User Move #${i + 1} ("${userMove}") is illegal. Current FEN: "${tempChess.fen()}". Error: ${e.message}`);
+          break;
+        }
+
+        // 5. After userMove, if there is opponentMove:
+        if (step.opponentMove) {
+          const oppMove = step.opponentMove;
+          const fromOpp = oppMove.slice(0, 2);
+          const toOpp = oppMove.slice(2, 4);
+          const promotionOpp = oppMove.slice(4) || undefined;
+          
+          try {
+            const result = tempChess.move({ from: fromOpp, to: toOpp, promotion: promotionOpp });
+            if (!result) throw new Error("Move returned null");
+          } catch (e: any) {
+            console.warn(`[Chess Validation Error] Puzzle "${id}" (Day ${day}, Topic: "${topic}"): Opponent Move #${i + 1} ("${oppMove}") is illegal. Current FEN: "${tempChess.fen()}". Error: ${e.message}`);
+            break;
+          }
+        }
+      }
+    } else {
+      // Fallback: old V1 moves validation
+      if (puzzleMoves.length === 0) {
+        console.warn(`[Chess Validation Warning] Puzzle "${id}" has no moves defined.`);
+        return;
+      }
+
+      let tempChess = new Chess(fen);
+      for (let i = 0; i < puzzleMoves.length; i++) {
+        const moveUci = puzzleMoves[i];
+        const from = moveUci.slice(0, 2);
+        const to = moveUci.slice(2, 4);
+        const promotion = moveUci.slice(4) || undefined;
+
+        try {
+          const result = tempChess.move({ from, to, promotion });
+          if (!result) {
+            throw new Error(`Move returned null`);
+          }
+        } catch (e: any) {
+          console.warn(`[Chess Validation Warning] Puzzle "${id}" ("${prompt.slice(0, 30)}..."): Move #${i + 1} ("${moveUci}") is illegal. Current FEN: "${tempChess.fen()}". Error: ${e.message}`);
+          break;
+        }
       }
     }
   });
