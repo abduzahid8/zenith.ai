@@ -78,7 +78,7 @@ export function useTimer(options: UseTimerOptions = {}) {
                         successExplanation: p.successExplanation,
                         failureExplanation: p.failureExplanation,
                         prompt: p.prompt,
-                        hints: p.hints || ['Подумай над лучшим ходом!']
+                        hints: p.hints || ['Think about your best move!']
                     }));
                 }
             }

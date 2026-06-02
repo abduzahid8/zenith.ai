@@ -26,8 +26,6 @@ export const taskEngine = {
         const primaryHobby = hobbies.find(h => h.is_primary) || hobbies[0];
         const hobbyId = primaryHobby?.hobby_id;
 
-        if (!hobbyId) return tasks;
-
         // --- Calculate which day the user is on ---
         const startDate = primaryHobby?.selected_at
             ? new Date(primaryHobby.selected_at)

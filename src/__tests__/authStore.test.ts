@@ -7,6 +7,22 @@ const mockSignUp = jest.fn();
 const mockSignOut = jest.fn();
 const mockGetSession = jest.fn();
 const mockGetUserHobbies = jest.fn();
+const mockGetOrCreateProfile = jest.fn().mockResolvedValue({
+    is_premium: false,
+    subscription_level: 'free',
+});
+
+// Mock stores that trigger native module imports (expo-modules-core)
+jest.mock('../store/deviceScreenTimeStore', () => ({
+    useDeviceScreenTimeStore: {
+        getState: jest.fn(() => ({ reset: jest.fn() })),
+    },
+}));
+jest.mock('../store/subscriptionStore', () => ({
+    useSubscriptionStore: {
+        getState: jest.fn(() => ({ reset: jest.fn() })),
+    },
+}));
 
 jest.mock('../services/supabase', () => ({
     authService: {
@@ -17,6 +33,10 @@ jest.mock('../services/supabase', () => ({
     },
     dbService: {
         getUserHobbies: (...args: unknown[]) => mockGetUserHobbies(...args),
+    },
+    profileService: {
+        getOrCreateProfile: (...args: unknown[]) => mockGetOrCreateProfile(...args),
+        updatePremiumStatus: jest.fn(() => Promise.resolve({ is_premium: true, subscription_level: 'premium' })),
     },
 }));
 

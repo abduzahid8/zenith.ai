@@ -563,9 +563,9 @@ const chessLessons: LessonContent[] = [
     hobby: 'chess',
     day: 2,
     learn: {
-      title: 'Ценность фигур',
-      body: 'Каждая фигура имеет условную ценность в пешках: Пешка = 1. Конь = 3. Слон = 3. Ладья = 5. Ферзь = 9. Король — бесценен. Зная ценности, ты понимаешь: отдавать ладью за коня невыгодно (5 > 3). Помни: конкретная позиция важнее ценности.',
-      keywords: ['ценность фигур', 'материальный перевес', 'размен', 'пешка'],
+      title: 'Chess Economics',
+      body: 'Not all pieces are equal. Memorize the scale: Pawn=1, Knight=3, Bishop=3, Rook=5, Queen=9. The King is priceless. A trade is good if you capture more value than you lose. But always check: is the captured piece truly undefended? Can the opponent recapture with advantage? The goal is not just to trade — it\'s to come out ahead.',
+      keywords: ['piece value', 'material', 'trade', 'advantage'],
     },
     do: {
       type: 'chess_puzzle',
@@ -694,9 +694,9 @@ const chessLessons: LessonContent[] = [
     hobby: 'chess',
     day: 3,
     learn: {
-      title: 'Три принципа дебюта',
-      body: 'Дебют — начало партии. Три золотых правила: 1️⃣ ЦЕНТР: займи или атакуй центр пешками (e4, d4, e5, d5). 2️⃣ РАЗВИТИЕ: выводи фигуры (коней и слонов) как можно быстрее — не ходи одной фигурой дважды! 3️⃣ БЕЗОПАСНОСТЬ КОРОЛЯ: сделай рокировку, спрячь короля.',
-      keywords: ['дебют', 'центр', 'развитие', 'рокировка', 'принципы дебюта'],
+      title: 'Opening Initiative',
+      body: 'The opening is a race for activity. Three rules: 1) FIGHT FOR THE CENTER — control e4, d4, e5, d5 with pawns. 2) DEVELOP — bring out knights and bishops quickly. Never move the same piece twice without reason. 3) KING SAFETY — castle before attacking. Every move should either develop a piece, secure the king, or fight for the center. Wasted tempos lose games.',
+      keywords: ['opening', 'center', 'development', 'tempo', 'initiative'],
     },
     do: {
       type: 'chess_puzzle',
@@ -825,9 +825,9 @@ const chessLessons: LessonContent[] = [
     hobby: 'chess',
     day: 4,
     learn: {
-      title: 'Рокировка',
-      body: 'Рокировка — особый ход: король и ладья меняются местами. Короткая рокировка: король идёт на g1 (или g8), ладья на f1 (или f8). Длинная: король на c1 (c8), ладья на d1 (d8). Нельзя рокироваться если: король уже ходил, ладья уже ходила, между ними стоят фигуры, король под шахом.',
-      keywords: ['рокировка', 'короткая рокировка', 'длинная рокировка', 'безопасность короля'],
+      title: 'King Safety',
+      body: 'Castling is the only move that moves two pieces at once. Short castle (O-O): King to g1, Rook to f1. Long castle (O-O-O): King to c1, Rook to d1. Castling is illegal if: the king has already moved, the rook has already moved, any piece is between them, the king is in check, or the king would pass through an attacked square. A king stuck in the center is a target.',
+      keywords: ['castling', 'king safety', 'short castle', 'long castle'],
     },
     do: {
       type: 'chess_puzzle',
@@ -956,9 +956,9 @@ const chessLessons: LessonContent[] = [
     hobby: 'chess',
     day: 5,
     learn: {
-      title: 'Шах, мат и пат',
-      body: 'Шах — нападение на короля. От шаха есть 3 защиты: побить атакующую фигуру, закрыться своей фигурой или убежать королем. Мат — шах, от которого нет защиты (победа). Пат — положение, когда королю нет шаха, но ходить некуда (ничья).',
-      keywords: ['шах', 'мат', 'пат', 'защита от шаха', 'ничья'],
+      title: 'Check, Mate & Stalemate',
+      body: 'CHECK: the king is attacked. Three ways out: capture the attacker, block the check, or move the king. CHECKMATE: check with no escape — you win. STALEMATE: the king is not in check but has no legal moves — it\'s a draw. Beginners often stalemate when winning. Always ask: "Is the king in check? Does he have a safe square?" The difference between mate and stalemate is the difference between winning and drawing.',
+      keywords: ['check', 'checkmate', 'stalemate', 'defense', 'draw'],
     },
     do: {
       type: 'chess_puzzle',
@@ -1087,9 +1087,9 @@ const chessLessons: LessonContent[] = [
     hobby: 'chess',
     day: 6,
     learn: {
-      title: 'Тактика — вилка / двойной удар',
-      body: 'Двойной удар — тактический прием, когда одна фигура нападает сразу на две фигуры соперника. Если нападающая фигура — конь или пешка, такой удар называют вилкой. Вилка чрезвычайно опасна, так как соперник может спасти только одну из атакованных фигур.',
-      keywords: ['двойной удар', 'вилка', 'тактический прием', 'выигрыш материала'],
+      title: 'Tactical Weapons',
+      body: 'A fork (or double attack) is one piece attacking two enemy pieces at once. The opponent can only save one. Knights are the best forking pieces — they attack in L-shapes that other pieces don\'t cover. A royal fork (attacking king + queen) is devastating. Bishops fork along diagonals, rooks along ranks/files, pawns can fork too. Always scan for forks before moving.',
+      keywords: ['fork', 'double attack', 'knight', 'tactics', 'royal fork'],
     },
     do: {
       type: 'chess_puzzle',
@@ -1218,9 +1218,9 @@ const chessLessons: LessonContent[] = [
     hobby: 'chess',
     day: 7,
     learn: {
-      title: 'Повторение',
-      body: 'Время подвести итоги первой недели занятий! Мы изучили основы: ходы фигур, их условную ценность, три золотых правила дебюта, правила рокировки, понятия шаха, мата и пата, а также грозное оружие — двойной удар (вилку). Закрепи эти знания в финальном тесте!',
-      keywords: ['повторение', 'итоги недели', 'шахматные основы', 'тактика'],
+      title: 'Final Challenge',
+      body: 'This is the test. Every puzzle hides a motif you\'ve learned: a fork, a mate, a winning trade, a discovered attack, a checkmate. The prompt won\'t tell you what to look for — that\'s the point. Recognize the pattern, calculate the sequence, execute the solution. You\'ve learned the tools. Now prove you can use them.',
+      keywords: ['review', 'pattern recognition', 'mixed tactics', 'final test'],
     },
     do: {
       type: 'chess_puzzle',

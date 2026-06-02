@@ -1,13 +1,13 @@
-// ─── Mock Supabase client ────────────────────────────
-const mockInvoke = jest.fn();
+// ─── Mock fetch (ai.ts uses fetch() directly, not supabase) ──
+const mockFetch = jest.fn();
 
-jest.mock('../services/supabase/client', () => ({
-    getSupabase: () => ({
-        functions: {
-            invoke: mockInvoke,
-        },
-    }),
-}));
+beforeAll(() => {
+    jest.spyOn(global, 'fetch').mockImplementation(mockFetch);
+});
+
+afterAll(() => {
+    (global.fetch as jest.Mock).mockRestore();
+});
 
 import { aiService } from '../services/ai';
 
@@ -21,9 +21,9 @@ beforeEach(() => {
 
 describe('aiService.sendMessage', () => {
     it('returns AI response on success', async () => {
-        mockInvoke.mockResolvedValue({
-            data: { data: 'Привет! Как дела?' },
-            error: null,
+        mockFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ data: 'Привет! Как дела?' }),
         });
 
         const result = await aiService.sendMessage([
@@ -31,22 +31,27 @@ describe('aiService.sendMessage', () => {
         ]);
 
         expect(result).toBe('Привет! Как дела?');
-        expect(mockInvoke).toHaveBeenCalledWith('ai-proxy', {
-            body: expect.objectContaining({ action: 'sendMessage' }),
-        });
+        expect(mockFetch).toHaveBeenCalledWith(
+            expect.stringContaining('workers.dev'),
+            expect.objectContaining({
+                method: 'POST',
+                body: expect.stringContaining('sendMessage'),
+            })
+        );
     });
 
     it('returns fallback message on error', async () => {
-        mockInvoke.mockResolvedValue({
-            data: null,
-            error: new Error('Edge Function timeout'),
+        mockFetch.mockResolvedValue({
+            ok: false,
+            status: 500,
+            json: async () => ({ error: 'Worker error' }),
         });
 
         const result = await aiService.sendMessage([
             { role: 'user', content: 'test' },
         ]);
 
-        expect(result).toContain('Извините');
+        expect(result).toContain('Sorry');
     });
 });
 
@@ -54,9 +59,9 @@ describe('aiService.sendMessage', () => {
 
 describe('aiService.getHobbyRecommendations', () => {
     it('returns parsed array from AI', async () => {
-        mockInvoke.mockResolvedValue({
-            data: { data: JSON.stringify(['chess', 'drawing', 'coding']) },
-            error: null,
+        mockFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ data: JSON.stringify(['chess', 'drawing', 'coding']) }),
         });
 
         const result = await aiService.getHobbyRecommendations({ 1: 0, 2: 1 });
@@ -65,9 +70,9 @@ describe('aiService.getHobbyRecommendations', () => {
     });
 
     it('returns defaults on non-array response', async () => {
-        mockInvoke.mockResolvedValue({
-            data: { data: '"invalid"' },
-            error: null,
+        mockFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ data: '"invalid"' }),
         });
 
         const result = await aiService.getHobbyRecommendations({});
@@ -76,9 +81,10 @@ describe('aiService.getHobbyRecommendations', () => {
     });
 
     it('returns defaults on error', async () => {
-        mockInvoke.mockResolvedValue({
-            data: null,
-            error: new Error('fail'),
+        mockFetch.mockResolvedValue({
+            ok: false,
+            status: 500,
+            json: async () => ({ error: 'fail' }),
         });
 
         const result = await aiService.getHobbyRecommendations({});
@@ -91,9 +97,9 @@ describe('aiService.getHobbyRecommendations', () => {
 
 describe('aiService.generateDailyTasks', () => {
     it('returns parsed tasks', async () => {
-        mockInvoke.mockResolvedValue({
-            data: { data: JSON.stringify(['Learn basics', 'Practice 30 min']) },
-            error: null,
+        mockFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ data: JSON.stringify(['Learn basics', 'Practice 30 min']) }),
         });
 
         const result = await aiService.generateDailyTasks('chess', 1, 1);
@@ -102,7 +108,11 @@ describe('aiService.generateDailyTasks', () => {
     });
 
     it('returns defaults on failure', async () => {
-        mockInvoke.mockResolvedValue({ data: null, error: new Error('x') });
+        mockFetch.mockResolvedValue({
+            ok: false,
+            status: 500,
+            json: async () => ({ error: 'x' }),
+        });
 
         const result = await aiService.generateDailyTasks('chess', 1, 1);
 
@@ -114,15 +124,15 @@ describe('aiService.generateDailyTasks', () => {
 
 describe('aiService.generateSubstituteContent', () => {
     it('returns parsed substitute content', async () => {
-        mockInvoke.mockResolvedValue({
-            data: {
+        mockFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({
                 data: JSON.stringify({
                     type: 'challenge',
                     message: 'Try this instead!',
                     action: 'Start session',
                 }),
-            },
-            error: null,
+            }),
         });
 
         const result = await aiService.generateSubstituteContent('instagram', 'chess');
@@ -133,9 +143,9 @@ describe('aiService.generateSubstituteContent', () => {
     });
 
     it('fills missing fields with defaults', async () => {
-        mockInvoke.mockResolvedValue({
-            data: { data: JSON.stringify({}) },
-            error: null,
+        mockFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ data: JSON.stringify({}) }),
         });
 
         const result = await aiService.generateSubstituteContent('tiktok', 'drawing');
@@ -146,7 +156,11 @@ describe('aiService.generateSubstituteContent', () => {
     });
 
     it('returns full fallback on error', async () => {
-        mockInvoke.mockResolvedValue({ data: null, error: new Error('x') });
+        mockFetch.mockResolvedValue({
+            ok: false,
+            status: 500,
+            json: async () => ({ error: 'x' }),
+        });
 
         const result = await aiService.generateSubstituteContent('youtube', 'coding');
 
@@ -158,8 +172,9 @@ describe('aiService.generateSubstituteContent', () => {
 
 describe('aiService.analyzeUserProfile', () => {
     it('returns parsed profile analysis', async () => {
-        mockInvoke.mockResolvedValue({
-            data: {
+        mockFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({
                 data: JSON.stringify({
                     personality_type: 'визуал',
                     temperament: 'сангвиник',
@@ -167,8 +182,7 @@ describe('aiService.analyzeUserProfile', () => {
                     strengths: ['Креативность'],
                     growth_areas: ['Дисциплина'],
                 }),
-            },
-            error: null,
+            }),
         });
 
         const result = await aiService.analyzeUserProfile({ 1: 0, 2: 1 });
@@ -178,23 +192,27 @@ describe('aiService.analyzeUserProfile', () => {
     });
 
     it('fills defaults for missing fields', async () => {
-        mockInvoke.mockResolvedValue({
-            data: { data: JSON.stringify({}) },
-            error: null,
+        mockFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ data: JSON.stringify({}) }),
         });
 
         const result = await aiService.analyzeUserProfile({});
 
-        expect(result.personality_type).toBe('аналитик');
-        expect(result.strengths).toEqual(['Целеустремлённость']);
+        expect(result.personality_type).toBe('Analyst');
+        expect(result.strengths).toEqual(['Determination']);
     });
 
     it('returns full defaults on error', async () => {
-        mockInvoke.mockResolvedValue({ data: null, error: new Error('x') });
+        mockFetch.mockResolvedValue({
+            ok: false,
+            status: 500,
+            json: async () => ({ error: 'x' }),
+        });
 
         const result = await aiService.analyzeUserProfile({});
 
-        expect(result.personality_type).toBe('аналитик');
-        expect(result.temperament).toBe('сбалансированный');
+        expect(result.personality_type).toBe('Analyst');
+        expect(result.temperament).toBe('Balanced');
     });
 });
