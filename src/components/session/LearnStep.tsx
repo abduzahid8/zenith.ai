@@ -19,8 +19,7 @@ import { useAppTheme } from '../../theme/useAppTheme';
 import { aiService } from '../../services/ai';
 import { useT } from '../../store/languageStore';
 import * as Haptics from 'expo-haptics';
-
-import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 
 function splitTextIntoThreeCards(body: string, title: string) {
     const normalizedTitle = title.toLowerCase();
@@ -29,15 +28,15 @@ function splitTextIntoThreeCards(body: string, title: string) {
         return [
             {
                 subtitle: 'Король и Ферзь',
-                text: 'Шахматы — это игра на 8×8 клетках. ♔ Король ходит на 1 клетку в любом направлении. ♕ Ферзь — самая сильная фигура, ходит на любое количество клеток по прямой и диагонали.',
+                text: 'Шахматы — это игра на 8×8 клетках. Король ходит на 1 клетку в любом направлении. Ферзь — самая сильная фигура, ходит на любое количество клеток по прямой и диагонали.',
             },
             {
                 subtitle: 'Ладья и Слон',
-                text: '♖ Ладья ходит только по прямым линиям (вертикалям и горизонталям). ♗ Слон ходит только по диагоналям любого цвета.',
+                text: 'Ладья ходит только по прямым линиям (вертикалям и горизонталям). Слон ходит только по диагоналям любого цвета.',
             },
             {
                 subtitle: 'Конь и Пешка',
-                text: '♘ Конь ходит необычным Г-образным способом (2 клетки прямо и 1 вбок). ♙ Пешка ходит только вперёд на 1 клетку (в первый ход на 2) и бьёт по диагонали.',
+                text: 'Конь ходит необычным Г-образным способом (2 клетки прямо и 1 вбок). Пешка ходит только вперёд на 1 клетку (в первый ход на 2) и бьёт по диагонали.',
             },
         ];
     }
@@ -46,7 +45,7 @@ function splitTextIntoThreeCards(body: string, title: string) {
         return [
             {
                 subtitle: 'Ценность фигур',
-                text: 'Каждая фигура имеет свою ценность: ♙ Пешка = 1 очко, ♘ Конь = 3, ♗ Слон = 3, ♖ Ладья = 5, ♕ Ферзь = 9, а ♔ Король — бесценен.',
+                text: 'Каждая фигура имеет свою ценность: Пешка = 1 очко, Конь = 3, Слон = 3, Ладья = 5, Ферзь = 9, а Король — бесценен.',
             },
             {
                 subtitle: 'Выгодный размен',
@@ -275,9 +274,9 @@ export const LearnStep: React.FC<LearnStepProps> = ({
         const prefetchKeywords = async () => {
             for (const kw of keywords) {
                 try {
-                    const prompt = `Объясни термин "${kw}" простыми словами в 2-3 предложениях.
-Контекст: пользователь изучает "${hobbyId}" в приложении Zenyth.AI, уровень — начинающий.
-Отвечай на том же языке, на котором написан термин. Не используй разметку markdown, пиши простым и тёплым текстом с 1 смайликом.`;
+                    const prompt = `Дай академическое и точное определение термина "${kw}" в 2-3 предложениях.
+Контекст: пользователь изучает "${hobbyId}" в приложении Zenyth.AI.
+Отвечай строго по сути, без приветствий (не пиши "Привет", "Здравствуйте"), без обращений к пользователю и без использования смайликов/эмодзи. Не используй разметку markdown. Текст должен быть в строгом научно-популярном стиле.`;
                     
                     const res = await aiService.sendMessage([{ role: 'user', content: prompt }], hobbyId);
                     setExplanations(prev => ({ ...prev, [kw]: res }));
@@ -309,9 +308,9 @@ export const LearnStep: React.FC<LearnStepProps> = ({
         setLoadingKeyword(keyword);
 
         try {
-            const prompt = `Объясни термин "${keyword}" простыми словами в 2-3 предложениях.
-Контекст: пользователь изучает "${hobbyId}" в приложении Zenyth.AI, уровень — начинающий.
-Отвечай на том же языке, на котором написан термин. Не используй разметку markdown, пиши простым и тёплым текстом с 1 смайликом.`;
+            const prompt = `Дай академическое и точное определение термина "${keyword}" в 2-3 предложениях.
+Контекст: пользователь изучает "${hobbyId}" в приложении Zenyth.AI.
+Отвечай строго по сути, без приветствий (не пиши "Привет", "Здравствуйте"), без обращений к пользователю и без использования смайликов/эмодзи. Не используй разметку markdown. Текст должен быть в строгом научно-популярном стиле.`;
 
             const res = await aiService.sendMessage([{ role: 'user', content: prompt }], hobbyId);
             setExplanations(prev => ({ ...prev, [keyword]: res }));
@@ -370,15 +369,24 @@ export const LearnStep: React.FC<LearnStepProps> = ({
             extrapolate: 'clamp',
         });
 
-        const renderCardContent = (cardItem: typeof cards[0], isTop: boolean) => {
+        const renderCardContent = (cardItem: typeof cards[0], isTop: boolean, colorsList: [string, string]) => {
+            const subtitleColor = '#0F2147';
+            const textColor = '#1A253C';
+            const hintColor = 'rgba(15, 33, 71, 0.45)';
+
             return (
-                <View style={{ flex: 1, justifyContent: 'center' }}>
-                    <Text style={styles.cardSubtitle}>{cardItem.subtitle}</Text>
-                    <Text style={styles.cardText}>{cardItem.text}</Text>
-                    <Text style={[styles.swipeHint, { opacity: isTop ? 1 : 0 }]}>
+                <LinearGradient
+                    colors={colorsList}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.gradientContainer}
+                >
+                    <Text style={[styles.cardSubtitle, { color: subtitleColor }]}>{cardItem.subtitle}</Text>
+                    <Text style={[styles.cardText, { color: textColor }]}>{cardItem.text}</Text>
+                    <Text style={[styles.swipeHint, { color: hintColor }]}>
                         Свайп для следующей карты ➔
                     </Text>
-                </View>
+                </LinearGradient>
             );
         };
 
@@ -394,7 +402,6 @@ export const LearnStep: React.FC<LearnStepProps> = ({
                     { scale: 1 },
                     { translateY: 0 },
                 ],
-                backgroundColor: cardIndex === 0 ? '#8CDEFF' : cardIndex === 1 ? '#78BAFF' : '#7EB0FF',
                 zIndex: 3,
                 opacity: topCardOpacity,
                 elevation: 0,
@@ -404,7 +411,6 @@ export const LearnStep: React.FC<LearnStepProps> = ({
                     { scale: bgCard1Scale },
                     { translateY: bgCard1TranslateY },
                 ],
-                backgroundColor: cardIndex === 0 ? '#8CDEFF' : cardIndex === 1 ? '#78BAFF' : '#7EB0FF',
                 zIndex: 2,
                 opacity: bgCard1Opacity,
                 elevation: 0,
@@ -414,12 +420,16 @@ export const LearnStep: React.FC<LearnStepProps> = ({
                     { scale: bgCard2Scale },
                     { translateY: bgCard2TranslateY },
                 ],
-                backgroundColor: cardIndex === 0 ? '#8CDEFF' : cardIndex === 1 ? '#78BAFF' : '#7EB0FF',
                 zIndex: 1,
                 opacity: bgCard2Opacity,
                 elevation: 0,
                 shadowOpacity: 0,
             };
+
+            const gradientColors: [string, string] = 
+                cardIndex === 0 ? ['#BBDEFB', '#90CAF9'] : // Soft blue (originally second)
+                cardIndex === 1 ? ['#B3E5FC', '#81D4FA'] : // Soft sky blue (originally third)
+                ['#B2EBF2', '#80DEEA'];                     // Soft cyan (originally first)
 
             if (isTopCard) {
                 const rotate = pan.x.interpolate({
@@ -444,7 +454,7 @@ export const LearnStep: React.FC<LearnStepProps> = ({
                             },
                         ]}
                     >
-                        {renderCardContent(card, true)}
+                        {renderCardContent(card, true, gradientColors)}
                     </Animated.View>
                 );
             } else {
@@ -453,7 +463,7 @@ export const LearnStep: React.FC<LearnStepProps> = ({
                         key={`depth-${depth}`}
                         style={[styles.card, styles.cardBehind, cardStyle]}
                     >
-                        {renderCardContent(card, false)}
+                        {renderCardContent(card, false, gradientColors)}
                     </Animated.View>
                 );
             }
@@ -573,12 +583,9 @@ const createStyles = (colors: any) => StyleSheet.create({
         marginBottom: scale(28),
     },
     card: {
-        backgroundColor: '#8CDEFF',
         borderRadius: scale(24),
-        padding: scale(20),
-        borderWidth: 0,
         height: scale(215),
-        justifyContent: 'center',
+        overflow: 'hidden',
     },
     cardBehind: {
         position: 'absolute',
@@ -586,23 +593,28 @@ const createStyles = (colors: any) => StyleSheet.create({
         right: 0,
         top: 0,
     },
+    gradientContainer: {
+        flex: 1,
+        padding: scale(20),
+        justifyContent: 'center',
+    },
     cardSubtitle: {
         fontFamily: fonts.heading.bold,
         fontSize: scale(19),
         lineHeight: scale(24),
-        color: '#1A253C',
+        color: '#0F2147',
         marginBottom: scale(8),
     },
     cardText: {
         fontFamily: fonts.body?.light || fonts.heading.light,
         fontSize: scale(15),
         lineHeight: scale(22),
-        color: '#2B3E60',
+        color: '#1A253C',
     },
     swipeHint: {
         fontFamily: fonts.heading.bold,
         fontSize: scale(11),
-        color: 'rgba(43, 62, 96, 0.4)',
+        color: 'rgba(15, 33, 71, 0.5)',
         textAlign: 'right',
         marginTop: scale(8),
         textTransform: 'uppercase',
@@ -652,19 +664,24 @@ const createStyles = (colors: any) => StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'flex-start',
-        gap: scale(12),
+        gap: scale(8),
     },
     keywordBadge: {
-        backgroundColor: '#D1DCEF',
-        borderRadius: scale(20),
-        paddingHorizontal: scale(20),
-        paddingVertical: scale(10),
+        backgroundColor: '#D5E6F7',
+        borderRadius: scale(18),
+        paddingHorizontal: scale(16),
+        height: scale(38),
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(15, 33, 71, 0.05)',
     },
     keywordText: {
         fontFamily: fonts.body?.regular || fonts.heading.regular || undefined,
-        fontWeight: '400',
-        fontSize: scale(15),
-        color: '#2B3E60',
+        fontSize: scale(14),
+        color: colors.gamification?.termChipText || '#08132A',
+        textAlign: 'center',
+        lineHeight: scale(18),
     },
     nextButton: {
         position: 'absolute',

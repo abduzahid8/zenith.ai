@@ -15,6 +15,7 @@ import {
     TouchableOpacity,
     ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { scale } from '../../../constants';
 import { fonts } from '../../../theme';
@@ -22,21 +23,22 @@ import { useAppTheme } from '../../../theme/useAppTheme';
 
 // Позитивные сообщения в стиле Duolingo (без эмодзи)
 const CORRECT_MESSAGES = [
-    'Отлично! Так держать!',
-    'Правильный ответ!',
+    'Отлично!',
+    'Правильно!',
     'Потрясающе!',
-    'Все верно!',
+    'Верно!',
     'Великолепно!',
     'Идеально!',
+    'Супер!',
 ];
 
 // Мотивационные сообщения при ошибке (без эмодзи)
 const INCORRECT_MESSAGES = [
-    'Не переживай, ты справишься!',
-    'Ошибки — это часть обучения.',
-    'Почти получилось! Идем дальше.',
-    'Главное — не сдаваться!',
-    'В следующий раз обязательно получится!',
+    'Не сдавайся!',
+    'Попробуй ещё!',
+    'Почти получилось!',
+    'Не переживай!',
+    'Ещё попытку!',
 ];
 
 function getRandom<T>(arr: T[]): T {
@@ -125,11 +127,13 @@ export const EncouragementBanner: React.FC<EncouragementBannerProps> = ({
 
     if (!visible && (opacityAnim as any)._value === 0) return null;
 
+    const showFeedback = !!(feedback && isCorrect);
+
     const bannerStyle = isCorrect
         ? styles.bannerCorrect
         : styles.bannerIncorrect;
         
-    const textStyle = feedback 
+    const textStyle = showFeedback 
         ? null // Темный текст для заголовка при наличии развернутого фидбека
         : isCorrect
             ? styles.bannerTextCorrect
@@ -144,16 +148,18 @@ export const EncouragementBanner: React.FC<EncouragementBannerProps> = ({
                     transform: [{ translateY: slideAnim }],
                     opacity: opacityAnim,
                 },
-                feedback ? { flexDirection: 'column', alignItems: 'stretch' } : null
+                showFeedback ? { flexDirection: 'column', alignItems: 'stretch' } : null
             ]}
         >
-            {feedback ? (
+            {showFeedback ? (
                 // Вертикальная раскладка с отзывом от ИИ
                 <View style={{ width: '100%' }}>
-                    <Text style={[styles.bannerText, textStyle, { marginBottom: scale(8) }]}>
-                        {message}
-                    </Text>
-                    <View style={{ maxHeight: scale(150), overflow: 'hidden' }}>
+                    <View style={[styles.bannerHeader, { marginBottom: scale(6) }]}>
+                        <Text style={[styles.bannerText, textStyle]}>
+                            {message}
+                        </Text>
+                    </View>
+                    <View style={{ maxHeight: scale(80), overflow: 'hidden' }}>
                         <ScrollView showsVerticalScrollIndicator={true} bounces={false}>
                             <Text style={styles.feedbackText}>
                                 {feedback}
@@ -165,7 +171,7 @@ export const EncouragementBanner: React.FC<EncouragementBannerProps> = ({
                             style={[
                                 styles.nextButton,
                                 isCorrect ? styles.nextButtonCorrect : styles.nextButtonIncorrect,
-                                { width: '100%', marginTop: scale(16), height: scale(48), borderRadius: scale(24) }
+                                { width: '100%', marginTop: scale(12), height: scale(44), borderRadius: scale(22) }
                             ]}
                             onPress={onNext}
                             activeOpacity={0.85}
@@ -177,13 +183,15 @@ export const EncouragementBanner: React.FC<EncouragementBannerProps> = ({
             ) : (
                 // Стандартная горизонтальная раскладка
                 <>
-                    <Text style={[
-                        styles.bannerText, 
-                        textStyle,
-                        hideButton && { textAlign: 'center', marginRight: 0 }
-                    ]}>
-                        {message}
-                    </Text>
+                    <View style={styles.bannerHeader}>
+                        <Text style={[
+                            styles.bannerText, 
+                            textStyle,
+                            hideButton && { textAlign: 'center', marginRight: 0 }
+                        ]}>
+                            {message}
+                        </Text>
+                    </View>
                     {!hideButton && (
                         <TouchableOpacity
                             style={[styles.nextButton, isCorrect ? styles.nextButtonCorrect : styles.nextButtonIncorrect]}
@@ -202,39 +210,53 @@ export const EncouragementBanner: React.FC<EncouragementBannerProps> = ({
 const createStyles = (colors: any) => StyleSheet.create({
     banner: {
         position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        borderTopLeftRadius: scale(24),
-        borderTopRightRadius: scale(24),
-        paddingTop: scale(28),
-        paddingBottom: scale(36), // Generous padding for iOS Safe Area
-        paddingHorizontal: scale(24),
+        bottom: Platform.OS === 'ios' ? scale(36) : scale(26),
+        left: scale(16),
+        right: scale(16),
+        borderRadius: scale(9999),
+        paddingVertical: scale(16),
+        paddingHorizontal: scale(20),
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         zIndex: 999,
+        shadowColor: '#0F2147',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.03,
+        shadowRadius: 8,
+        elevation: 2,
     },
     bannerCorrect: {
-        backgroundColor: '#D1F5DB', // Matching correct pastel theme
+        backgroundColor: '#E8FDF0',
+        borderWidth: 1.5,
+        borderColor: '#A2E0B5',
     },
     bannerIncorrect: {
-        backgroundColor: '#FDF2F2', // Matching incorrect pastel theme
+        backgroundColor: '#FFF5F5',
+        borderWidth: 1.5,
+        borderColor: '#FFC4C2',
+    },
+    bannerHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        gap: scale(8),
+        marginRight: scale(12),
+        marginLeft: scale(10),
     },
     bannerText: {
         fontFamily: fonts.heading.bold,
-        fontSize: scale(17),
-        lineHeight: scale(22),
-        color: '#08132A',
+        fontSize: scale(19),
+        lineHeight: scale(24),
+        color: '#1A253C',
         flex: 1,
-        marginRight: scale(16),
         textAlign: 'left',
     },
     bannerTextCorrect: {
-        color: '#102852',
+        color: '#0A0F1D',
     },
     bannerTextIncorrect: {
-        color: '#721C24',
+        color: '#2A080C',
     },
     feedbackText: {
         fontFamily: fonts.body.regular,
