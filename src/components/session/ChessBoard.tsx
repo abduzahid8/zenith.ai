@@ -351,6 +351,17 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             uciMove === expectedMove ||
             uciMove === expectedMove.substring(0, 4); // Without promotion suffix
 
+        const isCastling = move.flags.includes('k') || move.flags.includes('q');
+        console.log('[ChessBoard Castling Debug Log]', {
+            expectedMove,
+            actualMove: uciMove,
+            currentStep: currentStepIndex,
+            isCastling,
+            san: move.san,
+            from: move.from,
+            to: move.to
+        });
+
         const isUsingSolution = !!(activePuzzle.solution && activePuzzle.solution.length > 0);
         console.log('[ChessBoard handleMove Debug]', {
             isUsingSolution,
