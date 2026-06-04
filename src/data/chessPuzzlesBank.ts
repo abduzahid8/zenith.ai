@@ -1082,6 +1082,126 @@ export const chessLessonPuzzles: Record<string, ChessPuzzle[]> = {
       tags: ['double-attack', 'multi-move', 'review'],
       metadata: { isStatic: true, estimatedTimeSec: 25, moveCount: 2 }
     }
+  ],
+
+  day4_king_safety: [
+    {
+      id: "day4_kingsafety_p5",
+      day: 4,
+      topic: "day4_king_safety",
+      skill: "Защита короля после рокировки",
+      goalType: "king_safety",
+      fen: "r1bqk2r/pppp1ppp/2n5/2b1p3/2B1P1n1/3P1N2/PPP2PPP/RNBQ1RK1 w kq - 0 1",
+      sideToMove: "w",
+      moves: ["h2h3"],
+      solution: [
+        {
+          userMove: "h2h3",
+          opponentMove: null,
+          explanation: "Отлично! Ход h3 выгоняет коня и предотвращает угрозы."
+        }
+      ],
+      prompt: "Твой король уже в укрытии, но соперник наращивает давление. Найди защитный ход.",
+      hints: {
+        soft: "Обрати внимание на активность фигур соперника рядом с твоим королём.",
+        medium: "Конь противника проник на королевский фланг и угрожает опасной вилкой.",
+        strong: "Прогони коня ходом крайней пешки, чтобы снять угрозу."
+      },
+      successExplanation: "Прекрасно! Ход h3 выгнал коня и предотвратил опасную атаку на f2.",
+      failureExplanation: "Ты не заметил, что конь на g4 угрожал вилкой на f2 с последующим вскрытием позиции короля.",
+      learningPoint: "После рокировки следи за полями f2 и h2 — они становятся уязвимы для атак лёгких фигур.",
+      tags: ["king_safety", "defense", "prophylaxis"],
+      metadata: { moveCount: 1 }
+    },
+    {
+      id: "day4_kingsafety_p6",
+      day: 4,
+      topic: "day4_king_safety",
+      skill: "Рокировка из центра",
+      goalType: "king_safety",
+      fen: "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2NP4/PPP2PPP/R1BQK1NR w KQkq - 0 1",
+      sideToMove: "w",
+      moves: ["g1f3", "e1g1"],
+      solution: [
+        {
+          userMove: "g1f3",
+          opponentMove: "d7d6",
+          explanation: "Отлично! Конь развит в центр, и путь для рокировки свободен."
+        },
+        {
+          userMove: "e1g1",
+          opponentMove: null,
+          explanation: "Великолепно! Король в безопасности после рокировки."
+        }
+      ],
+      prompt: "Король застрял в центре. Найди последовательность ходов, которая сделает позицию безопаснее.",
+      hints: {
+        soft: "Королю мешает собственная фигура — убери её с пути.",
+        medium: "Путь для рокировки преграждает собственный конь.",
+        strong: "Сначала развей коня в центр, чтобы освободить дорогу для укрытия короля."
+      },
+      successExplanation: "Отлично! После Nf3 король спрятался в укрытие через рокировку.",
+      failureExplanation: "Король остался в центре — при вскрытии центральных линий он попадёт под атаку.",
+      learningPoint: "Старайся делать рокировку как можно раньше, чтобы король оказался в безопасности.",
+      tags: ["king_safety", "castling", "development"],
+      metadata: { moveCount: 2 }
+    },
+    {
+      id: "day4_kingsafety_p7",
+      day: 4,
+      topic: "day4_king_safety",
+      skill: "Рокировка перед вскрытием центра",
+      goalType: "king_safety",
+      fen: "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2BPP3/5N2/PPP2PPP/RNBQK2R w KQkq - 0 1",
+      sideToMove: "w",
+      moves: ["e1g1"],
+      solution: [
+        {
+          userMove: "e1g1",
+          opponentMove: null,
+          explanation: "Прекрасно! Король вовремя покинул центр до его вскрытия."
+        }
+      ],
+      prompt: "Соперник готов вскрыть центр. Найди упреждающий ход, который обезопасит короля.",
+      hints: {
+        soft: "Центр может вскрыться, и король окажется под атакой.",
+        medium: "Соперник готов вскрыть центр пешечным ударом, открывая линии.",
+        strong: "Прежде чем соперник вскроет центр, спрячь короля с помощью рокировки."
+      },
+      successExplanation: "Отлично! Рокировка вовремя уводит короля в безопасное место.",
+      failureExplanation: "Король остался в центре и теперь уязвим для атаки по открытым линиям.",
+      learningPoint: "Если соперник угрожает вскрыть центр — рокируйся немедленно, не откладывая.",
+      tags: ["king_safety", "castling", "center"],
+      metadata: { moveCount: 1 }
+    },
+    {
+      id: "day4_kingsafety_p8",
+      day: 4,
+      topic: "day4_king_safety",
+      skill: "Скрытая угроза королю",
+      goalType: "king_safety",
+      fen: "r1b2rk1/ppp2qpp/2n1p3/2bp4/3P4/2P1P3/PP3PPP/R1BQ1RK1 w - - 0 1",
+      sideToMove: "w",
+      moves: ["h2h3"],
+      solution: [
+        {
+          userMove: "h2h3",
+          opponentMove: null,
+          explanation: "Великолепно! Ход h3 создал форточку — король получил путь к отступлению."
+        }
+      ],
+      prompt: "Позиция выглядит спокойно, но король в скрытой опасности. Найди угрозу и предотврати её, пока атака не стала решающей.",
+      hints: {
+        soft: "Позиция кажется безопасной, но королю может некуда отступить.",
+        medium: "Вражеский ферзь и ладья построились по линии «f», угрожая матом на первой горизонтали.",
+        strong: "Сделай ход крайней пешкой, чтобы король получил поле для отступления."
+      },
+      successExplanation: "Отлично! Ход h3 создал форточку для короля и предотвратил матовую атаку.",
+      failureExplanation: "Чёрные сыграли Qxf2+ Kh1 Qxf1# — ты не заметил, что королю некуда отступать.",
+      learningPoint: "Всегда создавай форточку для короля после рокировки, если соперник может атаковать по первой горизонтали.",
+      tags: ["king_safety", "back_rank_mate", "luft"],
+      metadata: { moveCount: 1 }
+    }
   ]
 };
 
