@@ -712,14 +712,14 @@ const createStyles = (colors: any) => {
         aiBubbleContainer: {
             marginTop: scale(14),
             marginBottom: scale(22),
-            paddingHorizontal: scale(20),
+            paddingHorizontal: scale(16),
             width: '100%',
         },
         aiBubble: {
             backgroundColor: '#FFFFFF',
             borderRadius: scale(20),
             paddingVertical: scale(14),
-            paddingHorizontal: scale(16),
+            paddingHorizontal: scale(12),
         },
         aiBubbleHeader: {
             flexDirection: 'row',
@@ -737,9 +737,10 @@ const createStyles = (colors: any) => {
         },
         aiBubbleText: {
             fontFamily: fonts.body.regular,
-            fontSize: scale(15),
-            lineHeight: scale(22),
+            fontSize: scale(13.5),
+            lineHeight: scale(19),
             color: '#1A253C',
+            height: scale(38), // Enforce exactly 2 lines height to prevent layout shifts
         },
         errorText: {
             fontFamily: fonts.heading.bold,
