@@ -1,3 +1,47 @@
+diff --git a/node_modules/react-native-chessboard/lib/commonjs/components/piece/index.js b/node_modules/react-native-chessboard/lib/commonjs/components/piece/index.js
+index 2ebf953..f60544e 100644
+--- a/node_modules/react-native-chessboard/lib/commonjs/components/piece/index.js
++++ b/node_modules/react-native-chessboard/lib/commonjs/components/piece/index.js
+@@ -83,13 +83,15 @@ const Piece = /*#__PURE__*/_react.default.memo( /*#__PURE__*/_react.default.forw
+         x,
+         y
+       } = toTranslation(move ? move.to : from);
++      const isCastling = move && (move.flags.includes('k') || move.flags.includes('q'));
++      const duration = isCastling ? 0 : moveDuration;
+       translateX.value = (0, _reactNativeReanimated.withTiming)(x, {
+-        duration: moveDuration
++        duration: duration
+       }, () => {
+         offsetX.value = translateX.value;
+       });
+       translateY.value = (0, _reactNativeReanimated.withTiming)(y, {
+-        duration: moveDuration
++        duration: duration
+       }, isFinished => {
+         if (!isFinished) return;
+         offsetY.value = translateY.value;
+diff --git a/node_modules/react-native-chessboard/lib/module/components/piece/index.js b/node_modules/react-native-chessboard/lib/module/components/piece/index.js
+index 9d3af78..9a26d5f 100644
+--- a/node_modules/react-native-chessboard/lib/module/components/piece/index.js
++++ b/node_modules/react-native-chessboard/lib/module/components/piece/index.js
+@@ -62,13 +62,15 @@ const Piece = /*#__PURE__*/React.memo( /*#__PURE__*/React.forwardRef((_ref, ref)
+         x,
+         y
+       } = toTranslation(move ? move.to : from);
++      const isCastling = move && (move.flags.includes('k') || move.flags.includes('q'));
++      const duration = isCastling ? 0 : moveDuration;
+       translateX.value = withTiming(x, {
+-        duration: moveDuration
++        duration: duration
+       }, () => {
+         offsetX.value = translateX.value;
+       });
+       translateY.value = withTiming(y, {
+-        duration: moveDuration
++        duration: duration
+       }, isFinished => {
+         if (!isFinished) return;
+         offsetY.value = translateY.value;
 diff --git a/node_modules/react-native-chessboard/lib/typescript/context/props-context/index.d.ts b/node_modules/react-native-chessboard/lib/typescript/context/props-context/index.d.ts
 index 42e9bea..12e69db 100644
 --- a/node_modules/react-native-chessboard/lib/typescript/context/props-context/index.d.ts
@@ -14,7 +58,7 @@ index 42e9bea..12e69db 100644
  } & {
      colors: Required<ChessboardColorsType>;
 diff --git a/node_modules/react-native-chessboard/src/components/piece/index.tsx b/node_modules/react-native-chessboard/src/components/piece/index.tsx
-index bbbd539..cede9cb 100644
+index bbbd539..2da0815 100644
 --- a/node_modules/react-native-chessboard/src/components/piece/index.tsx
 +++ b/node_modules/react-native-chessboard/src/components/piece/index.tsx
 @@ -43,6 +43,7 @@ const Piece = React.memo(
@@ -37,7 +81,7 @@ index bbbd539..cede9cb 100644
  
        const validateMove = useCallback(
          (from: Square, to: Square) => {
-@@ -80,6 +82,18 @@ const Piece = React.memo(
+@@ -80,13 +82,27 @@ const Piece = React.memo(
          (from: Square, to: Square) => {
            return new Promise<Move | undefined>((resolve) => {
              const move = validateMove(from, to);
@@ -54,9 +98,20 @@ index bbbd539..cede9cb 100644
 +              }
 +            }
              const { x, y } = toTranslation(move ? move.to : from);
-             translateX.value = withTiming(x, { duration: moveDuration }, () => {
+-            translateX.value = withTiming(x, { duration: moveDuration }, () => {
++            const isCastling = move && (move.flags.includes('k') || move.flags.includes('q'));
++            const duration = isCastling ? 0 : moveDuration;
++            translateX.value = withTiming(x, { duration }, () => {
                offsetX.value = translateX.value;
-@@ -116,6 +130,7 @@ const Piece = React.memo(
+             });
+             translateY.value = withTiming(
+               y,
+-              { duration: moveDuration },
++              { duration },
+               (isFinished) => {
+                 if (!isFinished) return;
+                 offsetY.value = translateY.value;
+@@ -116,6 +132,7 @@ const Piece = React.memo(
            translateY,
            validateMove,
            wrappedOnMoveForJSThread,
@@ -64,7 +119,7 @@ index bbbd539..cede9cb 100644
          ]
        );
  
-@@ -177,7 +192,7 @@ const Piece = React.memo(
+@@ -177,7 +194,7 @@ const Piece = React.memo(
            return;
          }
          if (!gestureEnabled.value) return;
@@ -73,7 +128,7 @@ index bbbd539..cede9cb 100644
          onStartTap(square);
        }, [
          gestureEnabled.value,
-@@ -221,12 +236,12 @@ const Piece = React.memo(
+@@ -221,12 +238,12 @@ const Piece = React.memo(
        const style = useAnimatedStyle(() => {
          return {
            position: 'absolute',
@@ -88,7 +143,7 @@ index bbbd539..cede9cb 100644
            ],
          };
        });
-@@ -243,9 +258,7 @@ const Piece = React.memo(
+@@ -243,9 +260,7 @@ const Piece = React.memo(
            height: size * 2,
            borderRadius: size,
            zIndex: 0,
