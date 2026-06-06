@@ -549,7 +549,7 @@ const createStyles = (colors: any) => {
             flexGrow: 1,
             paddingHorizontal: scale(20),
             paddingBottom: scale(40),
-            paddingTop: scale(36),
+            paddingTop: scale(48),
         },
     });
 };

@@ -489,6 +489,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: scale(20),
+        paddingTop: Platform.OS === 'ios' ? scale(16) : scale(8),
         marginBottom: scale(10),
     },
     activeSessionTimerPill: {

@@ -5,6 +5,7 @@ import {
     StyleSheet,
     TouchableOpacity,
     Alert,
+    Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Chess } from 'chess.js';
@@ -81,8 +82,11 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
 
     const chessboardRef = useRef<ChessboardRef>(null);
 
+
+
     // Multi-puzzle and Active puzzle states
     const [currentPuzzleIndex, setCurrentPuzzleIndex] = useState(0);
+    const [prevPuzzleIndex, setPrevPuzzleIndex] = useState(0);
 
     const activePuzzle = useMemo((): ChessPuzzle => {
         if (puzzles && puzzles.length > 0) {
@@ -104,6 +108,9 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         feedback: undefined,
     });
 
+    // Tracking attempts for each puzzle (max 2)
+    const [puzzleAttempts, setPuzzleAttempts] = useState<Record<number, number>>({});
+
     // Hints state
     const [hintsUsed, setHintsUsed] = useState(0);
 
@@ -113,21 +120,18 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     // Track the current FEN and chess.js state
     const [resetCounter, setResetCounter] = useState(0);
     const chessRef = useRef<Chess | null>(null);
+    if (!chessRef.current) {
+        chessRef.current = new Chess(activePuzzle.fen);
+    }
     const currentFenRef = useRef(activePuzzle.fen);
     const currentMoveIndexRef = useRef(0);
     const solvedRef = useRef(false);
     const lastProcessedTriggerRef = useRef(0);
     const isOpponentMovingRef = useRef(false);
 
-    // Sync state if FEN changes from outside
-    useEffect(() => {
-        setCurrentPuzzleIndex(0);
-        setPuzzleResults([]);
-        setSkipCounts({});
-    }, [fen]);
-
-    // Sync state when active puzzle changes
-    useEffect(() => {
+    // Sync state during render when puzzle index changes (official React pattern)
+    if (currentPuzzleIndex !== prevPuzzleIndex) {
+        setPrevPuzzleIndex(currentPuzzleIndex);
         const activeFen = activePuzzle.fen;
         chessRef.current = new Chess(activeFen);
         currentFenRef.current = activeFen;
@@ -137,11 +141,19 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         setCurrentMoveIndex(0);
         setIncorrectMove(false);
         setSolved(false);
-        setHintsUsed(0);
         setGestureEnabled(true);
         setBanner({ visible: false, isCorrect: true });
-        setResetCounter(prev => prev + 1);
-    }, [activePuzzle]);
+    }
+
+    // Sync state if FEN changes from outside (completely new lesson)
+    useEffect(() => {
+        setCurrentPuzzleIndex(0);
+        setPrevPuzzleIndex(0);
+        setPuzzleResults([]);
+        setSkipCounts({});
+        setHintsUsed(0);
+        setPuzzleAttempts({});
+    }, [fen]);
 
     const handleSkipPuzzle = useCallback(() => {
         setBanner({ visible: false, isCorrect: true });
@@ -339,6 +351,17 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             uciMove === expectedMove ||
             uciMove === expectedMove.substring(0, 4); // Without promotion suffix
 
+        const isCastling = move.flags.includes('k') || move.flags.includes('q');
+        console.log('[ChessBoard Castling Debug Log]', {
+            expectedMove,
+            actualMove: uciMove,
+            currentStep: currentStepIndex,
+            isCastling,
+            san: move.san,
+            from: move.from,
+            to: move.to
+        });
+
         const isUsingSolution = !!(activePuzzle.solution && activePuzzle.solution.length > 0);
         console.log('[ChessBoard handleMove Debug]', {
             isUsingSolution,
@@ -385,7 +408,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                         return next;
                     });
                     setGestureEnabled(false);
-                    setBanner({ visible: true, isCorrect: true, feedback: explanation || undefined });
+                    setBanner({ visible: true, isCorrect: true, feedback: undefined });
                 } else {
                     setGestureEnabled(true);
                 }
@@ -411,23 +434,62 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 currentStepAfter: currentMoveIndexRef.current,
                 nextExpectedMove: getExpectedUserMove(activePuzzle, currentMoveIndexRef.current)
             });
-            
             setIncorrectMove(true);
             setGestureEnabled(false);
             
+            const currentAttempts = (puzzleAttempts[currentPuzzleIndex] || 0) + 1;
+            setPuzzleAttempts(prev => ({
+                ...prev,
+                [currentPuzzleIndex]: currentAttempts
+            }));
+
             const explanation = activePuzzle.failureExplanation;
-            setBanner({ visible: true, isCorrect: false, feedback: explanation || undefined });
-            
-            setTimeout(() => {
-                // Восстанавливаем визуальную доску с актуальным FEN из chess.js
+
+            if (currentAttempts >= 2) {
+                // Вторая попытка неверная -> задача считается пропущенной/неверной
+                const newResults = [...puzzleResults];
+                newResults[currentPuzzleIndex] = 'skipped';
+                setPuzzleResults(newResults);
+                
+                // Переходим к следующей задаче мгновенно
+                setBanner(prev => ({ ...prev, visible: false }));
                 setResetCounter(prev => prev + 1);
                 setGestureEnabled(true);
+                
+                let nextIndex = currentPuzzleIndex + 1;
+                while (puzzles && nextIndex < puzzles.length && (newResults[nextIndex] === 'completed' || newResults[nextIndex] === 'skipped')) {
+                    nextIndex++;
+                }
+
+                if (puzzles && nextIndex < puzzles.length) {
+                    setCurrentPuzzleIndex(nextIndex);
+                } else {
+                    const firstSkipped = puzzles ? puzzles.findIndex((_, idx) => {
+                        const result = newResults[idx];
+                        const count = skipCounts[idx] || 0;
+                        return result === 'skipped' && count < 2;
+                    }) : -1;
+
+                    if (firstSkipped !== -1) {
+                        setCurrentPuzzleIndex(firstSkipped);
+                    } else {
+                        onComplete();
+                    }
+                }
+            } else {
+                setBanner({ visible: true, isCorrect: false, feedback: explanation || undefined });
+                
                 setTimeout(() => {
-                    setBanner(prev => prev.isCorrect ? prev : { ...prev, visible: false, feedback: undefined });
-                }, 1600);
-            }, 400);
+                    // Восстанавливаем визуальную доску с актуальным FEN из chess.js
+                    setResetCounter(prev => prev + 1);
+                    setGestureEnabled(true);
+                    setTimeout(() => {
+                        setBanner(prev => prev.isCorrect ? prev : { ...prev, visible: false, feedback: undefined });
+                    }, 1600);
+                }, 400);
+            }
         }
-    }, [activePuzzle, playOpponentMove, currentPuzzleIndex]);
+    }, [activePuzzle, playOpponentMove, currentPuzzleIndex, puzzleAttempts, t, puzzles, puzzleResults, skipCounts, onComplete]);
 
     const handleNextPuzzle = useCallback(() => {
         setBanner(prev => ({ ...prev, visible: false }));
@@ -519,23 +581,24 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                             />
                         );
 
-                        if (isSkipped) {
-                            return (
-                                <TouchableOpacity
-                                    key={idx}
-                                    style={{ flex: 1 }}
-                                    onPress={() => {
-                                        setCurrentPuzzleIndex(idx);
-                                    }}
-                                    activeOpacity={0.7}
-                                >
-                                    {pillElement}
-                                </TouchableOpacity>
-                            );
-                        }
+
 
                         return pillElement;
                     })}
+                </View>
+            )}
+
+            {/* AI Bubble Question */}
+            {activePuzzle.prompt && (
+                <View style={styles.aiBubbleContainer}>
+                    {/* Speech Bubble */}
+                    <View style={styles.aiBubble}>
+                        <View style={styles.aiBubbleHeader}>
+                            <Ionicons name="sparkles" size={scale(16)} color="#389FFF" style={styles.aiBubbleHeaderIcon} />
+                            <Text style={styles.aiBubbleHeaderLabel}>Совет от ИИ</Text>
+                        </View>
+                        <Text style={styles.aiBubbleText} numberOfLines={2} ellipsizeMode="tail">{activePuzzle.prompt}</Text>
+                    </View>
                 </View>
             )}
 
@@ -565,27 +628,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 </View>
             </View>
 
-            {/* AI Bubble Question */}
-            {activePuzzle.prompt && (
-                <View style={styles.aiBubbleContainer}>
-                    <View style={styles.aiBubble}>
-                        <Ionicons
-                            name="information-circle"
-                            size={scale(22)}
-                            color="#5BA3E6"
-                            style={styles.aiBubbleIcon}
-                        />
-                        <Text style={styles.aiBubbleText}>{activePuzzle.prompt}</Text>
-                    </View>
-                </View>
-            )}
 
-            {/* Error / Success feedback */}
-            {incorrectMove && !solved && (
-                <Text style={styles.errorText}>
-                    {t('Неверный ход. Попробуй ещё раз!')}
-                </Text>
-            )}
 
 
 
@@ -595,7 +638,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 feedback={banner.feedback}
                 onNext={handleNextPuzzle}
                 hideButton={!banner.isCorrect}
-                buttonText={puzzles && currentPuzzleIndex < puzzles.length - 1 ? t('Следующая задача') : (isLastStep ? t('Завершить') : t('Далее'))}
+                buttonText={puzzles && currentPuzzleIndex < puzzles.length - 1 ? t('Дальше') : (isLastStep ? t('Завершить') : t('Далее'))}
             />
         </View>
     );
@@ -615,14 +658,14 @@ const createStyles = (colors: any) => {
             justifyContent: 'space-between',
             alignItems: 'center',
             width: SCREEN_WIDTH - scale(40),
-            marginBottom: scale(24),
+            marginBottom: scale(16),
         },
         pillsContainer: {
             flexDirection: 'row',
             justifyContent: 'center',
             alignItems: 'center',
             gap: scale(6),
-            marginBottom: scale(24),
+            marginBottom: scale(20),
             width: SCREEN_WIDTH - scale(40),
         },
         pill: {
@@ -635,7 +678,7 @@ const createStyles = (colors: any) => {
             backgroundColor: '#34C759',
         },
         pillSkipped: {
-            backgroundColor: '#8E8E93',
+            backgroundColor: '#FF3B30',
         },
         pillActive: {
             backgroundColor: '#5BA3E6',
@@ -678,36 +721,37 @@ const createStyles = (colors: any) => {
             shadowRadius: 6,
         },
         aiBubbleContainer: {
-            flexDirection: 'row',
-            marginTop: scale(24),
-            paddingHorizontal: scale(20),
+            marginTop: scale(14),
+            marginBottom: scale(22),
+            paddingHorizontal: scale(16),
             width: '100%',
-            alignItems: 'flex-start',
         },
         aiBubble: {
-            flex: 1,
-            backgroundColor: '#F0F7FF',
-            borderRadius: scale(16),
-            padding: scale(14),
+            backgroundColor: '#FFFFFF',
+            borderRadius: scale(20),
+            paddingVertical: scale(14),
+            paddingHorizontal: scale(12),
+        },
+        aiBubbleHeader: {
             flexDirection: 'row',
             alignItems: 'center',
-            borderLeftWidth: 4,
-            borderLeftColor: '#5BA3E6',
-            shadowColor: '#5BA3E6',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.05,
-            shadowRadius: 4,
-            elevation: 1,
+            gap: scale(6),
+            marginBottom: scale(3),
         },
-        aiBubbleIcon: {
-            marginRight: scale(18),
+        aiBubbleHeaderIcon: {
+            // Gap takes care of spacing
+        },
+        aiBubbleHeaderLabel: {
+            fontFamily: fonts.heading.bold,
+            fontSize: scale(14),
+            color: '#389FFF',
         },
         aiBubbleText: {
             fontFamily: fonts.body.regular,
-            fontSize: scale(14),
-            lineHeight: scale(20),
-            color: colors.text || '#08132A',
-            flex: 1,
+            fontSize: scale(13.5),
+            lineHeight: scale(19),
+            color: '#1A253C',
+            height: scale(38), // Enforce exactly 2 lines height to prevent layout shifts
         },
         errorText: {
             fontFamily: fonts.heading.bold,

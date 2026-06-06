@@ -440,8 +440,7 @@ const createStyles = (colors: any) => {
             paddingVertical: scale(24),
             paddingHorizontal: scale(20),
             marginBottom: scale(24),
-            borderWidth: 1.5,
-            borderColor: '#8CA1C1',
+            borderWidth: 0,
             width: '100%',
             shadowColor: '#0F2147',
             shadowOffset: { width: 0, height: 8 },
@@ -483,12 +482,12 @@ const createStyles = (colors: any) => {
             borderColor: '#DDE8F4',
         },
         blankSlotCorrect: {
-            backgroundColor: '#FFFFFF',
-            borderColor: '#34C759',
+            backgroundColor: '#34C759',
+            borderColor: 'transparent',
         },
         blankSlotIncorrect: {
-            backgroundColor: '#FFFFFF',
-            borderColor: '#FF3B30',
+            backgroundColor: '#FF3B30',
+            borderColor: 'transparent',
         },
         blankSlotTextBase: {
             fontFamily: fonts.heading.bold,
@@ -501,10 +500,10 @@ const createStyles = (colors: any) => {
             color: '#1A253C',
         },
         blankTextCorrect: {
-            color: '#138D4F',
+            color: '#FFFFFF',
         },
         blankTextIncorrect: {
-            color: '#721C24',
+            color: '#FFFFFF',
         },
         wordPoolSection: {
             width: '100%',
