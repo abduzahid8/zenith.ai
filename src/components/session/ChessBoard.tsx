@@ -21,6 +21,19 @@ import EncouragementBanner from './chess/EncouragementBanner';
 import type { ChessPuzzle } from '../../data/chessPuzzlesBank';
 
 // --- ChessPuzzle V2 Helper Functions ---
+function getTargetSquareFromUci(move: string): string | null {
+    if (!move || move.length < 4) return null;
+    return move.slice(2, 4);
+}
+
+function getCurrentExpectedUserMove(puzzle: any, currentStep: number): string | null {
+    if (!puzzle) return null;
+    if (puzzle.solution && puzzle.solution.length > 0) {
+        return puzzle.solution[currentStep]?.userMove || null;
+    }
+    return puzzle.moves ? puzzle.moves[currentStep] || null : null;
+}
+
 const getExpectedUserMove = (activePuzzle: any, stepIndex: number): string | null => {
     if (activePuzzle.solution && activePuzzle.solution.length > 0) {
         return activePuzzle.solution[stepIndex]?.userMove || null;
@@ -113,6 +126,8 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
 
     // Hints state
     const [hintsUsed, setHintsUsed] = useState(0);
+    const [hintPressCount, setHintPressCount] = useState(0);
+    const [hintTargetSquare, setHintTargetSquare] = useState<Square | null>(null);
 
     // Gesture enabled state
     const [gestureEnabled, setGestureEnabled] = useState(true);
@@ -129,6 +144,24 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     const lastProcessedTriggerRef = useRef(0);
     const isOpponentMovingRef = useRef(false);
 
+    // Re-apply highlight to the target square if it is set and the board resets or FEN changes
+    useEffect(() => {
+        if (hintTargetSquare && chessboardRef.current) {
+            const timer = setTimeout(() => {
+                if (chessboardRef.current) {
+                    chessboardRef.current.resetAllHighlightedSquares();
+                    chessboardRef.current.highlight({
+                        square: hintTargetSquare,
+                        color: 'rgba(56, 159, 255, 0.5)',
+                    });
+                }
+            }, 100);
+            return () => clearTimeout(timer);
+        } else if (!hintTargetSquare && chessboardRef.current) {
+            chessboardRef.current.resetAllHighlightedSquares();
+        }
+    }, [resetCounter, currentFen, hintTargetSquare]);
+
     // Sync state during render when puzzle index changes (official React pattern)
     if (currentPuzzleIndex !== prevPuzzleIndex) {
         setPrevPuzzleIndex(currentPuzzleIndex);
@@ -143,6 +176,8 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         setSolved(false);
         setGestureEnabled(true);
         setBanner(prev => ({ ...prev, visible: false }));
+        setHintPressCount(0);
+        setHintTargetSquare(null);
     }
 
     // Sync state if FEN changes from outside (completely new lesson)
@@ -153,6 +188,8 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         setSkipCounts({});
         setHintsUsed(0);
         setPuzzleAttempts({});
+        setHintPressCount(0);
+        setHintTargetSquare(null);
     }, [fen]);
 
     const handleSkipPuzzle = useCallback(() => {
@@ -205,25 +242,56 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             return;
         }
 
-        const expectedMove = getExpectedUserMove(activePuzzle, currentMoveIndexRef.current);
+        const expectedMove = getCurrentExpectedUserMove(activePuzzle, currentMoveIndexRef.current);
         if (!expectedMove) return;
 
-        // Show where to move from (first 2 characters)
-        const fromSquare = expectedMove.substring(0, 2) as Square;
+        const nextPressCount = hintPressCount + 1;
+        setHintPressCount(nextPressCount);
         setHintsUsed(prev => prev + 1);
 
-        // Highlight the hint square on the board
-        if (chessboardRef.current) {
-            chessboardRef.current.resetAllHighlightedSquares();
-            chessboardRef.current.highlight({
-                square: fromSquare,
-                color: 'rgba(255, 249, 196, 0.8)',
-            });
+        // Get hint text
+        const puzzleHints = activePuzzle.hints || [];
+        let hintText = '';
+        if (Array.isArray(puzzleHints)) {
+            hintText = puzzleHints[nextPressCount - 1] || puzzleHints[puzzleHints.length - 1] || t('Подумай над лучшим ходом!');
+        } else if (puzzleHints && typeof puzzleHints === 'object') {
+            const hintsObj = puzzleHints as any;
+            if (nextPressCount === 1) hintText = hintsObj.soft;
+            else if (nextPressCount === 2) hintText = hintsObj.medium;
+            else hintText = hintsObj.strong;
+            hintText = hintText || t('Подумай над лучшим ходом!');
+        } else {
+            hintText = t('Подумай над лучшим ходом!');
         }
+
+        // Show the alert with the hint text
+        Alert.alert(t('Подсказка'), hintText);
 
         // Track hint usage
         lichessService.useHint();
-    }, [hintsUsed, maxHints, activePuzzle, t]);
+
+        if (nextPressCount >= 2) {
+            const targetSq = getTargetSquareFromUci(expectedMove);
+            if (targetSq) {
+                const targetSquareTyped = targetSq as Square;
+                setHintTargetSquare(targetSquareTyped);
+
+                // Highlight the target square immediately
+                if (chessboardRef.current) {
+                    chessboardRef.current.resetAllHighlightedSquares();
+                    chessboardRef.current.highlight({
+                        square: targetSquareTyped,
+                        color: 'rgba(56, 159, 255, 0.5)',
+                    });
+                }
+            }
+        } else {
+            // On first press, reset highlights (no square highlighted)
+            if (chessboardRef.current) {
+                chessboardRef.current.resetAllHighlightedSquares();
+            }
+        }
+    }, [hintPressCount, hintsUsed, maxHints, activePuzzle, t]);
 
     const playOpponentMove = useCallback((currentStepIndex: number) => {
         const oppMove = getOpponentMove(activePuzzle, currentStepIndex);
@@ -267,6 +335,8 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                         return next;
                     });
                     setGestureEnabled(false);
+                    setHintPressCount(0);
+                    setHintTargetSquare(null);
                     setTimeout(() => {
                         let nextIndex = currentPuzzleIndex + 1;
                         while (puzzles && nextIndex < puzzles.length && (puzzleResults[nextIndex] === 'completed' || puzzleResults[nextIndex] === 'skipped')) {
@@ -292,6 +362,8 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                     setTimeout(() => {
                         isOpponentMovingRef.current = false;
                         setGestureEnabled(true);
+                        setHintPressCount(0);
+                        setHintTargetSquare(null);
                     }, 100);
                 }
             }, 500);
@@ -398,8 +470,12 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                     });
                     setGestureEnabled(false);
                     setBanner({ visible: true, isCorrect: true, feedback: undefined });
+                    setHintPressCount(0);
+                    setHintTargetSquare(null);
                 } else {
                     setGestureEnabled(true);
+                    setHintPressCount(0);
+                    setHintTargetSquare(null);
                 }
             }
         } else {
