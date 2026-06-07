@@ -127,7 +127,8 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     // Hints state
     const [hintsUsed, setHintsUsed] = useState(0);
     const [hintPressCount, setHintPressCount] = useState(0);
-    const [hintTargetSquare, setHintTargetSquare] = useState<Square | null>(null);
+    const [hintTargetSquare, setHintTargetSquare] = useState<string | null>(null);
+    const [displayedPrompt, setDisplayedPrompt] = useState(activePuzzle.prompt);
 
     // Gesture enabled state
     const [gestureEnabled, setGestureEnabled] = useState(true);
@@ -144,23 +145,12 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     const lastProcessedTriggerRef = useRef(0);
     const isOpponentMovingRef = useRef(false);
 
-    // Re-apply highlight to the target square if it is set and the board resets or FEN changes
+    // Reset hint states and text when active puzzle changes
     useEffect(() => {
-        if (hintTargetSquare && chessboardRef.current) {
-            const timer = setTimeout(() => {
-                if (chessboardRef.current) {
-                    chessboardRef.current.resetAllHighlightedSquares();
-                    chessboardRef.current.highlight({
-                        square: hintTargetSquare,
-                        color: 'rgba(56, 159, 255, 0.5)',
-                    });
-                }
-            }, 100);
-            return () => clearTimeout(timer);
-        } else if (!hintTargetSquare && chessboardRef.current) {
-            chessboardRef.current.resetAllHighlightedSquares();
-        }
-    }, [resetCounter, currentFen, hintTargetSquare]);
+        setHintPressCount(0);
+        setHintTargetSquare(null);
+        setDisplayedPrompt(activePuzzle.prompt);
+    }, [activePuzzle]);
 
     // Sync state during render when puzzle index changes (official React pattern)
     if (currentPuzzleIndex !== prevPuzzleIndex) {
@@ -176,8 +166,6 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         setSolved(false);
         setGestureEnabled(true);
         setBanner(prev => ({ ...prev, visible: false }));
-        setHintPressCount(0);
-        setHintTargetSquare(null);
     }
 
     // Sync state if FEN changes from outside (completely new lesson)
@@ -188,8 +176,6 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         setSkipCounts({});
         setHintsUsed(0);
         setPuzzleAttempts({});
-        setHintPressCount(0);
-        setHintTargetSquare(null);
     }, [fen]);
 
     const handleSkipPuzzle = useCallback(() => {
@@ -264,8 +250,8 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             hintText = t('Подумай над лучшим ходом!');
         }
 
-        // Show the alert with the hint text
-        Alert.alert(t('Подсказка'), hintText);
+        // Set the text in the AI bubble card (NO Alert/modal!)
+        setDisplayedPrompt(hintText);
 
         // Track hint usage
         lichessService.useHint();
@@ -273,23 +259,10 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         if (nextPressCount >= 2) {
             const targetSq = getTargetSquareFromUci(expectedMove);
             if (targetSq) {
-                const targetSquareTyped = targetSq as Square;
-                setHintTargetSquare(targetSquareTyped);
-
-                // Highlight the target square immediately
-                if (chessboardRef.current) {
-                    chessboardRef.current.resetAllHighlightedSquares();
-                    chessboardRef.current.highlight({
-                        square: targetSquareTyped,
-                        color: 'rgba(56, 159, 255, 0.5)',
-                    });
-                }
+                setHintTargetSquare(targetSq);
             }
         } else {
-            // On first press, reset highlights (no square highlighted)
-            if (chessboardRef.current) {
-                chessboardRef.current.resetAllHighlightedSquares();
-            }
+            setHintTargetSquare(null);
         }
     }, [hintPressCount, hintsUsed, maxHints, activePuzzle, t]);
 
@@ -337,6 +310,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                     setGestureEnabled(false);
                     setHintPressCount(0);
                     setHintTargetSquare(null);
+                    setDisplayedPrompt(activePuzzle.prompt);
                     setTimeout(() => {
                         let nextIndex = currentPuzzleIndex + 1;
                         while (puzzles && nextIndex < puzzles.length && (puzzleResults[nextIndex] === 'completed' || puzzleResults[nextIndex] === 'skipped')) {
@@ -364,6 +338,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                         setGestureEnabled(true);
                         setHintPressCount(0);
                         setHintTargetSquare(null);
+                        setDisplayedPrompt(activePuzzle.prompt);
                     }, 100);
                 }
             }, 500);
@@ -472,10 +447,12 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                     setBanner({ visible: true, isCorrect: true, feedback: undefined });
                     setHintPressCount(0);
                     setHintTargetSquare(null);
+                    setDisplayedPrompt(activePuzzle.prompt);
                 } else {
                     setGestureEnabled(true);
                     setHintPressCount(0);
                     setHintTargetSquare(null);
+                    setDisplayedPrompt(activePuzzle.prompt);
                 }
             }
         } else {
@@ -660,7 +637,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             )}
 
             {/* AI Bubble Question */}
-            {activePuzzle.prompt && (
+            {displayedPrompt && (
                 <View style={styles.aiBubbleContainer}>
                     {/* Speech Bubble */}
                     <View style={styles.aiBubble}>
@@ -668,7 +645,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                             <Ionicons name="sparkles" size={scale(16)} color="#389FFF" style={styles.aiBubbleHeaderIcon} />
                             <Text style={styles.aiBubbleHeaderLabel}>Совет от ИИ</Text>
                         </View>
-                        <Text style={styles.aiBubbleText} numberOfLines={2} ellipsizeMode="tail">{activePuzzle.prompt}</Text>
+                        <Text style={styles.aiBubbleText} numberOfLines={2} ellipsizeMode="tail">{displayedPrompt}</Text>
                     </View>
                 </View>
             )}
@@ -692,6 +669,21 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                             withNumbers={false}
                             boardOrientation={isBlackActive ? 'black' : 'white'}
                         />
+                        {/* Custom Hint Target Square Overlay */}
+                        {hintTargetSquare && (
+                            <View
+                                pointerEvents="none"
+                                style={[
+                                    styles.hintTargetOverlay,
+                                    {
+                                        width: boardSize / 8,
+                                        height: boardSize / 8,
+                                        left: letters.indexOf(hintTargetSquare[0]) * (boardSize / 8),
+                                        top: numbers.indexOf(hintTargetSquare[1]) * (boardSize / 8),
+                                    }
+                                ]}
+                            />
+                        )}
                     </View>
                     <View style={[styles.lettersRow, { width: boardSize }]}>
                         {letters.map(l => <Text key={l} style={styles.coordText}>{l}</Text>)}
@@ -790,6 +782,17 @@ const createStyles = (colors: any) => {
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.15,
             shadowRadius: 6,
+        },
+        hintTargetOverlay: {
+            position: 'absolute',
+            borderWidth: 3,
+            borderColor: '#389FFF',
+            borderRadius: scale(4),
+            backgroundColor: 'rgba(56, 159, 255, 0.25)',
+            shadowColor: '#389FFF',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.8,
+            shadowRadius: scale(6),
         },
         aiBubbleContainer: {
             marginTop: scale(14),
