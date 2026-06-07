@@ -435,36 +435,42 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             const explanation = activePuzzle.failureExplanation;
 
             if (currentAttempts >= 2) {
-                // Вторая попытка неверная -> задача считается пропущенной/неверной
+                // Вторая попытка неверная -> показываем баннер, затем переходим к следующей задаче
                 const newResults = [...puzzleResults];
                 newResults[currentPuzzleIndex] = 'skipped';
                 setPuzzleResults(newResults);
-                
-                // Переходим к следующей задаче мгновенно
-                setBanner(prev => ({ ...prev, visible: false }));
+
+                // Сначала показываем визуальный откат доски
                 setResetCounter(prev => prev + 1);
-                setGestureEnabled(true);
-                
-                let nextIndex = currentPuzzleIndex + 1;
-                while (puzzles && nextIndex < puzzles.length && (newResults[nextIndex] === 'completed' || newResults[nextIndex] === 'skipped')) {
-                    nextIndex++;
-                }
 
-                if (puzzles && nextIndex < puzzles.length) {
-                    setCurrentPuzzleIndex(nextIndex);
-                } else {
-                    const firstSkipped = puzzles ? puzzles.findIndex((_, idx) => {
-                        const result = newResults[idx];
-                        const count = skipCounts[idx] || 0;
-                        return result === 'skipped' && count < 2;
-                    }) : -1;
+                // Показываем баннер с ошибкой
+                setBanner({ visible: true, isCorrect: false, feedback: explanation || undefined });
 
-                    if (firstSkipped !== -1) {
-                        setCurrentPuzzleIndex(firstSkipped);
-                    } else {
-                        onComplete();
+                // Через 2.2 сек скрываем баннер и переходим к следующей задаче
+                setTimeout(() => {
+                    setBanner(prev => ({ ...prev, visible: false }));
+
+                    let nextIndex = currentPuzzleIndex + 1;
+                    while (puzzles && nextIndex < puzzles.length && (newResults[nextIndex] === 'completed' || newResults[nextIndex] === 'skipped')) {
+                        nextIndex++;
                     }
-                }
+
+                    if (puzzles && nextIndex < puzzles.length) {
+                        setCurrentPuzzleIndex(nextIndex);
+                    } else {
+                        const firstSkipped = puzzles ? puzzles.findIndex((_, idx) => {
+                            const result = newResults[idx];
+                            const count = skipCounts[idx] || 0;
+                            return result === 'skipped' && count < 2;
+                        }) : -1;
+
+                        if (firstSkipped !== -1) {
+                            setCurrentPuzzleIndex(firstSkipped);
+                        } else {
+                            onComplete();
+                        }
+                    }
+                }, 2200);
             } else {
                 setBanner({ visible: true, isCorrect: false, feedback: explanation || undefined });
                 
