@@ -142,7 +142,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         setIncorrectMove(false);
         setSolved(false);
         setGestureEnabled(true);
-        setBanner({ visible: false, isCorrect: true });
+        setBanner(prev => ({ ...prev, visible: false }));
     }
 
     // Sync state if FEN changes from outside (completely new lesson)
@@ -440,15 +440,15 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 newResults[currentPuzzleIndex] = 'skipped';
                 setPuzzleResults(newResults);
 
-                // Сначала показываем визуальный откат доски
-                setResetCounter(prev => prev + 1);
-
-                // Показываем баннер с ошибкой
+                // Показываем баннер с ошибкой (НЕ сбрасываем доску мгновенно — фигура встанет плавно)
                 setBanner({ visible: true, isCorrect: false, feedback: explanation || undefined });
 
                 // Через 2.2 сек скрываем баннер и переходим к следующей задаче
                 setTimeout(() => {
                     setBanner(prev => ({ ...prev, visible: false }));
+
+                    // Сбрасываем доску визуально прямо перед переключением
+                    setResetCounter(prev => prev + 1);
 
                     let nextIndex = currentPuzzleIndex + 1;
                     while (puzzles && nextIndex < puzzles.length && (newResults[nextIndex] === 'completed' || newResults[nextIndex] === 'skipped')) {
