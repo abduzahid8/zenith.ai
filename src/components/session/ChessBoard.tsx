@@ -127,7 +127,8 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     // Hints state
     const [hintsUsed, setHintsUsed] = useState(0);
     const [hintPressCount, setHintPressCount] = useState(0);
-    const [hintTargetSquare, setHintTargetSquare] = useState<string | null>(null);
+    const [hintFromSquare, setHintFromSquare] = useState<string | null>(null);
+    const [hintToSquare, setHintToSquare] = useState<string | null>(null);
     const [displayedPrompt, setDisplayedPrompt] = useState(activePuzzle.prompt);
 
     // Gesture enabled state
@@ -145,12 +146,17 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     const lastProcessedTriggerRef = useRef(0);
     const isOpponentMovingRef = useRef(false);
 
-    // Reset hint states and text when active puzzle changes
-    useEffect(() => {
+    const resetHintState = useCallback(() => {
         setHintPressCount(0);
-        setHintTargetSquare(null);
+        setHintFromSquare(null);
+        setHintToSquare(null);
         setDisplayedPrompt(activePuzzle.prompt);
     }, [activePuzzle]);
+
+    // Reset hint states and text when active puzzle changes
+    useEffect(() => {
+        resetHintState();
+    }, [activePuzzle, resetHintState]);
 
     // Sync state during render when puzzle index changes (official React pattern)
     if (currentPuzzleIndex !== prevPuzzleIndex) {
@@ -256,13 +262,15 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         // Track hint usage
         lichessService.useHint();
 
-        if (nextPressCount >= 2) {
-            const targetSq = getTargetSquareFromUci(expectedMove);
-            if (targetSq) {
-                setHintTargetSquare(targetSq);
-            }
-        } else {
-            setHintTargetSquare(null);
+        const fromSq = expectedMove.substring(0, 2);
+        const toSq = expectedMove.substring(2, 4);
+
+        if (nextPressCount === 1) {
+            setHintFromSquare(fromSq);
+            setHintToSquare(null);
+        } else if (nextPressCount >= 2) {
+            setHintFromSquare(fromSq);
+            setHintToSquare(toSq);
         }
     }, [hintPressCount, hintsUsed, maxHints, activePuzzle, t]);
 
@@ -308,9 +316,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                         return next;
                     });
                     setGestureEnabled(false);
-                    setHintPressCount(0);
-                    setHintTargetSquare(null);
-                    setDisplayedPrompt(activePuzzle.prompt);
+                    resetHintState();
                     setTimeout(() => {
                         let nextIndex = currentPuzzleIndex + 1;
                         while (puzzles && nextIndex < puzzles.length && (puzzleResults[nextIndex] === 'completed' || puzzleResults[nextIndex] === 'skipped')) {
@@ -336,9 +342,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                     setTimeout(() => {
                         isOpponentMovingRef.current = false;
                         setGestureEnabled(true);
-                        setHintPressCount(0);
-                        setHintTargetSquare(null);
-                        setDisplayedPrompt(activePuzzle.prompt);
+                        resetHintState();
                     }, 100);
                 }
             }, 500);
@@ -445,14 +449,10 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                     });
                     setGestureEnabled(false);
                     setBanner({ visible: true, isCorrect: true, feedback: undefined });
-                    setHintPressCount(0);
-                    setHintTargetSquare(null);
-                    setDisplayedPrompt(activePuzzle.prompt);
+                    resetHintState();
                 } else {
                     setGestureEnabled(true);
-                    setHintPressCount(0);
-                    setHintTargetSquare(null);
-                    setDisplayedPrompt(activePuzzle.prompt);
+                    resetHintState();
                 }
             }
         } else {
@@ -591,6 +591,61 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         ? ['1', '2', '3', '4', '5', '6', '7', '8']
         : ['8', '7', '6', '5', '4', '3', '2', '1'];
 
+    const renderHintOverlays = () => {
+        const squareSize = boardSize / 8;
+        const overlays = [];
+
+        if (hintFromSquare && hintFromSquare.length >= 2) {
+            const file = hintFromSquare[0];
+            const rank = hintFromSquare[1];
+            const col = letters.indexOf(file);
+            const row = numbers.indexOf(rank);
+            if (col !== -1 && row !== -1) {
+                overlays.push(
+                    <View
+                        key="hint-from"
+                        pointerEvents="none"
+                        style={[
+                            styles.hintFromOverlay,
+                            {
+                                width: squareSize,
+                                height: squareSize,
+                                left: col * squareSize,
+                                top: row * squareSize,
+                            }
+                        ]}
+                    />
+                );
+            }
+        }
+
+        if (hintToSquare && hintToSquare.length >= 2) {
+            const file = hintToSquare[0];
+            const rank = hintToSquare[1];
+            const col = letters.indexOf(file);
+            const row = numbers.indexOf(rank);
+            if (col !== -1 && row !== -1) {
+                overlays.push(
+                    <View
+                        key="hint-to"
+                        pointerEvents="none"
+                        style={[
+                            styles.hintToOverlay,
+                            {
+                                width: squareSize,
+                                height: squareSize,
+                                left: col * squareSize,
+                                top: row * squareSize,
+                            }
+                        ]}
+                    />
+                );
+            }
+        }
+
+        return overlays;
+    };
+
     return (
         <View style={styles.container}>
             {/* Header: Hints */}
@@ -669,21 +724,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                             withNumbers={false}
                             boardOrientation={isBlackActive ? 'black' : 'white'}
                         />
-                        {/* Custom Hint Target Square Overlay */}
-                        {hintTargetSquare && (
-                            <View
-                                pointerEvents="none"
-                                style={[
-                                    styles.hintTargetOverlay,
-                                    {
-                                        width: boardSize / 8,
-                                        height: boardSize / 8,
-                                        left: letters.indexOf(hintTargetSquare[0]) * (boardSize / 8),
-                                        top: numbers.indexOf(hintTargetSquare[1]) * (boardSize / 8),
-                                    }
-                                ]}
-                            />
-                        )}
+                        {renderHintOverlays()}
                     </View>
                     <View style={[styles.lettersRow, { width: boardSize }]}>
                         {letters.map(l => <Text key={l} style={styles.coordText}>{l}</Text>)}
@@ -783,16 +824,28 @@ const createStyles = (colors: any) => {
             shadowOpacity: 0.15,
             shadowRadius: 6,
         },
-        hintTargetOverlay: {
+        hintFromOverlay: {
             position: 'absolute',
             borderWidth: 3,
             borderColor: '#389FFF',
-            borderRadius: scale(4),
-            backgroundColor: 'rgba(56, 159, 255, 0.25)',
+            borderRadius: scale(8),
+            backgroundColor: 'rgba(56, 159, 255, 0.05)',
             shadowColor: '#389FFF',
             shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.8,
+            shadowOpacity: 0.5,
+            shadowRadius: scale(4),
+        },
+        hintToOverlay: {
+            position: 'absolute',
+            borderWidth: 3,
+            borderColor: '#34C759',
+            borderRadius: scale(25),
+            backgroundColor: 'rgba(52, 199, 89, 0.15)',
+            shadowColor: '#34C759',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.6,
             shadowRadius: scale(6),
+            transform: [{ scale: 0.85 }],
         },
         aiBubbleContainer: {
             marginTop: scale(14),
