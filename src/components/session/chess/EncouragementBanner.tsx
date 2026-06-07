@@ -127,7 +127,7 @@ export const EncouragementBanner: React.FC<EncouragementBannerProps> = ({
 
     if (!visible && (opacityAnim as any)._value === 0) return null;
 
-    const showFeedback = !!(feedback);
+    const showFeedback = !!(feedback && isCorrect);
 
     const bannerStyle = isCorrect
         ? styles.bannerCorrect
