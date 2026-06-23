@@ -1,155 +1,3 @@
-diff --git a/node_modules/react-native-chessboard/lib/commonjs/components/piece/index.js b/node_modules/react-native-chessboard/lib/commonjs/components/piece/index.js
-index 2ebf953..8e122df 100644
---- a/node_modules/react-native-chessboard/lib/commonjs/components/piece/index.js
-+++ b/node_modules/react-native-chessboard/lib/commonjs/components/piece/index.js
-@@ -76,13 +76,27 @@ const Piece = /*#__PURE__*/_react.default.memo( /*#__PURE__*/_react.default.forw
-     } = _ref2;
-     onMove(move.from, move.to);
-   }, [onMove]);
--  const moveTo = (0, _react.useCallback)((from, to) => {
-+  const moveTo = (0, _react.useCallback)((from, to, force = false, isSilent = false) => {
-     return new Promise(resolve => {
-       const move = validateMove(from, to);
-+      const targetSquare = move ? move.to : (force ? to : from);
-       const {
-         x,
-         y
--      } = toTranslation(move ? move.to : from);
-+      } = toTranslation(targetSquare);
-+      const isCastling = move && (move.flags.includes('k') || move.flags.includes('q'));
-+      if (isCastling) {
-+        let rookFrom = move.color === 'w' 
-+          ? (move.flags.includes('k') ? 'h1' : 'a1') 
-+          : (move.flags.includes('k') ? 'h8' : 'a8');
-+        let rookTo = move.color === 'w' 
-+          ? (move.flags.includes('k') ? 'f1' : 'd1') 
-+          : (move.flags.includes('k') ? 'f8' : 'd8');
-+        const rookRef = refs === null || refs === void 0 ? void 0 : refs.current?.[rookFrom]?.current;
-+        if (rookRef) {
-+          rookRef.moveTo(rookTo, true, true);
-+        }
-+      }
-       translateX.value = (0, _reactNativeReanimated.withTiming)(x, {
-         duration: moveDuration
-       }, () => {
-@@ -95,7 +109,7 @@ const Piece = /*#__PURE__*/_react.default.memo( /*#__PURE__*/_react.default.forw
-         offsetY.value = translateY.value;
-         isGestureActive.value = false;
- 
--        if (move) {
-+        if (move && !isSilent) {
-           (0, _reactNativeReanimated.runOnJS)(wrappedOnMoveForJSThread)({
-             move
-           }); // Ideally I must call the resolve method
-@@ -110,7 +124,7 @@ const Piece = /*#__PURE__*/_react.default.memo( /*#__PURE__*/_react.default.forw
-         }
-       });
-     });
--  }, [isGestureActive, moveDuration, offsetX, offsetY, toTranslation, translateX, translateY, validateMove, wrappedOnMoveForJSThread]);
-+  }, [isGestureActive, moveDuration, offsetX, offsetY, toTranslation, translateX, translateY, validateMove, wrappedOnMoveForJSThread, refs]);
-   const movePiece = (0, _react.useCallback)(to => {
-     const from = toPosition({
-       x: offsetX.value,
-@@ -120,8 +134,8 @@ const Piece = /*#__PURE__*/_react.default.memo( /*#__PURE__*/_react.default.forw
-   }, [moveTo, offsetX.value, offsetY.value, toPosition]);
-   (0, _react.useImperativeHandle)(ref, () => {
-     return {
--      moveTo: to => {
--        return moveTo(square, to);
-+      moveTo: (to, force = false, isSilent = false) => {
-+        return moveTo(square, to, force, isSilent);
-       },
-       enable: active => {
-         pieceEnabled.value = active;
-diff --git a/node_modules/react-native-chessboard/lib/commonjs/context/board-refs-context/index.js b/node_modules/react-native-chessboard/lib/commonjs/context/board-refs-context/index.js
-index fdc9379..f55a3a1 100644
---- a/node_modules/react-native-chessboard/lib/commonjs/context/board-refs-context/index.js
-+++ b/node_modules/react-native-chessboard/lib/commonjs/context/board-refs-context/index.js
-@@ -60,7 +60,7 @@ const BoardRefsContextProviderComponent = /*#__PURE__*/_react.default.forwardRef
-         from,
-         to
-       } = _ref2;
--      return pieceRefs === null || pieceRefs === void 0 ? void 0 : (_pieceRefs$current = pieceRefs.current) === null || _pieceRefs$current === void 0 ? void 0 : (_pieceRefs$current$fr = _pieceRefs$current[from].current) === null || _pieceRefs$current$fr === void 0 ? void 0 : (_pieceRefs$current$fr2 = _pieceRefs$current$fr.moveTo) === null || _pieceRefs$current$fr2 === void 0 ? void 0 : _pieceRefs$current$fr2.call(_pieceRefs$current$fr, to);
-+      return pieceRefs === null || pieceRefs === void 0 ? void 0 : (_pieceRefs$current = pieceRefs.current) === null || _pieceRefs$current === void 0 ? void 0 : (_pieceRefs$current$fr = _pieceRefs$current[from].current) === null || _pieceRefs$current$fr === void 0 ? void 0 : (_pieceRefs$current$fr2 = _pieceRefs$current$fr.moveTo) === null || _pieceRefs$current$fr2 === void 0 ? void 0 : _pieceRefs$current$fr2.call(_pieceRefs$current$fr, to, true);
-     },
-     highlight: _ref3 => {
-       var _squareRefs$current;
-diff --git a/node_modules/react-native-chessboard/lib/module/components/piece/index.js b/node_modules/react-native-chessboard/lib/module/components/piece/index.js
-index 9d3af78..5056114 100644
---- a/node_modules/react-native-chessboard/lib/module/components/piece/index.js
-+++ b/node_modules/react-native-chessboard/lib/module/components/piece/index.js
-@@ -55,13 +55,27 @@ const Piece = /*#__PURE__*/React.memo( /*#__PURE__*/React.forwardRef((_ref, ref)
-     } = _ref2;
-     onMove(move.from, move.to);
-   }, [onMove]);
--  const moveTo = useCallback((from, to) => {
-+  const moveTo = useCallback((from, to, force = false, isSilent = false) => {
-     return new Promise(resolve => {
-       const move = validateMove(from, to);
-+      const targetSquare = move ? move.to : (force ? to : from);
-       const {
-         x,
-         y
--      } = toTranslation(move ? move.to : from);
-+      } = toTranslation(targetSquare);
-+      const isCastling = move && (move.flags.includes('k') || move.flags.includes('q'));
-+      if (isCastling) {
-+        let rookFrom = move.color === 'w' 
-+          ? (move.flags.includes('k') ? 'h1' : 'a1') 
-+          : (move.flags.includes('k') ? 'h8' : 'a8');
-+        let rookTo = move.color === 'w' 
-+          ? (move.flags.includes('k') ? 'f1' : 'd1') 
-+          : (move.flags.includes('k') ? 'f8' : 'd8');
-+        const rookRef = refs === null || refs === void 0 ? void 0 : refs.current?.[rookFrom]?.current;
-+        if (rookRef) {
-+          rookRef.moveTo(rookTo, true, true);
-+        }
-+      }
-       translateX.value = withTiming(x, {
-         duration: moveDuration
-       }, () => {
-@@ -74,7 +88,7 @@ const Piece = /*#__PURE__*/React.memo( /*#__PURE__*/React.forwardRef((_ref, ref)
-         offsetY.value = translateY.value;
-         isGestureActive.value = false;
- 
--        if (move) {
-+        if (move && !isSilent) {
-           runOnJS(wrappedOnMoveForJSThread)({
-             move
-           }); // Ideally I must call the resolve method
-@@ -89,7 +103,7 @@ const Piece = /*#__PURE__*/React.memo( /*#__PURE__*/React.forwardRef((_ref, ref)
-         }
-       });
-     });
--  }, [isGestureActive, moveDuration, offsetX, offsetY, toTranslation, translateX, translateY, validateMove, wrappedOnMoveForJSThread]);
-+  }, [isGestureActive, moveDuration, offsetX, offsetY, toTranslation, translateX, translateY, validateMove, wrappedOnMoveForJSThread, refs]);
-   const movePiece = useCallback(to => {
-     const from = toPosition({
-       x: offsetX.value,
-@@ -99,8 +113,8 @@ const Piece = /*#__PURE__*/React.memo( /*#__PURE__*/React.forwardRef((_ref, ref)
-   }, [moveTo, offsetX.value, offsetY.value, toPosition]);
-   useImperativeHandle(ref, () => {
-     return {
--      moveTo: to => {
--        return moveTo(square, to);
-+      moveTo: (to, force = false, isSilent = false) => {
-+        return moveTo(square, to, force, isSilent);
-       },
-       enable: active => {
-         pieceEnabled.value = active;
-diff --git a/node_modules/react-native-chessboard/lib/module/context/board-refs-context/index.js b/node_modules/react-native-chessboard/lib/module/context/board-refs-context/index.js
-index c92032c..f54cf3e 100644
---- a/node_modules/react-native-chessboard/lib/module/context/board-refs-context/index.js
-+++ b/node_modules/react-native-chessboard/lib/module/context/board-refs-context/index.js
-@@ -42,7 +42,7 @@ const BoardRefsContextProviderComponent = /*#__PURE__*/React.forwardRef((_ref, r
-         from,
-         to
-       } = _ref2;
--      return pieceRefs === null || pieceRefs === void 0 ? void 0 : (_pieceRefs$current = pieceRefs.current) === null || _pieceRefs$current === void 0 ? void 0 : (_pieceRefs$current$fr = _pieceRefs$current[from].current) === null || _pieceRefs$current$fr === void 0 ? void 0 : (_pieceRefs$current$fr2 = _pieceRefs$current$fr.moveTo) === null || _pieceRefs$current$fr2 === void 0 ? void 0 : _pieceRefs$current$fr2.call(_pieceRefs$current$fr, to);
-+      return pieceRefs === null || pieceRefs === void 0 ? void 0 : (_pieceRefs$current = pieceRefs.current) === null || _pieceRefs$current === void 0 ? void 0 : (_pieceRefs$current$fr = _pieceRefs$current[from].current) === null || _pieceRefs$current$fr === void 0 ? void 0 : (_pieceRefs$current$fr2 = _pieceRefs$current$fr.moveTo) === null || _pieceRefs$current$fr2 === void 0 ? void 0 : _pieceRefs$current$fr2.call(_pieceRefs$current$fr, to, true);
-     },
-     highlight: _ref3 => {
-       var _squareRefs$current;
 diff --git a/node_modules/react-native-chessboard/lib/typescript/context/props-context/index.d.ts b/node_modules/react-native-chessboard/lib/typescript/context/props-context/index.d.ts
 index 42e9bea..12e69db 100644
 --- a/node_modules/react-native-chessboard/lib/typescript/context/props-context/index.d.ts
@@ -166,10 +14,19 @@ index 42e9bea..12e69db 100644
  } & {
      colors: Required<ChessboardColorsType>;
 diff --git a/node_modules/react-native-chessboard/src/components/piece/index.tsx b/node_modules/react-native-chessboard/src/components/piece/index.tsx
-index bbbd539..58d9685 100644
+index bbbd539..b63b21d 100644
 --- a/node_modules/react-native-chessboard/src/components/piece/index.tsx
 +++ b/node_modules/react-native-chessboard/src/components/piece/index.tsx
-@@ -43,6 +43,7 @@ const Piece = React.memo(
+@@ -27,6 +27,8 @@ type PieceProps = {
+ 
+ export type ChessPieceRef = {
+   moveTo: (square: Square) => Promise<Move | undefined>;
++  /** Visual-only animation: no chess.js, no validation, no onMove callback */
++  moveToVisualOnly: (square: Square) => Promise<void>;
+   enable: (activate: boolean) => void;
+ };
+ 
+@@ -43,6 +45,7 @@ const Piece = React.memo(
        const {
          durations: { move: moveDuration },
          gestureEnabled: gestureEnabledFromChessboardProps,
@@ -177,7 +34,7 @@ index bbbd539..58d9685 100644
        } = useChessboardProps();
  
        const gestureEnabled = useDerivedValue(
-@@ -57,8 +58,9 @@ const Piece = React.memo(
+@@ -57,8 +60,9 @@ const Piece = React.memo(
        const offsetY = useSharedValue(0);
        const scale = useSharedValue(1);
  
@@ -189,15 +46,10 @@ index bbbd539..58d9685 100644
  
        const validateMove = useCallback(
          (from: Square, to: Square) => {
-@@ -77,10 +79,37 @@ const Piece = React.memo(
-       );
- 
-       const moveTo = useCallback(
--        (from: Square, to: Square) => {
-+        (from: Square, to: Square, force: boolean = false, isSilent: boolean = false) => {
+@@ -80,6 +84,18 @@ const Piece = React.memo(
+         (from: Square, to: Square) => {
            return new Promise<Move | undefined>((resolve) => {
              const move = validateMove(from, to);
--            const { x, y } = toTranslation(move ? move.to : from);
 +            if (move && (move.flags.includes('c') || move.flags.includes('e'))) {
 +              let capturedSquare = move.to;
 +              if (move.flags.includes('e')) {
@@ -210,35 +62,10 @@ index bbbd539..58d9685 100644
 +                capturedPieceRef.enable(false);
 +              }
 +            }
-+            const targetSquare = move ? move.to : (force ? to : from);
-+            const { x, y } = toTranslation(targetSquare);
-+            const isCastling = move && (move.flags.includes('k') || move.flags.includes('q'));
-+            if (isCastling) {
-+              let rookFrom: Square = move.color === 'w' 
-+                ? (move.flags.includes('k') ? 'h1' : 'a1') 
-+                : (move.flags.includes('k') ? 'h8' : 'a8');
-+              let rookTo: Square = move.color === 'w' 
-+                ? (move.flags.includes('k') ? 'f1' : 'd1') 
-+                : (move.flags.includes('k') ? 'f8' : 'd8');
-+              const rookRef = refs?.current?.[rookFrom]?.current;
-+              if (rookRef) {
-+                rookRef.moveTo(rookTo, true, true);
-+              }
-+            }
-+
+             const { x, y } = toTranslation(move ? move.to : from);
              translateX.value = withTiming(x, { duration: moveDuration }, () => {
                offsetX.value = translateX.value;
-             });
-@@ -91,7 +120,7 @@ const Piece = React.memo(
-                 if (!isFinished) return;
-                 offsetY.value = translateY.value;
-                 isGestureActive.value = false;
--                if (move) {
-+                if (move && !isSilent) {
-                   runOnJS(wrappedOnMoveForJSThread)({ move });
-                   // Ideally I must call the resolve method
-                   // inside the "wrappedOnMoveForJSThread" after
-@@ -116,6 +145,7 @@ const Piece = React.memo(
+@@ -116,6 +132,7 @@ const Piece = React.memo(
            translateY,
            validateMove,
            wrappedOnMoveForJSThread,
@@ -246,18 +73,61 @@ index bbbd539..58d9685 100644
          ]
        );
  
-@@ -131,8 +161,8 @@ const Piece = React.memo(
+@@ -127,6 +144,36 @@ const Piece = React.memo(
+         [moveTo, offsetX.value, offsetY.value, toPosition]
+       );
+ 
++      const moveToVisualOnly = useCallback(
++        (to: Square) => {
++          return new Promise<void>((resolve) => {
++            const { x, y } = toTranslation(to);
++            translateX.value = withTiming(x, { duration: moveDuration }, () => {
++              offsetX.value = translateX.value;
++            });
++            translateY.value = withTiming(
++              y,
++              { duration: moveDuration },
++              (isFinished) => {
++                if (!isFinished) return;
++                offsetY.value = translateY.value;
++                isGestureActive.value = false;
++                runOnJS(resolve)();
++              }
++            );
++          });
++        },
++        [
++          isGestureActive,
++          moveDuration,
++          offsetX,
++          offsetY,
++          toTranslation,
++          translateX,
++          translateY,
++        ]
++      );
++
+       useImperativeHandle(
          ref,
          () => {
-           return {
--            moveTo: (to: Square) => {
--              return moveTo(square, to);
-+            moveTo: (to: Square, force: boolean = false, isSilent: boolean = false) => {
-+              return moveTo(square, to, force, isSilent);
+@@ -134,12 +181,15 @@ const Piece = React.memo(
+             moveTo: (to: Square) => {
+               return moveTo(square, to);
              },
++            moveToVisualOnly: (to: Square) => {
++              return moveToVisualOnly(to);
++            },
              enable: (active: boolean) => {
                pieceEnabled.value = active;
-@@ -177,7 +207,7 @@ const Piece = React.memo(
+             },
+           };
+         },
+-        [moveTo, pieceEnabled, square]
++        [moveTo, moveToVisualOnly, pieceEnabled, square]
+       );
+ 
+       const onStartTap = useCallback(
+@@ -177,7 +227,7 @@ const Piece = React.memo(
            return;
          }
          if (!gestureEnabled.value) return;
@@ -266,7 +136,7 @@ index bbbd539..58d9685 100644
          onStartTap(square);
        }, [
          gestureEnabled.value,
-@@ -221,12 +251,12 @@ const Piece = React.memo(
+@@ -221,12 +271,12 @@ const Piece = React.memo(
        const style = useAnimatedStyle(() => {
          return {
            position: 'absolute',
@@ -281,7 +151,7 @@ index bbbd539..58d9685 100644
            ],
          };
        });
-@@ -243,9 +273,7 @@ const Piece = React.memo(
+@@ -243,9 +293,7 @@ const Piece = React.memo(
            height: size * 2,
            borderRadius: size,
            zIndex: 0,
@@ -317,10 +187,36 @@ index 5410d88..c2b05b1 100644
                  startPosition={{ x, y }}
                  square={square}
 diff --git a/node_modules/react-native-chessboard/src/context/board-operations-context/index.tsx b/node_modules/react-native-chessboard/src/context/board-operations-context/index.tsx
-index 2fc9565..f9472eb 100644
+index 2fc9565..75d1879 100644
 --- a/node_modules/react-native-chessboard/src/context/board-operations-context/index.tsx
 +++ b/node_modules/react-native-chessboard/src/context/board-operations-context/index.tsx
-@@ -144,6 +144,7 @@ const BoardOperationsContextProviderComponent = React.forwardRef<
+@@ -134,6 +134,25 @@ const BoardOperationsContextProviderComponent = React.forwardRef<
+         },
+       });
+ 
++      let rookFrom: Square | undefined;
++      let rookTo: Square | undefined;
++
++      if (move.flags.includes('k')) {
++        rookFrom = move.color === 'w' ? 'h1' : 'h8';
++        rookTo = move.color === 'w' ? 'f1' : 'f8';
++      } else if (move.flags.includes('q')) {
++        rookFrom = move.color === 'w' ? 'a1' : 'a8';
++        rookTo = move.color === 'w' ? 'd1' : 'd8';
++      }
++
++      if (rookFrom && rookTo) {
++        const rookRef = pieceRefs?.current?.[rookFrom]?.current;
++        if (rookRef) {
++          // Visual-only: animate rook without triggering onMove/validation/callback
++          rookRef.moveToVisualOnly(rookTo);
++        }
++      }
++
+       setBoard(chess.board());
+     },
+     [
+@@ -144,6 +163,7 @@ const BoardOperationsContextProviderComponent = React.forwardRef<
        onChessboardMoveCallback,
        setBoard,
        turn,
@@ -328,7 +224,7 @@ index 2fc9565..f9472eb 100644
      ]
    );
  
-@@ -189,13 +190,22 @@ const BoardOperationsContextProviderComponent = React.forwardRef<
+@@ -189,13 +209,22 @@ const BoardOperationsContextProviderComponent = React.forwardRef<
  
        const validSquares = (chess.moves({
          square,
@@ -368,19 +264,6 @@ index 481593d..7b54c4c 100644
            },
            styles.container,
          ]}
-diff --git a/node_modules/react-native-chessboard/src/context/board-refs-context/index.tsx b/node_modules/react-native-chessboard/src/context/board-refs-context/index.tsx
-index 3966cd9..6eee264 100644
---- a/node_modules/react-native-chessboard/src/context/board-refs-context/index.tsx
-+++ b/node_modules/react-native-chessboard/src/context/board-refs-context/index.tsx
-@@ -76,7 +76,7 @@ const BoardRefsContextProviderComponent = React.forwardRef<
-     ref,
-     () => ({
-       move: ({ from, to }) => {
--        return pieceRefs?.current?.[from].current?.moveTo?.(to);
-+        return pieceRefs?.current?.[from].current?.moveTo?.(to, true);
-       },
-       highlight: ({ square, color }) => {
-         squareRefs.current?.[square].current.highlight({
 diff --git a/node_modules/react-native-chessboard/src/context/props-context/index.tsx b/node_modules/react-native-chessboard/src/context/props-context/index.tsx
 index 448aa9c..51198a1 100644
 --- a/node_modules/react-native-chessboard/src/context/props-context/index.tsx

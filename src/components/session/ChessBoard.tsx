@@ -21,6 +21,19 @@ import EncouragementBanner from './chess/EncouragementBanner';
 import type { ChessPuzzle } from '../../data/chessPuzzlesBank';
 
 // --- ChessPuzzle V2 Helper Functions ---
+function getTargetSquareFromUci(move: string): string | null {
+    if (!move || move.length < 4) return null;
+    return move.slice(2, 4);
+}
+
+function getCurrentExpectedUserMove(puzzle: any, currentStep: number): string | null {
+    if (!puzzle) return null;
+    if (puzzle.solution && puzzle.solution.length > 0) {
+        return puzzle.solution[currentStep]?.userMove || null;
+    }
+    return puzzle.moves ? puzzle.moves[currentStep] || null : null;
+}
+
 const getExpectedUserMove = (activePuzzle: any, stepIndex: number): string | null => {
     if (activePuzzle.solution && activePuzzle.solution.length > 0) {
         return activePuzzle.solution[stepIndex]?.userMove || null;
@@ -113,6 +126,10 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
 
     // Hints state
     const [hintsUsed, setHintsUsed] = useState(0);
+    const [hintPressCount, setHintPressCount] = useState(0);
+    const [hintFromSquare, setHintFromSquare] = useState<string | null>(null);
+    const [hintToSquare, setHintToSquare] = useState<string | null>(null);
+    const [displayedPrompt, setDisplayedPrompt] = useState(activePuzzle.prompt);
 
     // Gesture enabled state
     const [gestureEnabled, setGestureEnabled] = useState(true);
@@ -129,6 +146,18 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     const lastProcessedTriggerRef = useRef(0);
     const isOpponentMovingRef = useRef(false);
 
+    const resetHintState = useCallback(() => {
+        setHintPressCount(0);
+        setHintFromSquare(null);
+        setHintToSquare(null);
+        setDisplayedPrompt(activePuzzle.prompt);
+    }, [activePuzzle]);
+
+    // Reset hint states and text when active puzzle changes
+    useEffect(() => {
+        resetHintState();
+    }, [activePuzzle, resetHintState]);
+
     // Sync state during render when puzzle index changes (official React pattern)
     if (currentPuzzleIndex !== prevPuzzleIndex) {
         setPrevPuzzleIndex(currentPuzzleIndex);
@@ -142,7 +171,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         setIncorrectMove(false);
         setSolved(false);
         setGestureEnabled(true);
-        setBanner({ visible: false, isCorrect: true });
+        setBanner(prev => ({ ...prev, visible: false }));
     }
 
     // Sync state if FEN changes from outside (completely new lesson)
@@ -205,25 +234,45 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             return;
         }
 
-        const expectedMove = getExpectedUserMove(activePuzzle, currentMoveIndexRef.current);
+        const expectedMove = getCurrentExpectedUserMove(activePuzzle, currentMoveIndexRef.current);
         if (!expectedMove) return;
 
-        // Show where to move from (first 2 characters)
-        const fromSquare = expectedMove.substring(0, 2) as Square;
+        const nextPressCount = hintPressCount + 1;
+        setHintPressCount(nextPressCount);
         setHintsUsed(prev => prev + 1);
 
-        // Highlight the hint square on the board
-        if (chessboardRef.current) {
-            chessboardRef.current.resetAllHighlightedSquares();
-            chessboardRef.current.highlight({
-                square: fromSquare,
-                color: 'rgba(255, 249, 196, 0.8)',
-            });
+        // Get hint text
+        const puzzleHints = activePuzzle.hints || [];
+        let hintText = '';
+        if (Array.isArray(puzzleHints)) {
+            hintText = puzzleHints[nextPressCount - 1] || puzzleHints[puzzleHints.length - 1] || t('Подумай над лучшим ходом!');
+        } else if (puzzleHints && typeof puzzleHints === 'object') {
+            const hintsObj = puzzleHints as any;
+            if (nextPressCount === 1) hintText = hintsObj.soft;
+            else if (nextPressCount === 2) hintText = hintsObj.medium;
+            else hintText = hintsObj.strong;
+            hintText = hintText || t('Подумай над лучшим ходом!');
+        } else {
+            hintText = t('Подумай над лучшим ходом!');
         }
+
+        // Set the text in the AI bubble card (NO Alert/modal!)
+        setDisplayedPrompt(hintText);
 
         // Track hint usage
         lichessService.useHint();
-    }, [hintsUsed, maxHints, activePuzzle, t]);
+
+        const fromSq = expectedMove.substring(0, 2);
+        const toSq = expectedMove.substring(2, 4);
+
+        if (nextPressCount === 1) {
+            setHintFromSquare(fromSq);
+            setHintToSquare(null);
+        } else if (nextPressCount >= 2) {
+            setHintFromSquare(fromSq);
+            setHintToSquare(toSq);
+        }
+    }, [hintPressCount, hintsUsed, maxHints, activePuzzle, t]);
 
     const playOpponentMove = useCallback((currentStepIndex: number) => {
         const oppMove = getOpponentMove(activePuzzle, currentStepIndex);
@@ -267,6 +316,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                         return next;
                     });
                     setGestureEnabled(false);
+                    resetHintState();
                     setTimeout(() => {
                         let nextIndex = currentPuzzleIndex + 1;
                         while (puzzles && nextIndex < puzzles.length && (puzzleResults[nextIndex] === 'completed' || puzzleResults[nextIndex] === 'skipped')) {
@@ -292,6 +342,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                     setTimeout(() => {
                         isOpponentMovingRef.current = false;
                         setGestureEnabled(true);
+                        resetHintState();
                     }, 100);
                 }
             }, 500);
@@ -409,8 +460,10 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                     });
                     setGestureEnabled(false);
                     setBanner({ visible: true, isCorrect: true, feedback: undefined });
+                    resetHintState();
                 } else {
                     setGestureEnabled(true);
+                    resetHintState();
                 }
             }
         } else {
@@ -446,36 +499,42 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             const explanation = activePuzzle.failureExplanation;
 
             if (currentAttempts >= 2) {
-                // Вторая попытка неверная -> задача считается пропущенной/неверной
+                // Вторая попытка неверная -> показываем баннер, затем переходим к следующей задаче
                 const newResults = [...puzzleResults];
                 newResults[currentPuzzleIndex] = 'skipped';
                 setPuzzleResults(newResults);
-                
-                // Переходим к следующей задаче мгновенно
-                setBanner(prev => ({ ...prev, visible: false }));
-                setResetCounter(prev => prev + 1);
-                setGestureEnabled(true);
-                
-                let nextIndex = currentPuzzleIndex + 1;
-                while (puzzles && nextIndex < puzzles.length && (newResults[nextIndex] === 'completed' || newResults[nextIndex] === 'skipped')) {
-                    nextIndex++;
-                }
 
-                if (puzzles && nextIndex < puzzles.length) {
-                    setCurrentPuzzleIndex(nextIndex);
-                } else {
-                    const firstSkipped = puzzles ? puzzles.findIndex((_, idx) => {
-                        const result = newResults[idx];
-                        const count = skipCounts[idx] || 0;
-                        return result === 'skipped' && count < 2;
-                    }) : -1;
+                // Показываем баннер с ошибкой (НЕ сбрасываем доску мгновенно — фигура встанет плавно)
+                setBanner({ visible: true, isCorrect: false, feedback: explanation || undefined });
 
-                    if (firstSkipped !== -1) {
-                        setCurrentPuzzleIndex(firstSkipped);
-                    } else {
-                        onComplete();
+                // Через 2.2 сек скрываем баннер и переходим к следующей задаче
+                setTimeout(() => {
+                    setBanner(prev => ({ ...prev, visible: false }));
+
+                    // Сбрасываем доску визуально прямо перед переключением
+                    setResetCounter(prev => prev + 1);
+
+                    let nextIndex = currentPuzzleIndex + 1;
+                    while (puzzles && nextIndex < puzzles.length && (newResults[nextIndex] === 'completed' || newResults[nextIndex] === 'skipped')) {
+                        nextIndex++;
                     }
-                }
+
+                    if (puzzles && nextIndex < puzzles.length) {
+                        setCurrentPuzzleIndex(nextIndex);
+                    } else {
+                        const firstSkipped = puzzles ? puzzles.findIndex((_, idx) => {
+                            const result = newResults[idx];
+                            const count = skipCounts[idx] || 0;
+                            return result === 'skipped' && count < 2;
+                        }) : -1;
+
+                        if (firstSkipped !== -1) {
+                            setCurrentPuzzleIndex(firstSkipped);
+                        } else {
+                            onComplete();
+                        }
+                    }
+                }, 2200);
             } else {
                 setBanner({ visible: true, isCorrect: false, feedback: explanation || undefined });
                 
@@ -543,6 +602,61 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         ? ['1', '2', '3', '4', '5', '6', '7', '8']
         : ['8', '7', '6', '5', '4', '3', '2', '1'];
 
+    const renderHintOverlays = () => {
+        const squareSize = boardSize / 8;
+        const overlays = [];
+
+        if (hintFromSquare && hintFromSquare.length >= 2) {
+            const file = hintFromSquare[0];
+            const rank = hintFromSquare[1];
+            const col = letters.indexOf(file);
+            const row = numbers.indexOf(rank);
+            if (col !== -1 && row !== -1) {
+                overlays.push(
+                    <View
+                        key="hint-from"
+                        pointerEvents="none"
+                        style={[
+                            styles.hintFromOverlay,
+                            {
+                                width: squareSize,
+                                height: squareSize,
+                                left: col * squareSize,
+                                top: row * squareSize,
+                            }
+                        ]}
+                    />
+                );
+            }
+        }
+
+        if (hintToSquare && hintToSquare.length >= 2) {
+            const file = hintToSquare[0];
+            const rank = hintToSquare[1];
+            const col = letters.indexOf(file);
+            const row = numbers.indexOf(rank);
+            if (col !== -1 && row !== -1) {
+                overlays.push(
+                    <View
+                        key="hint-to"
+                        pointerEvents="none"
+                        style={[
+                            styles.hintToOverlay,
+                            {
+                                width: squareSize,
+                                height: squareSize,
+                                left: col * squareSize,
+                                top: row * squareSize,
+                            }
+                        ]}
+                    />
+                );
+            }
+        }
+
+        return overlays;
+    };
+
     return (
         <View style={styles.container}>
             {/* Header: Hints */}
@@ -589,7 +703,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             )}
 
             {/* AI Bubble Question */}
-            {activePuzzle.prompt && (
+            {displayedPrompt && (
                 <View style={styles.aiBubbleContainer}>
                     {/* Speech Bubble */}
                     <View style={styles.aiBubble}>
@@ -597,7 +711,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                             <Ionicons name="sparkles" size={scale(16)} color="#389FFF" style={styles.aiBubbleHeaderIcon} />
                             <Text style={styles.aiBubbleHeaderLabel}>Совет от ИИ</Text>
                         </View>
-                        <Text style={styles.aiBubbleText} numberOfLines={2} ellipsizeMode="tail">{activePuzzle.prompt}</Text>
+                        <Text style={styles.aiBubbleText} numberOfLines={2} ellipsizeMode="tail">{displayedPrompt}</Text>
                     </View>
                 </View>
             )}
@@ -621,6 +735,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                             withNumbers={false}
                             boardOrientation={isBlackActive ? 'black' : 'white'}
                         />
+                        {renderHintOverlays()}
                     </View>
                     <View style={[styles.lettersRow, { width: boardSize }]}>
                         {letters.map(l => <Text key={l} style={styles.coordText}>{l}</Text>)}
@@ -719,6 +834,14 @@ const createStyles = (colors: any) => {
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.15,
             shadowRadius: 6,
+        },
+        hintFromOverlay: {
+            position: 'absolute',
+            backgroundColor: 'rgba(255, 249, 196, 0.65)',
+        },
+        hintToOverlay: {
+            position: 'absolute',
+            backgroundColor: 'rgba(255, 249, 196, 0.65)',
         },
         aiBubbleContainer: {
             marginTop: scale(14),
