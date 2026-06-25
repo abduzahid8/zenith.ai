@@ -64,23 +64,35 @@ export function useTimer(options: UseTimerOptions = {}) {
             }
 
             if (lesson && hobby === 'chess') {
-                // Загружаем 8 тематических шахматных задач для доски (do step)
+                // Загружаем тематические шахматные задачи для доски (do step)
                 const { getThematicPuzzles } = require('../data/chessPuzzlesBank');
                 const puzzles = getThematicPuzzles(day);
-                if (lesson.do) {
+                if (lesson.do && Array.isArray(puzzles) && puzzles.length > 0) {
                     lesson.do.type = 'chess_puzzle';
                     lesson.do.puzzleFen = puzzles[0].fen;
                     lesson.do.puzzleMoves = puzzles[0].puzzleMoves;
-                    lesson.do.puzzles = puzzles.map((p: any, index: number) => ({
+                    lesson.do.puzzles = puzzles.map((p: any) => ({
+                        id: p.id,
                         fen: p.fen,
                         moves: p.puzzleMoves,
                         solution: p.solution,
+                        sideToMove: p.sideToMove,
                         successExplanation: p.successExplanation,
                         failureExplanation: p.failureExplanation,
                         prompt: p.prompt,
-                        hints: p.hints || ['Think about your best move!']
+                        hints: p.hints || ['Think about your best move!'],
+                        metadata: p.metadata,
+                        day: p.day,
+                        topic: p.topic,
+                        dayKey: p.dayKey,
                     }));
                 }
+            }
+
+            // Fix lesson hobby to match actual selected hobby
+            // (LESSON_BANK aliases like python→codingLessons return wrong hobby)
+            if (lesson && selectedHobby && lesson.hobby !== selectedHobby) {
+                lesson = { ...lesson, hobby: selectedHobby as HobbyId };
             }
 
             setCurrentLesson(lesson || null);
@@ -125,6 +137,7 @@ export function useTimer(options: UseTimerOptions = {}) {
             setActiveStep('do'); // Переходим к финальной шахматной задаче
         } else if (step === 'do') {
             if (currentLesson?.hobby === 'chess') {
+                gamificationStore.recordChessSolve();
                 gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
                 gamificationStore.incrementSessionsCompleted();
                 setActiveStep('complete');

@@ -92,9 +92,6 @@ export const PythonRunner: React.FC<PythonRunnerProps> = ({
         setStdout('');
         setStderr(null);
 
-        // Record code run event in gamification store (unlocks first_code_run badge)
-        recordCodeRun();
-
         webViewRef.current?.postMessage(JSON.stringify({ code }));
     };
 
@@ -112,6 +109,7 @@ export const PythonRunner: React.FC<PythonRunnerProps> = ({
                 setStderr(data.error || null);
                 setRunning(false);
                 onOutput(data.stdout || '', data.error || null);
+                recordCodeRun();
             }
         } catch (e) {
             console.error('[PythonRunner] Failed to parse WebView message:', e);

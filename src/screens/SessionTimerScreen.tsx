@@ -1,5 +1,4 @@
 import React, { useRef, useMemo } from 'react';
-import { BlurView } from 'expo-blur';
 import {
     View,
     Text,
@@ -16,7 +15,6 @@ import { useRouter } from 'expo-router';
 import PagerView from '../components/ui/PagerView';
 import { scale } from '../constants';
 import { fonts } from '../theme';
-import { APP_TAB_ROUTES } from '../config/navigation';
 import { useTimer } from '../hooks/useTimer';
 
 // Extracted components

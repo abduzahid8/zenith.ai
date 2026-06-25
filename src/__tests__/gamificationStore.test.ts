@@ -34,7 +34,7 @@ function resetStore() {
         weeklyFreezeUsed: false,
         weeklyFreezeWeekStart: null,
         freezeActivatedToday: false,
-        currentDay: { english: 1, chess: 1, chinese: 1, coding: 1 },
+        currentDay: { english: 1, chess: 1, chinese: 1, coding: 1, python: 1, reading: 1 },
         unitProgress: {},
         artifacts: [],
         repetitionItems: [],
@@ -68,18 +68,18 @@ const THREE_DAYS_AGO = dateOffset(-3);
 describe('lessonContent — банк уроков', () => {
     const { getLessonByDay, LESSON_BANK, HOBBY_META } = require('../data/lessonContent');
 
-    test('все 4 хобби присутствуют', () => {
-        expect(Object.keys(LESSON_BANK)).toEqual(['english', 'chinese', 'chess', 'coding']);
+    test('все 6 хобби присутствуют', () => {
+        expect(Object.keys(LESSON_BANK)).toEqual(['english', 'chinese', 'chess', 'coding', 'python', 'reading']);
     });
 
     test('каждое хобби имеет ровно 7 уроков', () => {
-        for (const hobby of ['english', 'chinese', 'chess', 'coding']) {
+        for (const hobby of ['english', 'chinese', 'chess', 'coding', 'python', 'reading']) {
             expect(LESSON_BANK[hobby]).toHaveLength(7);
         }
     });
 
     test('уроки пронумерованы правильно (1-7)', () => {
-        for (const hobby of ['english', 'chinese', 'chess', 'coding']) {
+        for (const hobby of ['english', 'chinese', 'chess', 'coding', 'python', 'reading']) {
             for (let day = 1; day <= 7; day++) {
                 const lesson = LESSON_BANK[hobby][day - 1];
                 expect(lesson.day).toBe(day);
@@ -100,7 +100,7 @@ describe('lessonContent — банк уроков', () => {
     });
 
     test('каждый урок содержит обязательные поля', () => {
-        for (const hobby of ['english', 'chinese', 'chess', 'coding']) {
+        for (const hobby of ['english', 'chinese', 'chess', 'coding', 'python', 'reading']) {
             for (const lesson of LESSON_BANK[hobby]) {
                 expect(lesson.id).toBeTruthy();
                 expect(lesson.learn.title).toBeTruthy();
@@ -130,11 +130,13 @@ describe('lessonContent — банк уроков', () => {
         expect(codeLesson?.do.starterCode).toBeTruthy();
     });
 
-    test('HOBBY_META содержит все 4 хобби', () => {
+    test('HOBBY_META содержит все хобби', () => {
         expect(HOBBY_META.english).toBeDefined();
         expect(HOBBY_META.chinese).toBeDefined();
         expect(HOBBY_META.chess).toBeDefined();
         expect(HOBBY_META.coding).toBeDefined();
+        expect(HOBBY_META.python).toBeDefined();
+        expect(HOBBY_META.reading).toBeDefined();
     });
 });
 
@@ -383,7 +385,7 @@ describe('gamificationStore — продвижение по дням', () => {
     });
 
     test('переход через 7 дней фиксирует завершение юнита', () => {
-        useGamificationStore.setState({ currentDay: { english: 7, chess: 1, chinese: 1, coding: 1 } } as any);
+        useGamificationStore.setState({ currentDay: { english: 7, chess: 1, chinese: 1, coding: 1, python: 1, reading: 1 } } as any);
         getState().advanceDay('english');
         expect(getState().currentDay.english).toBe(8);
         expect(getState().unitProgress['english_unit1']).toBe(true);

@@ -21,6 +21,7 @@ import { aiService, ChatMessage } from '../services/ai';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { useAppTheme } from '../theme/useAppTheme';
 import { scale } from '../constants';
+import { HOBBY_META, HobbyId } from '../data/lessonContent';
 
 interface DisplayMessage {
     id: string;
@@ -42,9 +43,8 @@ export const AICoachScreen: React.FC = () => {
 
     // Initial greeting
     useEffect(() => {
-        const hobbyName = selectedHobby === 'chess' ? 'шахматами' :
-            selectedHobby === 'video_editing' ? 'видео монтажом' :
-                selectedHobby === 'drawing' ? 'рисованием' : 'хобби';
+        const meta = HOBBY_META[selectedHobby as HobbyId];
+        const hobbyName = meta?.label?.toLowerCase() || 'хобби';
 
         setMessages([
             {

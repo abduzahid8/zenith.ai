@@ -791,6 +791,9 @@ const TASK_TEMPLATES_DATA: Record<string, Record<TaskType, TaskTemplate[]>> = {
     }
 };
 
+// coding hobby uses the same templates as python (same curriculum)
+TASK_TEMPLATES_DATA['coding'] = TASK_TEMPLATES_DATA['python']!;
+
 // Helper Functions that now use the constant data/logic (can stay or be refactored)
 // For backward compatibility and specific logic (like 'recovery'), we keep them but can make them pick from the templates.
 

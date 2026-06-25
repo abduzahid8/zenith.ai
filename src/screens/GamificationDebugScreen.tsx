@@ -21,7 +21,7 @@ import { useRouter } from 'expo-router';
 import { useGamificationStore, BADGE_DEFINITIONS, getDailyProgress } from '../store/gamificationStore';
 import { getLessonByDay, LESSON_BANK, HOBBY_META, HobbyId } from '../data/lessonContent';
 
-const HOBBIES: HobbyId[] = ['english', 'chinese', 'chess', 'coding'];
+const HOBBIES: HobbyId[] = ['english', 'chinese', 'chess', 'coding', 'python', 'reading'];
 
 export const GamificationDebugScreen: React.FC = () => {
     const router = useRouter();

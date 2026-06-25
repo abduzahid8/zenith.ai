@@ -349,7 +349,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         }
     }, [activePuzzle, puzzles, currentPuzzleIndex, onComplete]);
 
-    const handleMove = useCallback(({ move, state }: { move: Move; state: any }) => {
+    const handleMove = useCallback(({ move }: { move: Move }) => {
         if (solvedRef.current || !gestureEnabled || isOpponentMovingRef.current) return;
 
         // Build the UCI move string from the move object

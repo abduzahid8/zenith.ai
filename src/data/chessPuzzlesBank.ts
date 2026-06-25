@@ -196,8 +196,8 @@ export const day3_opening_initiative: ChessPuzzle[] = [
     ],
     prompt: "Черный конь на королевском фланге связан. Разрушь защиту и займи центр с темпом.",
     hints: {
-      soft: "Обрати внимание на связку твоего слона g5 и черного коня f6.",
-      medium: "Разменяй слона на коня, чтобы освободить поле d5 для атаки конем.",
+      soft: "Обрати внимание на связку твоего слона с конем противника на королевском фланге.",
+      medium: "Разменяй слона на коня, чтобы освободить центральное поле для атаки конем.",
       strong: "Забери коня на f6 слоном, а после взятия ферзем сыграй конем на d5."
     },
     successExplanation: "Превосходно! Взятие на f6 разрушило оборону черных, а ход Nd5 позволил коню занять доминирующую центральную позицию с нападением на ферзя.",
@@ -606,15 +606,31 @@ export const chessLessonPuzzles: Record<string, ChessPuzzle[]> = {
       metadata: { moveCount: 2 }
     },
     {
-      // P6 remains untouched as explicitly requested by the user
+      id: "day2_piece_value_p6",
+      day: 2,
+      topic: "day2_piece_value",
+      skill: "Выбор цели — защищенная vs незащищенная",
+      goalType: "win_material",
       fen: "4k3/8/8/3p4/4p3/2N5/8/4K3 w - - 0 1",
+      sideToMove: "w",
       moves: ["c3d5"],
+      solution: [
+        {
+          userMove: "c3d5",
+          opponentMove: null,
+          explanation: "Верно! Пешка на d5 беззащитна, а на e4 — защищена."
+        }
+      ],
       prompt: "Одна из пешек соперника находится под защитой, а другая нет. Сделай верный выбор!",
-      hints: [
-        "Помни, что черные пешки ходят сверху вниз и бьют по диагонали.",
-        "Пешка d5 защищает пешку e4. Если взять на e4, твоего коня съедят.",
-        "Забери незащищенную пешку на d5 ходом c3-d5."
-      ]
+      hints: {
+        soft: "Одна из чёрных пешек прикрывает другую. Выбери безопасную цель.",
+        medium: "Не бери ту пешку, которая под защитой соседки — иначе потеряешь коня.",
+        strong: "Забери незащищенную пешку на d5 ходом c3-d5."
+      },
+      successExplanation: "Верно! Конь забирает беззащитную пешку на d5.",
+      failureExplanation: "Пешка на e4 защищена пешкой d5. Нужно взять ту, что без защиты.",
+      learningPoint: "Распознавание защищённых и незащищённых фигур при выборе цели.",
+      metadata: { moveCount: 1 }
     },
     {
       id: "day2_piece_value_p7",
@@ -685,7 +701,7 @@ export const chessLessonPuzzles: Record<string, ChessPuzzle[]> = {
   day3_opening_initiative: day3_opening_initiative,
 
 
-  day4_castling: [
+  day4_king_safety: [
     // ── Задача 1 ── Одноходовая | castle_safety
     {
       id: "day4_task1",
@@ -877,18 +893,18 @@ export const chessLessonPuzzles: Record<string, ChessPuzzle[]> = {
       topic: "Безопасность короля",
       skill: "Битые поля и невозможность рокировки",
       goalType: "castle_safety",
-      fen: "r1bqk2r/ppp2ppp/2n2n2/3pp3/1b2P3/2NP1N2/PPP1BPPP/R1BQK2R w KQkq - 2 7",
+      fen: "r1bqk2r/ppp2ppp/2n2n2/3pp3/Nb2P3/5N2/PPP1BPPP/R1BQK2R w KQkq - 2 7",
       sideToMove: "w",
       solution: [
         {
           userMove: "c1d2",
           opponentMove: "b4d2",
-          explanation: "Белые разменивают слона, который перекрывал угрозу. Чёрные берут слона."
+          explanation: "Белые разменивают слона, убирая блокировщика. Чёрные берут слона."
         },
         {
           userMove: "d1d2",
           opponentMove: "e8g8",
-          explanation: "Ферзь берёт, освобождая поле f1 для короля. Чёрные рокируют."
+          explanation: "Ферзь берёт, освобождая путь для короля. Чёрные рокируют."
         },
         {
           userMove: "e1g1",
@@ -920,9 +936,9 @@ export const chessLessonPuzzles: Record<string, ChessPuzzle[]> = {
       sideToMove: "w",
       solution: [
         {
-          userMove: "d4d5",
+          userMove: "e4d5",
           opponentMove: "c6e7",
-          explanation: "Белые продвигают пешку, вскрывая напряжение. Чёрный конь вынужден отступить."
+          explanation: "Белые берут пешку, вскрывая центр. Чёрный конь вынужден отступить."
         },
         {
           userMove: "f1e2",
@@ -946,6 +962,64 @@ export const chessLessonPuzzles: Record<string, ChessPuzzle[]> = {
       learningPoint: "Когда центр вскрывается, у тебя есть только несколько ходов, чтобы укрыть короля. Не трать их на жадность.",
       tags: ["открытый_центр", "вскрытая_атака", "рокировка", "многоходовая", "мини_босс"],
       metadata: { difficulty: 5, moveCount: 3, multiStep: true, isStatic: true, estimatedTimeSec: 60, engineChecked: false }
+    },
+
+    // ── Задача 9 ── Одноходовая | профилактика коневой вилки
+    {
+      id: "day4_task9",
+      day: 4,
+      topic: "Безопасность короля",
+      skill: "Профилактика после рокировки",
+      goalType: "best_move",
+      fen: "r1bq1rk1/pppp1ppp/2n2n2/2b1p3/2B1P3/2NP4/PPP2PPP/R1BQ1RK1 w - - 0 7",
+      sideToMove: "w",
+      solution: [
+        {
+          userMove: "h2h3",
+          opponentMove: null,
+          explanation: "Пешка на h3 не даёт чёрному коню прыгнуть на g4 и угрожать вилкой на f2."
+        }
+      ],
+      prompt: "Твой король уже в укрытии, но враг прощупывает слабые поля рядом. Предотврати угрозу.",
+      hints: {
+        soft: "Посмотри на самое слабое поле вокруг короля.",
+        medium: "Чёрный конь хочет прыгнуть на уязвимое поле рядом с королем и напасть на твои ценные фигуры.",
+        strong: "Ход пешкой на h3 отнимет у коня поле g4 и обезопасит королевский фланг."
+      },
+      successExplanation: "Отлично! Ход h3 не даёт чёрному коню прыгнуть на g4. Если бы конь туда попал, он угрожал бы вилкой на f2 — атакой на ферзя и ладью. Профилактика — лучшая защита.",
+      failureExplanation: "Оставив поле g4 без присмотра, ты позволяешь коню противника ворваться на f2 с вилкой.",
+      learningPoint: "После рокировки следи за полем f2 — оно остаётся самым слабым. Один профилактический ход пешкой (h3) нейтрализует угрозу коня.",
+      tags: ["профилактика", "безопасность_короля", "поле_f2", "одноходовая"],
+      metadata: { difficulty: 2, moveCount: 1, multiStep: false, isStatic: true, estimatedTimeSec: 30, engineChecked: false }
+    },
+
+    // ── Задача 10 ── Одноходовая | профилактика связки
+    {
+      id: "day4_task10",
+      day: 4,
+      topic: "Безопасность короля",
+      skill: "Профилактика против связки",
+      goalType: "best_move",
+      fen: "r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 0 7",
+      sideToMove: "w",
+      solution: [
+        {
+          userMove: "h2h3",
+          opponentMove: null,
+          explanation: "Пешка на h3 не даёт чёрному слону выйти на g4 и связать коня с ферзём."
+        }
+      ],
+      prompt: "Враг целится в твоего коня, чтобы обездвижить его связкой. Предотврати угрозу.",
+      hints: {
+        soft: "Посмотри, какая фигура соперника может стать очень активной.",
+        medium: "Чёрный слон хочет выйти на активную позицию и обездвижить твоего коня связкой.",
+        strong: "Ход пешкой на h3 навсегда закроет слону дорогу на g4."
+      },
+      successExplanation: "Верно! Ход h3 не даёт чёрному слону выйти на g4 и связать коня с ферзём. Связка сковала бы твои фигуры и ослабила защиту короля.",
+      failureExplanation: "Пропустив h3, ты позволяешь слону противника создать неприятную связку. Связанный конь не сможет защищать короля.",
+      learningPoint: "Связка коня на f3 — одна из частых угроз после рокировки. Ход h3 заранее снимает эту проблему.",
+      tags: ["профилактика", "связка", "безопасность_короля", "одноходовая"],
+      metadata: { difficulty: 2, moveCount: 1, multiStep: false, isStatic: true, estimatedTimeSec: 30, engineChecked: false }
     }
   ],
 
@@ -1545,7 +1619,7 @@ export const chessLessonPuzzles: Record<string, ChessPuzzle[]> = {
       prompt: "Найди скрытую слабость позиции и выиграй фигуру соперника.",
       hints: {
         soft: "Один из слонов соперника защищен лишь косвенно.",
-        medium: "Используй фигуру на c1, чтобы создать вскрытое нападение.",
+        medium: "У тебя есть фигура за конем, которая может атаковать ценные фигуры врага через вскрытие линии.",
         strong: "Забери конем слона на e6, открывая ладье путь к вражескому ферзю."
       },
       successExplanation: "Великолепно! Ты нашел двойную угрозу через вскрытое нападение.",
@@ -1644,7 +1718,7 @@ export const chessLessonPuzzles: Record<string, ChessPuzzle[]> = {
           explanation: "Шах и мат! Конь наносит красивейший спёртый мат королю, зажатому собственными фигурами."
         }
       ],
-      prompt: "Защитники короля отвлечены. Нанеси решающий удар.",
+      prompt: "Защитники вражеского короля отвлечены и не могут прийти на помощь. Нанеси решающий удар конём!",
       hints: {
         soft: "Король соперника зажат собственными пешками и ладьей.",
         medium: "Конь может проникнуть в лагерь врага с неотразимым шахом.",
@@ -1685,7 +1759,7 @@ export const chessLessonPuzzles: Record<string, ChessPuzzle[]> = {
       ],
       prompt: "Защита короля ослаблена. Проведи форсированную матовую атаку.",
       hints: {
-        soft: "Защитник короля на f8 перегружен.",
+        soft: "Защитник короля перегружен — он занят сразу двумя важными задачами.",
         medium: "Жертва ладьи заставит короля выйти на уязвимое поле.",
         strong: "Забери ладью соперника на f8 своей ладьей, а затем дай мат ферзем на d8."
       },
@@ -1808,7 +1882,7 @@ export const chessLessonPuzzles: Record<string, ChessPuzzle[]> = {
       prompt: "Один ход меняет оценку позиции. Найди путь к победе.",
       hints: {
         soft: "Ищи способ завлечь ладью соперника на неудачное поле.",
-        medium: "Безумная жертва ферзя на g8 вынудит ладью заблокировать короля.",
+        medium: "Пожертвуй самого сильного, чтобы заманить ладью на неудобное поле перед королем.",
         strong: "Поставь ферзя под удар ладьи на g8, освобождая поле f7 для коня."
       },
       successExplanation: "Блестяще! Ты нашел классическую матовую комбинацию с отвлечением и спёртым матом.",
@@ -1830,12 +1904,12 @@ export const getThematicPuzzles = (day: number): ChessPuzzleTask[] => {
     'day1_board_geometry',
     'day2_piece_value',
     'day3_opening_initiative',
-    'day4_castling',
+    'day4_king_safety',
     'day5_check_mate_stalemate',
     'day6_fork_double_attack',
     'day7_review_mixed'
   ];
-  const key = keys[day - 1] || 'day1_board_geometry';
+  const key = keys[day - 1] || keys[(day - 1) % 7];
   const puzzles = chessLessonPuzzles[key] || [];
   return puzzles.map((p, idx) => ({
     id: p.id || `chess_puzzle_${day}_${idx + 1}`,
@@ -1859,8 +1933,6 @@ export const getThematicPuzzles = (day: number): ChessPuzzleTask[] => {
     dayKey: p.dayKey,
   }));
 };
-
-export const ACTIVE_CHESS_PUZZLES: ChessPuzzleTask[] = getThematicPuzzles(1);
 
 export function validateChessPuzzles(puzzles: ChessPuzzleTask[]) {
   const fens = new Set<string>();

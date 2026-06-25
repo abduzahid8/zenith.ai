@@ -16,7 +16,6 @@ import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useT } from '../../store/languageStore';
 import { aiService } from '../../services/ai';
-import ChessBoard from './ChessBoard';
 import PythonRunner from './PythonRunner';
 import { TaskStep } from '../../data/lessonContent';
 
@@ -61,14 +60,6 @@ export const DoStep: React.FC<DoStepProps> = ({
         setStdout(out);
         setStderr(err);
         setAnswer(out); // The output of the code serves as the user's primary answer
-    };
-
-    // Handle chess board completion
-    const handleChessComplete = () => {
-        setIsSolved(true);
-        setAnswer('Успешно решено!');
-        // Automatically check and complete
-        handleCheckAnswer('Успешно решено!');
     };
 
     const handleCheckAnswer = async (forcedAnswer?: string) => {
@@ -132,19 +123,6 @@ export const DoStep: React.FC<DoStepProps> = ({
     // Render interactive practice element based on type
     const renderInteractiveInput = () => {
         switch (task.type) {
-            case 'chess_puzzle':
-                return (
-                    <ChessBoard
-                        fen={task.puzzleFen || ''}
-                        puzzleMoves={task.puzzleMoves || []}
-                        puzzles={task.puzzles}
-                        question={task.prompt}
-                        maxHints={3}
-                        onComplete={handleChessComplete}
-                        isLastStep={isLastStep}
-                    />
-                );
-
             case 'code':
                 return (
                     <PythonRunner

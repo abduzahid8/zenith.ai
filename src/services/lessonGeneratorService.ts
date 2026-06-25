@@ -19,6 +19,8 @@ const HOBBY_CONTEXT: Record<HobbyId, string> = {
   chinese: 'китайский язык (иероглифы, пиньинь, базовые фразы, тоны)',
   chess:   'шахматы (стратегия, тактика, дебюты, эндшпили)',
   coding:  'программирование на Python (синтаксис, алгоритмы, практические задачи)',
+  python:  'программирование на Python (синтаксис, алгоритмы, практические задачи)',
+  reading: 'чтение и работа с информацией (техники чтения, анализ, конспектирование, критическое мышление)',
 };
 
 const TASK_TYPE_BY_HOBBY: Record<HobbyId, TaskType[]> = {
@@ -26,6 +28,8 @@ const TASK_TYPE_BY_HOBBY: Record<HobbyId, TaskType[]> = {
   chinese: ['fill_blank', 'translate', 'free_text'],
   chess:   ['chess_puzzle', 'free_text'],
   coding:  ['code', 'free_text'],
+  python:  ['code', 'free_text'],
+  reading: ['free_text'],
 };
 
 // ─────────────────────────────────────────────
@@ -254,6 +258,35 @@ ${hobby === 'chess' ? 'Выбери тип задания: "chess_puzzle".' : `�
           type: 'code',
           prompt: 'Напиши программу, которая спрашивает число от пользователя и определяет: положительное оно, отрицательное или ноль.',
           starterCode: 'number = float(input("Введи число: "))\n# Напиши условия\n',
+        },
+      },
+      python: {
+        id: `python_fallback_d${dayNumber}`,
+        hobby: 'python',
+        day: dayNumber,
+        learn: {
+          title: 'Повторение: основы Python',
+          body: 'Ключевые конструкции Python: переменные (x = 5), условия (if x > 0:), циклы (for i in range(10):), функции (def my_func():), ввод (input()), вывод (print()).',
+          keywords: ['переменная', 'условие', 'цикл', 'функция', 'Python'],
+        },
+        do: {
+          type: 'code',
+          prompt: 'Напиши программу, которая спрашивает число от пользователя и определяет: положительное оно, отрицательное или ноль.',
+          starterCode: 'number = float(input("Введи число: "))\n# Напиши условия\n',
+        },
+      },
+      reading: {
+        id: `reading_fallback_d${dayNumber}`,
+        hobby: 'reading',
+        day: dayNumber,
+        learn: {
+          title: 'Повторение: техники чтения',
+          body: 'Эффективные техники чтения: SQ3R (просмотр → вопросы → чтение → пересказ → повтор), активное чтение с пометками, skimming (быстрый просмотр), scanning (поиск информации), метод Cornell для конспектов.',
+          keywords: ['SQ3R', 'активное чтение', 'skimming', 'Cornell', 'конспект'],
+        },
+        do: {
+          type: 'free_text',
+          prompt: 'Прочитай любую короткую статью, применив хотя бы одну технику чтения, и запиши: что прочитал, какую технику применил, что понял нового.',
         },
       },
     };
