@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
     View,
     ScrollView,
@@ -22,6 +22,9 @@ import { useTaskStore } from '../../store/taskStore';
 import { TaskType } from '../../services/supabase/types';
 import { useGamificationStore } from '../../store/gamificationStore';
 import { useUserProfileStore } from '../../store/userProfileStore';
+import { useGoalStore } from '../../store/goalStore';
+import { GoalSnapshot } from '../../types/goals';
+import GoalProgressBar from '../../components/goal/GoalProgressBar';
 
 const booksImage = require('../../../assets/images/home-books.png');
 const targetImage = require('../../../assets/images/home-target.png');
@@ -50,7 +53,16 @@ const HomeTab: React.FC<HomeTabProps> = ({
     const t = useT();
     const { dailyTasks } = useTaskStore();
     const [showAllDoneModal, setShowAllDoneModal] = useState(false);
+    const [goalSnapshot, setGoalSnapshot] = useState<GoalSnapshot | null>(null);
     const insightsLabel = Platform.OS === 'ios' ? t('Время Хобби') : t('Экранное время');
+
+    const { selectedHobby } = useUserProfileStore();
+    useEffect(() => {
+        if (selectedHobby) {
+            const snapshot = useGoalStore.getState().getSnapshot(selectedHobby as any);
+            setGoalSnapshot(snapshot);
+        }
+    }, [selectedHobby]);
 
     const handleNavigate = (route: string) => {
         console.log('[HomeTab] handleNavigate - route:', route);
@@ -124,6 +136,10 @@ const HomeTab: React.FC<HomeTabProps> = ({
             contentContainerStyle={{ paddingBottom: scale(100), flexGrow: 1, justifyContent: 'flex-end' }}
             showsVerticalScrollIndicator={false}
         >
+            {goalSnapshot && (
+                <GoalProgressBar snapshot={goalSnapshot} />
+            )}
+
             <TouchableOpacity
                 onPress={handleStartLesson}
                 activeOpacity={0.8}

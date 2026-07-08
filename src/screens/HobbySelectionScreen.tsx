@@ -76,7 +76,7 @@ export default function HobbySelectionScreen() {
         } finally {
             resetTasks(); // Clear stale task cache from previous hobby
             setSelectedHobby(selectedId);
-            router.push('/subscription');
+            router.push(`/goal-setup?hobbyId=${selectedId}`);
         }
     };
 

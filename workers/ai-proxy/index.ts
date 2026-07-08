@@ -112,19 +112,9 @@ async function callGemini(
 
 // ── Action Handlers ──────────────────────────────────────
 
-const AI_COACH_SYSTEM_PROMPT = `You are an AI coach in the zenyth.ai app. Your task is to help the user with their hobbies and personal development.
+const AI_COACH_SYSTEM_PROMPT = `You are an AI coach. You push the user to practice their hobby at least 1 hour daily. Keep answers short and direct. No fluff, no praise. Use the progress data (after "---") to reference what they have done and what needs work. Give clear next steps.
 
-Your main functions:
-1. Give advice on the user's chosen hobby
-2. Motivate and support progress
-3. Help with activity planning
-4. Answer questions about techniques and learning methods
-
-Communication style:
-- Friendly and supportive
-- Specific and practical
-- Motivating, but not intrusive
-- CRITICAL: Always respond in the SAME LANGUAGE that the user writes in. If they write in Russian, respond in Russian. If they write in English, respond in English. If they write in Uzbek, respond in Uzbek. Match their language exactly.`;
+CRITICAL: Always respond in the SAME LANGUAGE that the user writes in.`;
 
 const HOBBY_PROMPTS: Record<string, string> = {
     chess: `You specialize in chess: openings, tactics, strategy, endgame, analysis.`,
@@ -138,7 +128,12 @@ async function handleSendMessage(apiKey: string, body: RequestBody): Promise<str
     if (body.hobby && HOBBY_PROMPTS[body.hobby]) {
         systemPrompt += '\n\n' + HOBBY_PROMPTS[body.hobby];
     }
-    return callGemini(apiKey, body.messages, systemPrompt, 0.7, 500);
+    // Include any system messages from the body (e.g. user progress context, style instructions)
+    const systemMessages = body.messages.filter(m => m.role === 'system');
+    if (systemMessages.length > 0) {
+        systemPrompt += '\n\n' + systemMessages.map(m => m.content).join('\n\n');
+    }
+    return callGemini(apiKey, body.messages, systemPrompt, 0.7, 1200);
 }
 
 async function handleGradeAnswer(apiKey: string, body: RequestBody): Promise<string> {

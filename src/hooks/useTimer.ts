@@ -12,7 +12,9 @@ import { useHobbyTimeStore } from '../store/hobbyTimeStore';
 import { sessionService } from '../services/supabase/sessions';
 import { useT } from '../store/languageStore';
 import { useGamificationStore } from '../store/gamificationStore';
-import { HobbyId, LessonContent } from '../data/lessonContent';
+import { useGoalStore } from '../store/goalStore';
+import { HobbyId, LessonContent, HOBBY_META } from '../data/lessonContent';
+import { getMaxTasksPerDay } from '../domain/tasks/rules';
 
 
 export type TimerStatus = 'idle' | 'running' | 'paused';
@@ -108,6 +110,20 @@ export function useTimer(options: UseTimerOptions = {}) {
         }
     }, [selectedHobby, gamificationStore.currentDay, gamificationStore.artifacts]);
 
+    // Session weight by step depth — deeper work counts more
+    const STEP_WEIGHT: Record<string, number> = {
+        learn: 1,
+        do: 2,
+        deepen1: 3,
+        deepen2: 4,
+    };
+    // Difficulty adjustment by step depth — harder steps grow skill faster
+    const STEP_DIFFICULTY: Record<string, 'completed_easy' | 'completed_struggled'> = {
+        do: 'completed_easy',
+        deepen1: 'completed_easy',
+        deepen2: 'completed_easy',
+    };
+
     const handleStepComplete = useCallback((step: string, userInput?: string, aiFeedback?: string) => {
         console.log('[useTimer] Completing step:', step);
         
@@ -138,12 +154,18 @@ export function useTimer(options: UseTimerOptions = {}) {
         } else if (step === 'do') {
             if (currentLesson?.hobby === 'chess') {
                 gamificationStore.recordChessSolve();
+                useGoalStore.getState().recordDailyAction('chess' as HobbyId, STEP_WEIGHT[step] || 1, currentLesson.learn.title);
+                useGoalStore.getState().adjustDifficulty('chess' as HobbyId, STEP_DIFFICULTY[step] || 'completed_easy');
                 gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
                 gamificationStore.incrementSessionsCompleted();
                 setActiveStep('complete');
             } else if (isPremium && currentLesson?.deepen1) {
                 setActiveStep('deepen1');
             } else {
+                if (currentLesson?.hobby) {
+                    useGoalStore.getState().recordDailyAction(currentLesson.hobby as HobbyId, STEP_WEIGHT[step] || 1, currentLesson.learn.title);
+                    useGoalStore.getState().adjustDifficulty(currentLesson.hobby as HobbyId, STEP_DIFFICULTY[step] || 'completed_easy');
+                }
                 gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
                 gamificationStore.incrementSessionsCompleted();
                 setActiveStep('complete');
@@ -152,11 +174,19 @@ export function useTimer(options: UseTimerOptions = {}) {
             if (isPremium && currentLesson?.deepen2) {
                 setActiveStep('deepen2');
             } else {
+                if (currentLesson?.hobby) {
+                    useGoalStore.getState().recordDailyAction(currentLesson.hobby as HobbyId, STEP_WEIGHT[step] || 1, currentLesson.learn.title);
+                    useGoalStore.getState().adjustDifficulty(currentLesson.hobby as HobbyId, STEP_DIFFICULTY[step] || 'completed_easy');
+                }
                 gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
                 gamificationStore.incrementSessionsCompleted();
                 setActiveStep('complete');
             }
         } else if (step === 'deepen2') {
+            if (currentLesson?.hobby) {
+                useGoalStore.getState().recordDailyAction(currentLesson.hobby as HobbyId, STEP_WEIGHT[step] || 1, currentLesson.learn.title);
+                useGoalStore.getState().adjustDifficulty(currentLesson.hobby as HobbyId, STEP_DIFFICULTY[step] || 'completed_easy');
+            }
             gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
             gamificationStore.incrementSessionsCompleted();
             setActiveStep('complete');
@@ -191,7 +221,7 @@ export function useTimer(options: UseTimerOptions = {}) {
 
     // Sync tasks from store whenever dailyTasks changes
     useEffect(() => {
-        const maxTasks = isPremium ? 4 : 3;
+        const maxTasks = getMaxTasksPerDay(isPremium);
         const orderedFiltered = ENGINE_TYPES_ORDER
             .flatMap(type => dailyTasks.filter(task => task.type === type && task.status !== 'skipped'))
             .slice(0, maxTasks);
@@ -564,6 +594,29 @@ export function useTimer(options: UseTimerOptions = {}) {
         finishSession();
     }, [dontShowAgainChecked, finishSession]);
 
+    const buildUserContext = useCallback((): string => {
+        const g = useGamificationStore.getState();
+        const p = useUserProfileStore.getState();
+        const hobby = (selectedHobby || p.selectedHobby) as HobbyId | null;
+        if (!hobby) return '';
+        const meta = HOBBY_META[hobby];
+        const day = g.currentDay[hobby] || 1;
+        const week = Math.ceil(day / 7);
+        const list: string[] = [];
+        if (p.userName) list.push(`Name: ${p.userName}`);
+        list.push(`Hobby: ${meta?.label || hobby} (day ${day}, week ${week})`);
+        list.push(`Streak: ${g.currentStreak} days`);
+        list.push(`Sessions today: ${g.sessionsCompletedToday}`);
+        list.push(`Artifacts saved: ${g.artifacts.length}`);
+        list.push(`Badges: ${g.unlockedBadges.length}`);
+        list.push(`Code runs: ${g.codeRunCount}`);
+        if (g.chessTaskSolved) list.push(`Chess puzzles solved: yes`);
+        if (g.dailyChecklist.learn) list.push(`Today: learn done`);
+        if (g.dailyChecklist.do) list.push(`Today: main task done`);
+        if (g.dailyChecklist.deepen1) list.push(`Today: deepen done`);
+        return list.map(s => `- ${s}`).join('\n');
+    }, [selectedHobby]);
+
     const handleSendMessage = useCallback(async () => {
         const trimmedInput = chatInput.trim();
         console.log('[useTimer] handleSendMessage - input:', trimmedInput.substring(0, 50));
@@ -580,7 +633,8 @@ export function useTimer(options: UseTimerOptions = {}) {
 
         try {
             console.log('[useTimer] Sending message to AI service');
-            const response = await aiService.sendMessage(newMessages, selectedHobby ?? undefined);
+            const userContext = buildUserContext();
+            const response = await aiService.sendMessage(newMessages, selectedHobby ?? undefined, userContext);
             console.log('[useTimer] AI response received');
             const assistantMsg: ChatMessage = { role: 'assistant', content: response };
             setMessages(prev => [...prev, assistantMsg]);
@@ -591,7 +645,7 @@ export function useTimer(options: UseTimerOptions = {}) {
         } finally {
             setIsAiLoading(false);
         }
-    }, [chatInput, isAiLoading, messages, selectedHobby]);
+    }, [chatInput, isAiLoading, messages, selectedHobby, buildUserContext]);
 
     return {
         // Timer

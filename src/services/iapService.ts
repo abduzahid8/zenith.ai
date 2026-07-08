@@ -95,6 +95,18 @@ export const iapService = {
         }
 
         try {
+            // Check if the native module exists before attempting connection
+            // Use require() to avoid import-time issues with NativeModules in some environments
+            let hasNativeModule = false;
+            try {
+                const RN = require('react-native');
+                hasNativeModule = !!(RN.NativeModules?.ExpoIap);
+            } catch {}
+            if (!hasNativeModule) {
+                console.log('[IAP] ExpoIap native module not available — skipping setup');
+                return false;
+            }
+
             console.log('[IAP] Connecting to StoreKit...');
             // Timeout initConnection — on simulator or without StoreKit it can hang forever
             await Promise.race([

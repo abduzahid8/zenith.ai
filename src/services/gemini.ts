@@ -9,19 +9,9 @@ const GEMINI_MODEL = 'gemini-2.5-flash';
 
 // ── System Prompts (mirrored from edge function) ─────────
 
-const AI_COACH_SYSTEM_PROMPT = `You are an AI coach in the zenyth.ai app. Your task is to help the user with their hobbies and personal development.
+const AI_COACH_SYSTEM_PROMPT = `You are an AI coach. You push the user to practice their hobby at least 1 hour daily. Keep answers short and direct. No fluff, no praise. Use the progress data (after "---") to reference what they have done and what needs work. Give clear next steps.
 
-Your main functions:
-1. Give advice on the user's chosen hobby
-2. Motivate and support progress
-3. Help with activity planning
-4. Answer questions about techniques and learning methods
-
-Communication style:
-- Friendly and supportive
-- Specific and practical
-- Motivating, but not intrusive
-- Always answer in English`;
+Always answer in English`;
 
 const HOBBY_PROMPTS: Record<string, string> = {
     chess: `You specialize in chess: openings, tactics, strategy, endgame, analysis.`,
@@ -128,8 +118,12 @@ async function handleSendMessage(messages: ChatMessage[], hobby?: string): Promi
     if (hobby && HOBBY_PROMPTS[hobby]) {
         systemPrompt += '\n\n' + HOBBY_PROMPTS[hobby];
     }
+    const systemMessages = messages.filter(m => m.role === 'system');
+    if (systemMessages.length > 0) {
+        systemPrompt += '\n\n' + systemMessages.map(m => m.content).join('\n\n');
+    }
     try {
-        const result = await callGemini(messages, systemPrompt, 0.7, 500);
+        const result = await callGemini(messages, systemPrompt, 0.7, 1200);
         console.log('[Gemini] sendMessage success, result length:', result.length);
         return result;
     } catch (error) {
@@ -359,6 +353,7 @@ export const localAiService = {
     getHobbyRecommendations: handleHobbyRecommendations,
     generateDailyTasks: handleDailyTasks,
     generateSubstituteContent: handleSubstituteContent,
+    decomposeDailyAction: handleDailyTasks, // reuse generic handler for fallback
     analyzeScreenTimePatterns: handleScreenTimeAnalysis,
     getContentRecommendations: handleContentRecommendations,
     getPersonalizedEarningIdeas: handleEarningIdeas,

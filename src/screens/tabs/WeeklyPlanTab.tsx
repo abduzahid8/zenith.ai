@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     View,
     ScrollView,
@@ -19,6 +19,9 @@ import { useUserProfileStore } from '../../store/userProfileStore';
 import { Task, TaskType } from '../../services/supabase/types';
 import { getMaxTasksPerDay } from '../../domain/tasks/rules';
 import { useT } from '../../store/languageStore';
+import { useGoalStore } from '../../store/goalStore';
+import { GoalSnapshot } from '../../types/goals';
+import GoalProgressBar from '../../components/goal/GoalProgressBar';
 
 interface WeeklyPlanTabProps {
     isPremium: boolean;
@@ -29,12 +32,20 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
     const { user } = useAuthStore();
     const userId = user?.id;
     const { dailyTasks, loading, error, fetchDailyPlan } = useTaskStore();
-    const { isPremium: profilePremium } = useUserProfileStore();
+    const { isPremium: profilePremium, selectedHobby } = useUserProfileStore();
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
     const t = useT();
+    const [goalSnapshot, setGoalSnapshot] = useState<GoalSnapshot | null>(null);
 
     const ENGINE_TYPES: TaskType[] = ['theory', 'practice', 'analysis', 'puzzles'];
+
+    useEffect(() => {
+        if (selectedHobby) {
+            const snapshot = useGoalStore.getState().getSnapshot(selectedHobby as any);
+            setGoalSnapshot(snapshot);
+        }
+    }, [selectedHobby]);
     const allEngineTasks = ENGINE_TYPES
         .flatMap(type => dailyTasks.filter(task => task.type === type));
 
@@ -130,6 +141,13 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
             contentContainerStyle={{ paddingBottom: scale(100) }}
             showsVerticalScrollIndicator={false}
         >
+            {goalSnapshot && (
+                <>
+                    <Text style={styles.yourDayTitle}>Твоя цель</Text>
+                    <GoalProgressBar snapshot={goalSnapshot} />
+                </>
+            )}
+
             <Text style={styles.yourDayTitle}>{t('Твой день')}</Text>
 
             {engineTasks.length === 0 && (
@@ -221,7 +239,7 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
             {/* Add Task button:
                 - Free users: always visible; shows lock when at 2-task limit, plus when below
                 - Premium users: visible only when below 4 tasks */}
-            {(!(isPremium || profilePremium) || orderedTasks.length < 4) && (
+            {(!(isPremium || profilePremium) || orderedTasks.length < maxTasks) && (
                 <TouchableOpacity
                     style={[
                         styles.addTaskCard,

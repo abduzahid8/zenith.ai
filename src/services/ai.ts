@@ -51,21 +51,17 @@ export const aiService = {
     // Send message to AI coach
     sendMessage: async (
         messages: ChatMessage[],
-        hobby?: string
+        hobby?: string,
+        userContext?: string
     ): Promise<string> => {
-        // Inject a style instruction so replies feel warm and render
-        // cleanly on the client (no raw markdown like ** or #).
-        // Emojis are completely banned.
-        const styleInstruction: ChatMessage = {
-            role: 'system',
-            content:
-                'Reply in the same language as the user. Keep the tone warm, friendly and encouraging. ' +
-                'Do NOT use any emojis under any circumstances — only clean text. ' +
-                'Do NOT use markdown syntax — no **bold**, no ##headings, no backticks. ' +
-                'When you need a list, use short bullets prefixed with "• ". ' +
-                'Keep answers concise and skimmable.',
-        };
-        const enrichedMessages: ChatMessage[] = [styleInstruction, ...messages];
+        const enrichedMessages: ChatMessage[] = [];
+        if (userContext) {
+            enrichedMessages.push({
+                role: 'system',
+                content: 'Current user app data (use this to answer questions about their activity):\n' + userContext + '\n\nAnswer concisely: explain progress, what it means, what to do next. Not too short, not too long.',
+            });
+        }
+        enrichedMessages.push(...messages);
 
         if (USE_LOCAL_AI) {
             return localAiService.sendMessage(enrichedMessages, hobby);
@@ -239,6 +235,119 @@ export const aiService = {
             return Array.isArray(parsed) ? parsed : [];
         } catch {
             return [];
+        }
+    },
+
+    // Decompose a goal into today's next action
+    decomposeDailyAction: async (
+        goalSnapshot: {
+            hobby: string;
+            goalDescription: string;
+            percentComplete: number;
+            daysRemaining: number;
+            projectedCompletion: string;
+            unitsRemaining: number;
+            dailyRateNeeded: number;
+            currentDay: number;
+            category: string;
+        }
+    ): Promise<string> => {
+        const isExecution = goalSnapshot.category === 'execution';
+
+        if (isExecution) {
+            const { getRecommendations } = await import('../data/toolRecommendations');
+            const pattern = getRecommendations(goalSnapshot.goalDescription);
+            if (pattern) {
+                const topRec = pattern.recommendations[0];
+                return `Focus on: ${pattern.bottleneck} Try ${topRec.name} — ${topRec.reason}`;
+            }
+        }
+
+        if (USE_LOCAL_AI) {
+            return (localAiService as any).decomposeDailyAction(goalSnapshot);
+        }
+        try {
+            const parsed = await invokeAI<string>('decomposeDailyAction', { goalSnapshot });
+            if (isExecution) {
+                return parsed || 'Run your numbers — every check-in moves the needle. Log your count today.';
+            }
+            return parsed || 'Continue with today\'s lesson — every session brings you closer to your goal.';
+        } catch {
+            if (isExecution) {
+                return 'Run your numbers — every check-in moves the needle. Log your count today.';
+            }
+            return 'Continue with today\'s lesson — every session brings you closer to your goal.';
+        }
+    },
+
+    // Propose measurable proxies for an execution goal with no natural count
+    proposeMetrics: async (
+        goalDescription: string
+    ): Promise<Array<{
+        label: string;
+        unit: string;
+        startingValue: number;
+        target: number;
+        deadlineDays: number;
+        reasoning: string;
+    }>> => {
+        const payload = { goalDescription };
+        if (USE_LOCAL_AI) {
+            try {
+                return await (localAiService as any).proposeMetrics(goalDescription);
+            } catch {
+                return [];
+            }
+        }
+        try {
+            const parsed = await invokeAI<Array<Record<string, unknown>>>('proposeMetrics', payload);
+            return Array.isArray(parsed) ? parsed.map((p: any) => ({
+                label: p.label || 'Progress',
+                unit: p.unit || 'units',
+                startingValue: typeof p.startingValue === 'number' ? p.startingValue : 0,
+                target: typeof p.target === 'number' ? p.target : 10,
+                deadlineDays: typeof p.deadlineDays === 'number' ? p.deadlineDays : 90,
+                reasoning: p.reasoning || '',
+            })) : [];
+        } catch {
+            return [];
+        }
+    },
+
+    // Break an execution goal into strategic milestones
+    breakDownMilestones: async (
+        goalDescription: string,
+        metricLabel: string,
+        target: number,
+        unit: string
+    ): Promise<Array<{
+        label: string;
+        target: number;
+        unit: string;
+    }>> => {
+        const payload = { goalDescription, metricLabel, target, unit };
+        if (USE_LOCAL_AI) {
+            try {
+                return await (localAiService as any).breakDownMilestones(goalDescription, metricLabel, target, unit);
+            } catch {
+                return [];
+            }
+        }
+        try {
+            const parsed = await invokeAI<Array<Record<string, unknown>>>('breakDownMilestones', payload);
+            return Array.isArray(parsed) ? parsed.map((m: any) => ({
+                label: m.label || 'Phase',
+                target: typeof m.target === 'number' ? m.target : Math.ceil(target / 3),
+                unit: m.unit || unit,
+            })) : [];
+        } catch {
+            const p1 = Math.ceil(target * 0.4);
+            const p2 = Math.ceil(target * 0.35);
+            return [
+                { label: 'Phase 1: Foundation', target: p1, unit },
+                { label: 'Phase 2: Momentum', target: p2, unit },
+                { label: 'Phase 3: Finish', target: target - p1 - p2, unit },
+            ];
         }
     },
 

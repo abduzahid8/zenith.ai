@@ -3,6 +3,7 @@
 
 import { dbService, ScreenTimeLog, ScreenTimeLimit, SubstituteNotification } from './supabase';
 import { aiService } from './ai';
+import { useGoalStore } from '../store/goalStore';
 
 // App categories for classification
 export const APP_CATEGORIES = {
@@ -245,22 +246,44 @@ export const screenTimeService = {
                 userHobby || 'general'
             );
 
+            // Inject goal context into notification
+            let message = content.message;
+            let action = content.action;
+            if (userHobby) {
+                const snapshot = useGoalStore.getState().getSnapshot(userHobby as any);
+                if (snapshot) {
+                    message = `[${snapshot.percentComplete}% toward "${snapshot.definition.description}"] ${message}`;
+                    action = `Complete today's ${userHobby} step — ${snapshot.unitsRemaining} ${snapshot.definition.type === 'reading_books' ? 'books' : 'units'} remain`;
+                }
+            }
+
             const notification: Omit<SubstituteNotification, 'id' | 'user_id' | 'created_at'> = {
                 triggered_by_app: triggeredByApp,
                 notification_type: (content.type || 'reminder') as 'reminder' | 'challenge' | 'insight' | 'motivation',
-                notification_content: content.message,
-                suggested_action: content.action
+                notification_content: message,
+                suggested_action: action
             };
 
             return dbService.logSubstituteNotification(userId, notification);
         } catch (e) {
             console.error('Failed to generate substitute notification:', e);
-            // Fallback to default notification
+
+            // Fallback with goal context
+            let fallbackMessage = 'Хочешь заняться чем-то полезным?';
+            let fallbackAction = 'Открой приложение и начни сессию';
+            if (userHobby) {
+                const snapshot = useGoalStore.getState().getSnapshot(userHobby as any);
+                if (snapshot) {
+                    fallbackMessage = `Your next step toward "${snapshot.definition.description}" — ${snapshot.unitsRemaining} ${snapshot.definition.type === 'reading_books' ? 'books' : 'units'} remain`;
+                    fallbackAction = `Start today's ${userHobby} lesson`;
+                }
+            }
+
             const fallback: Omit<SubstituteNotification, 'id' | 'user_id' | 'created_at'> = {
                 triggered_by_app: triggeredByApp,
                 notification_type: 'reminder',
-                notification_content: 'Хочешь заняться чем-то полезным?',
-                suggested_action: 'Открой приложение и начни сессию'
+                notification_content: fallbackMessage,
+                suggested_action: fallbackAction
             };
             return dbService.logSubstituteNotification(userId, fallback);
         }

@@ -15,4 +15,5 @@ module.exports = {
     },
     // Ignore node_modules except Expo packages if needed
     transformIgnorePatterns: ['/node_modules/'],
+    watchman: false,
 };

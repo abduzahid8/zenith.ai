@@ -22,7 +22,6 @@ import {
     DailyUsageSummary,
     AppUsageData,
 } from '../../modules/device-activity';
-import { useAuthStore } from './authStore';
 import { screenTimeService } from '../services/screenTimeService';
 
 type WeeklyPoint = { date: string; seconds: number };
@@ -217,7 +216,7 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
             fetchTodayData: async () => {
                 set({ isLoading: true, error: null });
                 try {
-                    const user = useAuthStore.getState().user;
+                    const user = require('./authStore').useAuthStore.getState().user;
                     if (!get().isAuthorized && user) {
                         const summary = await screenTimeService.getTodaySummary(user.id);
                         set({
@@ -304,7 +303,7 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
 
             syncToSupabase: async () => {
                 try {
-                    const user = useAuthStore.getState().user;
+                    const user = require('./authStore').useAuthStore.getState().user;
                     if (!user) return;
 
                     const { topApps } = get();
@@ -319,7 +318,7 @@ export const useDeviceScreenTimeStore = create<DeviceScreenTimeState>()(
             fetchWeeklyData: async () => {
                 set({ isLoading: true, error: null });
                 try {
-                    const user = useAuthStore.getState().user;
+                    const user = require('./authStore').useAuthStore.getState().user;
 
                     // Always try native data first when authorized
                     // (returns [] on iOS until DeviceActivityReport extension writes data)

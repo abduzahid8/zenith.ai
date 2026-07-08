@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
     View,
     Text,
@@ -16,9 +16,14 @@ import { scale } from '../../constants';
 import { fonts } from '../../theme';
 import { aiService, ChatMessage } from '../../services/ai';
 import { useUserProfileStore } from '../../store/userProfileStore';
+import { useGamificationStore } from '../../store/gamificationStore';
 import { useLanguageStore } from '../../store/languageStore';
+import { useGoalStore } from '../../store/goalStore';
+import { GoalSnapshot } from '../../types/goals';
+import GoalProgressBar from '../../components/goal/GoalProgressBar';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useT } from '../../store/languageStore';
+import { HobbyId, HOBBY_META } from '../../data/lessonContent';
 
 interface DisplayMessage {
     id: string;
@@ -39,12 +44,83 @@ const AICoachTab: React.FC = () => {
     const [messages, setMessages] = useState<DisplayMessage[]>([]);
     const [inputText, setInputText] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [goalSnapshot, setGoalSnapshot] = useState<GoalSnapshot | null>(null);
+    const [todaysMove, setTodaysMove] = useState('');
     const chatListRef = useRef<FlatList>(null);
     const { selectedHobby } = useUserProfileStore();
 
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
     const t = useT();
+
+    const buildUserContext = (): string => {
+        const g = useGamificationStore.getState();
+        const p = useUserProfileStore.getState();
+        const hobby = (selectedHobby || p.selectedHobby) as HobbyId | null;
+        const list: string[] = [];
+        if (p.userName) list.push(`Name: ${p.userName}`);
+        list.push(`Streak: ${g.currentStreak} days`);
+        list.push(`Sessions today: ${g.sessionsCompletedToday}`);
+        list.push(`Artifacts saved: ${g.artifacts.length}`);
+        list.push(`Badges earned: ${g.unlockedBadges.length}`);
+        list.push(`Code runs: ${g.codeRunCount}`);
+        if (g.chessTaskSolved) list.push(`Chess puzzles solved: yes`);
+        if (g.dailyChecklist.learn) list.push(`Today: learn done`);
+        if (g.dailyChecklist.do) list.push(`Today: main task done`);
+        if (g.dailyChecklist.deepen1) list.push(`Today: deepen done`);
+
+        const goalState = useGoalStore.getState();
+        const snapshot = hobby ? goalState.getSnapshot(hobby) : null;
+        if (snapshot) {
+            list.push(`Goal: ${snapshot.definition.description}`);
+            list.push(`Progress: ${snapshot.percentComplete}% (${snapshot.progress.currentValue}/${snapshot.definition.target})`);
+            list.push(`Days remaining: ${snapshot.daysRemaining}`);
+            list.push(`Status: ${snapshot.projectedCompletion}`);
+        }
+
+        if (hobby) {
+            const meta = HOBBY_META[hobby];
+            const day = g.currentDay[hobby] || 1;
+            const week = Math.ceil(day / 7);
+            list.push(`Current hobby: ${meta?.label || hobby} (day ${day}, week ${week})`);
+        } else {
+            const lines = (Object.keys(g.currentDay) as HobbyId[])
+                .filter(h => h !== 'coding')
+                .map(h => `${HOBBY_META[h]?.label || h} (day ${g.currentDay[h] || 1})`);
+            if (lines.length) list.push(`Hobbies: ${lines.join(', ')}`);
+        }
+        return list.map(s => `- ${s}`).join('\n');
+    };
+
+    // Load goal + today's move on mount
+    useEffect(() => {
+        const hobby = selectedHobby as HobbyId;
+        if (!hobby) return;
+
+        const snapshot = useGoalStore.getState().getSnapshot(hobby);
+        setGoalSnapshot(snapshot);
+
+        if (snapshot) {
+            const move = `Today's move: complete today's lesson — ${snapshot.unitsRemaining} ${snapshot.definition.type === 'reading_books' ? 'books' : 'units'} remain toward "${snapshot.definition.description}"`;
+            setTodaysMove(move);
+
+            const g = useGamificationStore.getState();
+            const day = g.currentDay[hobby] || 1;
+            aiService.decomposeDailyAction({
+                hobby,
+                goalDescription: snapshot.definition.description,
+                percentComplete: snapshot.percentComplete,
+                daysRemaining: snapshot.daysRemaining,
+                projectedCompletion: snapshot.projectedCompletion,
+                unitsRemaining: snapshot.unitsRemaining,
+                dailyRateNeeded: snapshot.dailyRateNeeded,
+                currentDay: day,
+                category: snapshot.definition.category,
+            }).then((aiMove) => {
+                setTodaysMove(aiMove || move);
+            }).catch(() => {});
+        }
+    }, [selectedHobby]);
 
     const handleSend = async () => {
         const trimmedInput = inputText.trim();
@@ -74,7 +150,8 @@ const AICoachTab: React.FC = () => {
                 .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
                 .concat([{ role: 'user', content: userMessage.content }]);
 
-            const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined);
+            const userContext = buildUserContext();
+            const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined, userContext);
             console.log('[AICoachTab] AI response received');
 
             const assistantMessage: DisplayMessage = {
@@ -119,7 +196,8 @@ const AICoachTab: React.FC = () => {
 
         try {
             const chatMessages: ChatMessage[] = [{ role: 'user', content: suggestion }];
-            const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined);
+            const userContext = buildUserContext();
+            const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined, userContext);
 
             const assistantMessage: DisplayMessage = {
                 id: (Date.now() + 1).toString(),
@@ -149,6 +227,18 @@ const AICoachTab: React.FC = () => {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={0}
         >
+            {goalSnapshot ? (
+                <>
+                    <GoalProgressBar snapshot={goalSnapshot} />
+                    {todaysMove ? (
+                        <View style={styles.todaysMoveCard}>
+                            <Text style={styles.todaysMoveLabel}>Today's move</Text>
+                            <Text style={styles.todaysMoveText}>{todaysMove}</Text>
+                        </View>
+                    ) : null}
+                </>
+            ) : null}
+
             {messages.length === 0 && (
                 <>
                     <View style={styles.aiTitleContainer}>
@@ -186,6 +276,8 @@ const AICoachTab: React.FC = () => {
                     </View>
                 </>
             )}
+
+
 
             {messages.length > 0 && (
                 <FlatList
@@ -249,6 +341,29 @@ const AICoachTab: React.FC = () => {
 };
 
 const createStyles = (colors: any) => StyleSheet.create({
+    todaysMoveCard: {
+        marginHorizontal: scale(4),
+        marginBottom: scale(8),
+        padding: scale(14),
+        borderRadius: scale(12),
+        backgroundColor: '#4F8EF7' + '15',
+        borderLeftWidth: 3,
+        borderLeftColor: '#4F8EF7',
+    },
+    todaysMoveLabel: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(11),
+        color: '#4F8EF7',
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        marginBottom: scale(4),
+    },
+    todaysMoveText: {
+        fontFamily: fonts.body.regular,
+        fontSize: scale(14),
+        lineHeight: scale(20),
+        color: '#000',
+    },
     aiContent: {
         flex: 1,
         paddingHorizontal: scale(20),

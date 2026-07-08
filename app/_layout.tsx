@@ -272,6 +272,20 @@ export default function RootLayout() {
                                     title: ''
                                 }}
                             />
+                            <Stack.Screen
+                                name="goal-detail"
+                                options={{
+                                    presentation: 'card',
+                                    animation: 'slide_from_right',
+                                }}
+                            />
+                            <Stack.Screen
+                                name="goal-setup"
+                                options={{
+                                    presentation: 'card',
+                                    animation: 'slide_from_right',
+                                }}
+                            />
                         </Stack>
                     )}
 

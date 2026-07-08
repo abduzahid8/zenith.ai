@@ -21,7 +21,7 @@ export function getAutoTasksPerDay(): number {
 }
 
 export function getMaxTasksPerDay(isPremium: boolean): number {
-    return isPremium ? 4 : 2;
+    return isPremium ? 15 : 2;
 }
 
 export function isDuplicateTemplate(params: {

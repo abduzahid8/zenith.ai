@@ -20,12 +20,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useGamificationStore, BADGE_DEFINITIONS, getDailyProgress } from '../store/gamificationStore';
 import { getLessonByDay, LESSON_BANK, HOBBY_META, HobbyId } from '../data/lessonContent';
+import { useUserProfileStore } from '../store/userProfileStore';
 
 const HOBBIES: HobbyId[] = ['english', 'chinese', 'chess', 'coding', 'python', 'reading'];
 
 export const GamificationDebugScreen: React.FC = () => {
     const router = useRouter();
     const store = useGamificationStore();
+    const profile = useUserProfileStore();
     const [selectedHobby, setSelectedHobby] = useState<HobbyId>('english');
     const [log, setLog] = useState<string[]>(['🟢 Debug экран запущен']);
 
@@ -198,6 +200,12 @@ export const GamificationDebugScreen: React.FC = () => {
                             {chessTaskSolved ? 'да' : 'нет'}
                         </Text>
                     </View>
+                    <View style={s.row}>
+                        <Text style={s.label}>⭐ Premium:</Text>
+                        <Text style={[s.value, profile.isPremium ? s.good : s.warn]}>
+                            {profile.isPremium ? 'да' : 'нет'} ({profile.subscriptionLevel})
+                        </Text>
+                    </View>
 
                     {pendingBadge && (
                         <View style={s.badgeAlert}>
@@ -313,6 +321,21 @@ export const GamificationDebugScreen: React.FC = () => {
                         </TouchableOpacity>
                         <TouchableOpacity style={[s.btn, s.btnBlue]} onPress={handleSimulateFreeze}>
                             <Text style={s.btnText}>❄️ Тест заморозки</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <Text style={s.sectionLabel}>— Premium —</Text>
+                    <View style={s.btnRow}>
+                        <TouchableOpacity
+                            style={[s.btn, profile.isPremium ? s.btnGreen : s.btn]}
+                            onPress={() => {
+                                profile.setPremium(!profile.isPremium);
+                                addLog(`⭐ Premium: ${!profile.isPremium ? 'включён' : 'выключен'}`);
+                            }}
+                        >
+                            <Text style={s.btnText}>
+                                {profile.isPremium ? '⭐ Premium ✓' : '⭐ Дать Premium'}
+                            </Text>
                         </TouchableOpacity>
                     </View>
 

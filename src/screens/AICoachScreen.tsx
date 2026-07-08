@@ -17,11 +17,15 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fonts } from '../theme';
 import { useUserProfileStore } from '../store/userProfileStore';
+import { useGamificationStore } from '../store/gamificationStore';
 import { aiService, ChatMessage } from '../services/ai';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { useAppTheme } from '../theme/useAppTheme';
 import { scale } from '../constants';
 import { HOBBY_META, HobbyId } from '../data/lessonContent';
+import { useGoalStore } from '../store/goalStore';
+import { GoalSnapshot } from '../types/goals';
+import GoalProgressBar from '../components/goal/GoalProgressBar';
 
 interface DisplayMessage {
     id: string;
@@ -39,21 +43,113 @@ export const AICoachScreen: React.FC = () => {
     const [messages, setMessages] = useState<DisplayMessage[]>([]);
     const [inputText, setInputText] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [goalSnapshot, setGoalSnapshot] = useState<GoalSnapshot | null>(null);
+    const [todaysMove, setTodaysMove] = useState<string>('');
     const flatListRef = useRef<FlatList>(null);
 
-    // Initial greeting
-    useEffect(() => {
-        const meta = HOBBY_META[selectedHobby as HobbyId];
-        const hobbyName = meta?.label?.toLowerCase() || 'хобби';
+    const buildUserContext = (): string => {
+        const g = useGamificationStore.getState();
+        const p = useUserProfileStore.getState();
+        const hobby = (selectedHobby || p.selectedHobby) as HobbyId | null;
+        const list: string[] = [];
+        if (p.userName) list.push(`Name: ${p.userName}`);
+        list.push(`Streak: ${g.currentStreak} days`);
+        list.push(`Sessions today: ${g.sessionsCompletedToday}`);
+        list.push(`Artifacts saved: ${g.artifacts.length}`);
+        list.push(`Badges earned: ${g.unlockedBadges.length}`);
+        list.push(`Code runs: ${g.codeRunCount}`);
+        if (g.chessTaskSolved) list.push(`Chess puzzles solved: yes`);
+        if (g.dailyChecklist.learn) list.push(`Today: learn done`);
+        if (g.dailyChecklist.do) list.push(`Today: main task done`);
+        if (g.dailyChecklist.deepen1) list.push(`Today: deepen done`);
 
-        setMessages([
-            {
-                id: '1',
-                role: 'assistant',
-                content: `Привет! Я твой ИИ-наставник по ${hobbyName}. Можешь задать любой вопрос или поделиться своим прогрессом 🎯`,
-                timestamp: new Date(),
-            },
-        ]);
+        // Include goal context
+        const goalState = useGoalStore.getState();
+        const snapshot = hobby ? goalState.getSnapshot(hobby) : null;
+        if (snapshot) {
+            list.push(`Goal: ${snapshot.definition.description}`);
+            list.push(`Progress: ${snapshot.percentComplete}% (${snapshot.progress.currentValue}/${snapshot.definition.target})`);
+            list.push(`Days remaining: ${snapshot.daysRemaining}`);
+            list.push(`Status: ${snapshot.projectedCompletion}`);
+        }
+
+        if (hobby) {
+            const meta = HOBBY_META[hobby];
+            const day = g.currentDay[hobby] || 1;
+            const week = Math.ceil(day / 7);
+            list.push(`Current hobby: ${meta?.label || hobby} (day ${day}, week ${week})`);
+        } else {
+            const lines = (Object.keys(g.currentDay) as HobbyId[])
+                .filter(h => h !== 'coding')
+                .map(h => `${HOBBY_META[h]?.label || h} (day ${g.currentDay[h] || 1})`);
+            if (lines.length) list.push(`Hobbies: ${lines.join(', ')}`);
+        }
+        return list.map(s => `- ${s}`).join('\n');
+    };
+
+    // Load goal + today's move on mount
+    useEffect(() => {
+        const hobby = selectedHobby as HobbyId;
+        if (!hobby) return;
+
+        const snapshot = useGoalStore.getState().getSnapshot(hobby);
+        setGoalSnapshot(snapshot);
+
+        const meta = HOBBY_META[hobby];
+        const hobbyName = meta?.label?.toLowerCase() || 'hobby';
+
+        if (snapshot) {
+            const move = `Today's move: complete today's ${hobbyName} lesson — ${snapshot.unitsRemaining} ${snapshot.definition.type === 'reading_books' ? 'books' : 'units'} remain toward "${snapshot.definition.description}"`;
+            setTodaysMove(move);
+
+            // Call AI for a decomposed daily action
+            const gamification = useGamificationStore.getState();
+            const day = gamification.currentDay[hobby] || 1;
+            aiService.decomposeDailyAction({
+                hobby: hobby,
+                goalDescription: snapshot.definition.description,
+                percentComplete: snapshot.percentComplete,
+                daysRemaining: snapshot.daysRemaining,
+                projectedCompletion: snapshot.projectedCompletion,
+                unitsRemaining: snapshot.unitsRemaining,
+                dailyRateNeeded: snapshot.dailyRateNeeded,
+                currentDay: day,
+                category: snapshot.definition.category,
+            }).then((aiMove) => {
+                setTodaysMove(aiMove || move);
+                setMessages(prev => {
+                    if (prev.length > 0 && prev[0].role === 'assistant') {
+                        const updated = [...prev];
+                        updated[0] = {
+                            ...updated[0],
+                            content: `You're ${snapshot.percentComplete}% toward "${snapshot.definition.description}". ${snapshot.progress.streak > 0 ? `${snapshot.progress.streak}-day streak — keep going!` : 'Complete today\'s lesson to start building your streak.'} ${aiMove || move}`,
+                        };
+                        return updated;
+                    }
+                    return prev;
+                });
+            }).catch(() => {
+                // Fallback — static message already set
+            });
+
+            setMessages([
+                {
+                    id: '1',
+                    role: 'assistant',
+                    content: `You're ${snapshot.percentComplete}% toward "${snapshot.definition.description}". ${snapshot.progress.streak > 0 ? `${snapshot.progress.streak}-day streak — keep going!` : 'Complete today\'s lesson to start building your streak.'} ${move}`,
+                    timestamp: new Date(),
+                },
+            ]);
+        } else {
+            setMessages([
+                {
+                    id: '1',
+                    role: 'assistant',
+                    content: `Hi! I'm your AI coach for ${hobbyName}. Set a goal to get personalized daily actions toward your finish line.`,
+                    timestamp: new Date(),
+                },
+            ]);
+        }
     }, [selectedHobby]);
 
     const handleSend = async () => {
@@ -90,7 +186,8 @@ export const AICoachScreen: React.FC = () => {
                 }))
                 .concat([{ role: 'user', content: userMessage.content }]);
 
-            const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined);
+            const userContext = buildUserContext();
+            const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined, userContext);
             console.log('[AICoachScreen] AI response received');
 
             const assistantMessage: DisplayMessage = {
@@ -153,6 +250,27 @@ export const AICoachScreen: React.FC = () => {
                 <Text style={styles.headerTitle}>ИИ-тренер</Text>
                 <View style={styles.placeholder} />
             </View>
+
+            {/* Goal Progress */}
+            {goalSnapshot ? (
+                <>
+                    <GoalProgressBar snapshot={goalSnapshot} />
+                    {todaysMove ? (
+                        <View style={styles.todaysMoveCard}>
+                            <Text style={styles.todaysMoveLabel}>Today's move</Text>
+                            <Text style={styles.todaysMoveText}>{todaysMove}</Text>
+                        </View>
+                    ) : null}
+                </>
+            ) : (
+                <TouchableOpacity style={styles.setGoalCard} onPress={() => router.push(`/goal-setup${selectedHobby ? `?hobbyId=${selectedHobby}` : ''}` as any)} activeOpacity={0.8}>
+                    <Text style={styles.setGoalTitle}>Set a goal to track progress</Text>
+                    <Text style={styles.setGoalSubtitle}>Define what you want to achieve and get a daily plan toward your finish line</Text>
+                    <View style={styles.setGoalButton}>
+                        <Text style={styles.setGoalButtonText}>Set your goal</Text>
+                    </View>
+                </TouchableOpacity>
+            )}
 
             {/* Messages */}
             <FlatList
@@ -233,6 +351,66 @@ const createStyles = (colors: any) => StyleSheet.create({
     },
     placeholder: {
         width: scale(40),
+    },
+    todaysMoveCard: {
+        marginHorizontal: scale(20),
+        marginBottom: scale(12),
+        padding: scale(14),
+        borderRadius: scale(12),
+        backgroundColor: colors.buttonPrimary + '15',
+        borderLeftWidth: 3,
+        borderLeftColor: colors.buttonPrimary,
+    },
+    todaysMoveLabel: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(11),
+        color: colors.buttonPrimary,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        marginBottom: scale(4),
+    },
+    todaysMoveText: {
+        fontFamily: fonts.body.regular,
+        fontSize: scale(14),
+        lineHeight: scale(20),
+        color: colors.text,
+    },
+    setGoalCard: {
+        marginHorizontal: scale(20),
+        marginBottom: scale(12),
+        padding: scale(20),
+        borderRadius: scale(16),
+        backgroundColor: colors.surfaceLight,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderStyle: 'dashed',
+        alignItems: 'center',
+    },
+    setGoalTitle: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(16),
+        color: colors.text,
+        marginBottom: scale(6),
+        textAlign: 'center',
+    },
+    setGoalSubtitle: {
+        fontFamily: fonts.body.regular,
+        fontSize: scale(13),
+        color: colors.textSecondary,
+        textAlign: 'center',
+        lineHeight: scale(18),
+        marginBottom: scale(16),
+    },
+    setGoalButton: {
+        backgroundColor: colors.buttonPrimary,
+        borderRadius: scale(20),
+        paddingHorizontal: scale(24),
+        paddingVertical: scale(10),
+    },
+    setGoalButtonText: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(14),
+        color: '#FFFFFF',
     },
     messagesContainer: {
         paddingHorizontal: scale(20),
