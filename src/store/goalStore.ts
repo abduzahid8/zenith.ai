@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { HobbyId } from '../data/lessonContent';
 import { GoalDefinition, GoalProgress, GoalSnapshot, BottleneckAnalysis, HelpMode, Milestone, GoalProgressEntry } from '../types/goals';
-import { getHandler, skillHandler, executionHandler, rollingVelocity } from '../services/goalHandlers';
+import { getHandler, skillHandler, executionHandler, rollingVelocity, computeNextMode } from '../services/goalHandlers';
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -60,7 +60,6 @@ function computeStreak(history: GoalProgressEntry[]): number {
   const isToday = lastEntry.date === today;
   const wasYesterday = lastEntry.date === yesterdayStr;
 
-  // Count consecutive trailing days with activity
   if (isToday || wasYesterday) {
     const activeDays = new Set(history.map(h => h.date));
     let streak = 0;
@@ -112,7 +111,6 @@ export const useGoalStore = create<GoalState>()(
 
       setGoal: (goal) => {
         const initialProgress = getInitialProgress(goal.id, goal.startingValue);
-        const handler = getHandler(goal.category);
 
         const updates: Partial<GoalState> = {
           goals: { ...get().goals, [goal.id]: goal },
@@ -166,12 +164,10 @@ export const useGoalStore = create<GoalState>()(
           return true;
         };
 
-        // Update skill goal
         const skillGoalId = goalByHobby[hobbyId];
         const skillGoal = skillGoalId ? goals[skillGoalId] : null;
         if (skillGoal) applyAction(skillGoal, value);
 
-        // Update execution goal bound to same hobby
         const execGoalId = executionGoalByHobby[hobbyId];
         const execGoal = execGoalId ? goals[execGoalId] : null;
         if (execGoal) applyAction(execGoal, value);
@@ -205,14 +201,16 @@ export const useGoalStore = create<GoalState>()(
 
         const isBehind = rollingRate < dailyRateNeeded && existing.dailyActions >= 3;
 
-        const nextMode: HelpMode = existing.currentMode === 'troubleshoot'
-          ? existing.history.filter(h => h.type === 'bottleneck').length > 0
-              && existing.history[existing.history.length - 1]?.type !== 'bottleneck'
-            ? 'tactical'
-            : 'troubleshoot'
-          : isBehind && existing.dailyActions >= 3
-            ? 'tools'
-            : 'tactical';
+        // Mode transitions now live in one documented, pure function
+        // (see goalHandlers.computeNextMode) instead of an inline ternary.
+        const nextMode: HelpMode = existing.currentMode === 'milestone'
+          ? 'milestone' // milestone mode only advances via advanceMilestone/setMilestones
+          : computeNextMode({
+            currentMode: existing.currentMode,
+            isBehind,
+            dailyActions: existing.dailyActions,
+            history: existing.history,
+          });
 
         // Auto-advance milestone
         let updatedMilestones = [...existing.milestones];
@@ -263,7 +261,7 @@ export const useGoalStore = create<GoalState>()(
         if (!existing) return;
 
         const currentDiff = existing.currentDifficulty ?? goal.difficultyScore ?? 500;
-        const newDiff = skillHandler.adjustDifficulty(currentDiff, result);
+        const newDiff = skillHandler.adjustDifficulty(goal, currentDiff, result);
 
         set({
           progress: {
@@ -291,13 +289,19 @@ export const useGoalStore = create<GoalState>()(
         const execGoalId = executionGoalByHobby[hobbyId];
         const goalId = skillGoalId || execGoalId;
         let goal = goalId ? goals[goalId] : null;
-        // Fallback: hobby mapping may point to an abandoned/removed goal;
-        // look for any active goal tagged with this hobby
+
+        // Self-healing fallback: if the hobby index is stale (e.g. legacy
+        // data), find the goal by scanning once, then REPAIR the index so
+        // subsequent calls hit the fast path instead of scanning again.
         if (!goal) {
           goal = Object.values(goals).find(g => g.hobby === hobbyId && g.status === 'active') ?? null;
+          if (goal) {
+            const indexKey = goal.category === 'skill' ? 'goalByHobby' : 'executionGoalByHobby';
+            set({ [indexKey]: { ...get()[indexKey], [hobbyId]: goal.id } } as Partial<GoalState>);
+          }
         }
+
         let progressData = goal ? progress[goal.id] : null;
-        // Auto-initialize progress if missing (e.g. legacy data)
         if (goal && !progressData) {
           progressData = getInitialProgress(goal.id, goal.startingValue);
           set({ progress: { ...get().progress, [goal.id]: progressData } });
@@ -308,14 +312,11 @@ export const useGoalStore = create<GoalState>()(
       getSnapshotById: (goalId: string) => {
         const { goals, progress } = get();
         let goal: GoalDefinition | null = goals[goalId];
-        // Fallback: scan for a goal whose .id matches (key may differ from id in legacy data)
         if (!goal) {
           goal = Object.values(goals).find(g => g.id === goalId) ?? null;
         }
         let progressData = goal ? progress[goal.id] : null;
-        // Fallback: scan progress for matching goalId (progress may exist without goal)
         if (!goal && progress[goalId]) {
-          // No goal definition exists — create a placeholder
           const stub: GoalDefinition = {
             id: goalId,
             hobby: 'goal' as any,
@@ -411,7 +412,8 @@ export const useGoalStore = create<GoalState>()(
           const prog = state.progress[goalId];
           if (!prog) return state;
           const next = Math.min(prog.currentMilestoneIndex + 1, prog.milestones.length - 1);
-          return { progress: { ...state.progress, [goalId]: { ...prog, currentMilestoneIndex: next, currentMode: next >= prog.milestones.length ? 'tactical' : 'milestone' } } };
+          const allDone = prog.milestones.every((m, i) => (i === prog.currentMilestoneIndex ? true : m.currentValue >= m.target));
+          return { progress: { ...state.progress, [goalId]: { ...prog, currentMilestoneIndex: next, currentMode: (next >= prog.milestones.length || (next === prog.currentMilestoneIndex && allDone)) ? 'tactical' : 'milestone' } } };
         });
       },
 
@@ -440,8 +442,6 @@ export const useGoalStore = create<GoalState>()(
         return {
           ...c,
           ...p,
-          // In-memory goals take priority over persisted ones
-          // so goals created before rehydration aren't lost
           goals: { ...p.goals, ...c.goals },
           progress: { ...p.progress, ...c.progress },
           goalByHobby: { ...(p.goalByHobby || {}), ...(c.goalByHobby || {}) },

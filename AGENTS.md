@@ -31,6 +31,11 @@
 - **Puzzle content quality**: Fixed 10 violations (coordinates in soft/medium hints, direct command in prompt) across days 2, 3, 4, 7
 - **Dead code cleanup**: Removed unused `BlurView`, `APP_TAB_ROUTES` imports in SessionTimerScreen; unused `state` param in ChessBoard
 
+### Done (continued)
+- **`adjustDifficulty` scaling**: Step is now `max(25, range * 5%)` of the goal's own range instead of a fixed 50 — a chess goal (400→1200) gets ~40/step, a small skill (0→100) gets 5/step
+- **`computeNextMode()`**: Extracted mode-transition logic from `recordCheckin` ternary into a documented pure function in `goalHandlers.ts` — takes `(currentMode, history, isBehind, dailyActions)` and returns `HelpMode`
+- **Index healing**: `getSnapshot`/`getSnapshotById` now repair `goalByHobby`/`executionGoalByHobby` after fallback — subsequent calls hit the direct index instead of scanning every time
+
 ### In Progress
 - (none)
 

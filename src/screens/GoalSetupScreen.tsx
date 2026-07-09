@@ -255,12 +255,11 @@ export default function GoalSetupScreen() {
               })));
             }
           })
-          .catch(() => {});
+          .catch(() => { });
       }
     }
 
     setSaving(false);
-    console.log('[GoalSetup] handleSave complete goalId=%s hobbyId=%s category=%s', savedGoalId, hobbyId, category);
     if (savedGoalId) {
       const params = `goalId=${savedGoalId}${hobbyId ? `&hobbyId=${hobbyId}` : ''}`;
       router.push(`/goal-detail?${params}`);
@@ -459,7 +458,7 @@ export default function GoalSetupScreen() {
             {/* Hint */}
             <Text style={styles.hint}>
               {isSkill
-                ? 'We\'ll track your difficulty score as you practice.'
+                ? 'Your "current" number moves up or down after each lesson based on how it goes — it won\'t always match your raw practice count, and that\'s expected.'
                 : 'Check in daily with your real count.'}
             </Text>
 
@@ -554,320 +553,67 @@ export default function GoalSetupScreen() {
 // ── Styles ───────────────────────────────────────────────
 
 const createStyles = (colors: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: scale(24),
-    paddingBottom: scale(48),
-  },
-  header: {
-    alignItems: 'center',
-    marginTop: scale(40),
-    marginBottom: scale(32),
-  },
-  emoji: {
-    fontSize: scale(48),
-    marginBottom: scale(12),
-  },
-  title: {
-    fontFamily: fonts.heading.bold,
-    fontSize: scale(28),
-    color: colors.text,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontFamily: fonts.heading.light,
-    fontSize: scale(18),
-    color: colors.textSecondary,
-    marginTop: scale(4),
-    textAlign: 'center',
-  },
-  field: {
-    marginBottom: scale(20),
-  },
-  label: {
-    fontFamily: fonts.heading.bold,
-    fontSize: scale(14),
-    color: colors.text,
-    marginBottom: scale(8),
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: scale(24), paddingBottom: scale(48) },
+  header: { alignItems: 'center', marginTop: scale(40), marginBottom: scale(32) },
+  emoji: { fontSize: scale(48), marginBottom: scale(12) },
+  title: { fontFamily: fonts.heading.bold, fontSize: scale(28), color: colors.text, textAlign: 'center' },
+  subtitle: { fontFamily: fonts.heading.light, fontSize: scale(18), color: colors.textSecondary, marginTop: scale(4), textAlign: 'center' },
+  field: { marginBottom: scale(20) },
+  label: { fontFamily: fonts.heading.bold, fontSize: scale(14), color: colors.text, marginBottom: scale(8) },
   textInput: {
-    backgroundColor: colors.surfaceLight,
-    borderRadius: scale(12),
-    paddingHorizontal: scale(16),
-    paddingVertical: Platform.OS === 'ios' ? scale(14) : scale(10),
-    fontFamily: fonts.body.regular,
-    fontSize: scale(16),
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.surfaceLight, borderRadius: scale(12), paddingHorizontal: scale(16),
+    paddingVertical: Platform.OS === 'ios' ? scale(14) : scale(10), fontFamily: fonts.body.regular,
+    fontSize: scale(16), color: colors.text, borderWidth: 1, borderColor: colors.border,
   },
-  row: {
-    flexDirection: 'row',
-    gap: scale(12),
-  },
-  typeRow: {
-    flexDirection: 'row',
-    gap: scale(12),
-  },
-  typeCard: {
-    flex: 1,
-    borderRadius: scale(14),
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    padding: scale(16),
-    backgroundColor: colors.surfaceLight,
-  },
+  row: { flexDirection: 'row', gap: scale(12) },
+  typeRow: { flexDirection: 'row', gap: scale(12) },
+  typeCard: { flex: 1, borderRadius: scale(14), borderWidth: 1.5, borderColor: colors.border, padding: scale(16), backgroundColor: colors.surfaceLight },
   typeCardActive: {
-    borderColor: colors.buttonPrimary,
-    backgroundColor: colors.buttonPrimary + '12',
-    shadowColor: colors.buttonPrimary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
+    borderColor: colors.buttonPrimary, backgroundColor: colors.buttonPrimary + '12',
+    shadowColor: colors.buttonPrimary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 4,
   },
-  typeCardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: scale(10),
-  },
-  typeIcon: {
-    fontSize: scale(32),
-  },
+  typeCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: scale(10) },
+  typeIcon: { fontSize: scale(32) },
   typeIconActive: {},
-  typeCheck: {
-    fontSize: scale(20),
-    color: colors.buttonPrimary,
-    fontWeight: '700',
-  },
-  typeTitle: {
-    fontFamily: fonts.heading.bold,
-    fontSize: scale(14),
-    color: colors.text,
-    marginBottom: scale(6),
-  },
-  typeTitleActive: {
-    color: colors.buttonPrimary,
-  },
-  typeDesc: {
-    fontFamily: fonts.body.regular,
-    fontSize: scale(11),
-    color: colors.textSecondary,
-    lineHeight: scale(16),
-    marginBottom: scale(10),
-  },
-  typeDescActive: {
-    color: colors.text,
-  },
-  typeExamples: {
-    backgroundColor: colors.surface + '80',
-    borderRadius: scale(8),
-    padding: scale(10),
-    gap: scale(4),
-  },
-  typeExamplesActive: {
-    backgroundColor: colors.buttonPrimary + '10',
-  },
-  typeExampleText: {
-    fontFamily: fonts.body.regular,
-    fontSize: scale(11),
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-  },
-  typeExampleTextActive: {
-    color: colors.text,
-  },
-  hint: {
-    fontFamily: fonts.body.regular,
-    fontSize: scale(13),
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: scale(18),
-    marginBottom: scale(20),
-    paddingHorizontal: scale(4),
-  },
-  deadlineOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: scale(10),
-  },
-  deadlinePill: {
-    borderRadius: scale(20),
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: scale(18),
-    paddingVertical: scale(10),
-  },
-  deadlinePillActive: {
-    backgroundColor: colors.buttonPrimary,
-    borderColor: colors.buttonPrimary,
-  },
-  deadlinePillText: {
-    fontFamily: fonts.heading.bold,
-    fontSize: scale(14),
-    color: colors.text,
-  },
-  deadlinePillTextActive: {
-    color: '#FFFFFF',
-  },
-  // Step wizard
-  stepDots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: scale(8),
-    marginTop: scale(16),
-    marginBottom: scale(8),
-  },
-  stepDot: {
-    width: scale(10),
-    height: scale(10),
-    borderRadius: scale(5),
-    backgroundColor: colors.surfaceLight,
-  },
-  stepDotActive: {
-    backgroundColor: colors.buttonPrimary,
-    width: scale(28),
-    borderRadius: scale(5),
-  },
+  typeCheck: { fontSize: scale(20), color: colors.buttonPrimary, fontWeight: '700' },
+  typeTitle: { fontFamily: fonts.heading.bold, fontSize: scale(14), color: colors.text, marginBottom: scale(6) },
+  typeTitleActive: { color: colors.buttonPrimary },
+  typeDesc: { fontFamily: fonts.body.regular, fontSize: scale(11), color: colors.textSecondary, lineHeight: scale(16), marginBottom: scale(10) },
+  typeDescActive: { color: colors.text },
+  hint: { fontFamily: fonts.body.regular, fontSize: scale(13), color: colors.textSecondary, textAlign: 'center', lineHeight: scale(18), marginBottom: scale(20), paddingHorizontal: scale(4) },
+  deadlineOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: scale(10) },
+  deadlinePill: { borderRadius: scale(20), borderWidth: 1, borderColor: colors.border, paddingHorizontal: scale(18), paddingVertical: scale(10) },
+  deadlinePillActive: { backgroundColor: colors.buttonPrimary, borderColor: colors.buttonPrimary },
+  deadlinePillText: { fontFamily: fonts.heading.bold, fontSize: scale(14), color: colors.text },
+  deadlinePillTextActive: { color: '#FFFFFF' },
+  stepDots: { flexDirection: 'row', justifyContent: 'center', gap: scale(8), marginTop: scale(16), marginBottom: scale(8) },
+  stepDot: { width: scale(10), height: scale(10), borderRadius: scale(5), backgroundColor: colors.surfaceLight },
+  stepDotActive: { backgroundColor: colors.buttonPrimary, width: scale(28), borderRadius: scale(5) },
   reviewCard: {
-    backgroundColor: colors.surface,
-    borderRadius: scale(16),
-    padding: scale(20),
-    marginBottom: scale(20),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+    backgroundColor: colors.surface, borderRadius: scale(16), padding: scale(20), marginBottom: scale(20),
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
   },
-  reviewTitle: {
-    fontFamily: fonts.heading.bold,
-    fontSize: scale(18),
-    color: colors.text,
-    marginBottom: scale(16),
-  },
-  reviewRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: scale(8),
-    borderBottomWidth: 1,
-    borderBottomColor: colors.surfaceLight,
-  },
-  reviewLabel: {
-    fontFamily: fonts.body.regular,
-    fontSize: scale(14),
-    color: colors.textSecondary,
-  },
-  reviewValue: {
-    fontFamily: fonts.heading.bold,
-    fontSize: scale(14),
-    color: colors.text,
-  },
-  navRow: {
-    flexDirection: 'row',
-    gap: scale(12),
-    marginTop: scale(8),
-  },
-  backButton: {
-    flex: 1,
-    height: scale(50),
-    borderRadius: scale(25),
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backButtonText: {
-    fontFamily: fonts.heading.bold,
-    fontSize: scale(16),
-    color: colors.text,
-  },
-  nextButton: {
-    flex: 2,
-    height: scale(50),
-    borderRadius: scale(25),
-    backgroundColor: colors.buttonPrimary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  nextButtonDisabled: {
-    opacity: 0.5,
-  },
-  nextButtonText: {
-    fontFamily: fonts.heading.bold,
-    fontSize: scale(16),
-    color: '#FFFFFF',
-  },
-  saveButton: {
-    flex: 1,
-    height: scale(50),
-    borderRadius: scale(25),
-    backgroundColor: colors.buttonPrimary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
-  saveButtonText: {
-    fontFamily: fonts.heading.bold,
-    fontSize: scale(16),
-    color: '#FFFFFF',
-  },
-
-  // Proxy picker
-  proxyLoading: {
-    alignItems: 'center',
-    paddingVertical: scale(24),
-  },
-  proxyLoadingText: {
-    fontFamily: fonts.body.regular,
-    fontSize: scale(14),
-    color: colors.textSecondary,
-    marginTop: scale(12),
-    textAlign: 'center',
-  },
-  proxyOption: {
-    padding: scale(14),
-    borderRadius: scale(12),
-    backgroundColor: colors.surfaceLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: scale(10),
-  },
-  proxyOptionTitle: {
-    fontFamily: fonts.heading.bold,
-    fontSize: scale(15),
-    color: colors.text,
-    marginBottom: scale(4),
-  },
-  proxyOptionDetail: {
-    fontFamily: fonts.body.regular,
-    fontSize: scale(13),
-    color: colors.buttonPrimary,
-    marginBottom: scale(4),
-  },
-  proxyOptionReason: {
-    fontFamily: fonts.body.regular,
-    fontSize: scale(12),
-    color: colors.textSecondary,
-    lineHeight: scale(16),
-  },
-  proxySkip: {
-    alignItems: 'center',
-    paddingVertical: scale(12),
-  },
-  proxySkipText: {
-    fontFamily: fonts.body.regular,
-    fontSize: scale(14),
-    color: colors.textSecondary,
-    textDecorationLine: 'underline',
-  },
+  reviewTitle: { fontFamily: fonts.heading.bold, fontSize: scale(18), color: colors.text, marginBottom: scale(16) },
+  reviewRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: scale(8), borderBottomWidth: 1, borderBottomColor: colors.surfaceLight },
+  reviewLabel: { fontFamily: fonts.body.regular, fontSize: scale(14), color: colors.textSecondary },
+  reviewValue: { fontFamily: fonts.heading.bold, fontSize: scale(14), color: colors.text },
+  navRow: { flexDirection: 'row', gap: scale(12), marginTop: scale(8) },
+  backButton: { flex: 1, height: scale(50), borderRadius: scale(25), borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  backButtonText: { fontFamily: fonts.heading.bold, fontSize: scale(16), color: colors.text },
+  nextButton: { flex: 2, height: scale(50), borderRadius: scale(25), backgroundColor: colors.buttonPrimary, justifyContent: 'center', alignItems: 'center' },
+  nextButtonDisabled: { opacity: 0.5 },
+  nextButtonText: { fontFamily: fonts.heading.bold, fontSize: scale(16), color: '#FFFFFF' },
+  saveButton: { flex: 1, height: scale(50), borderRadius: scale(25), backgroundColor: colors.buttonPrimary, justifyContent: 'center', alignItems: 'center' },
+  saveButtonDisabled: { opacity: 0.5 },
+  saveButtonText: { fontFamily: fonts.heading.bold, fontSize: scale(16), color: '#FFFFFF' },
+  proxyLoading: { alignItems: 'center', paddingVertical: scale(24) },
+  proxyLoadingText: { fontFamily: fonts.body.regular, fontSize: scale(14), color: colors.textSecondary, marginTop: scale(12), textAlign: 'center' },
+  proxyOption: { padding: scale(14), borderRadius: scale(12), backgroundColor: colors.surfaceLight, borderWidth: 1, borderColor: colors.border, marginBottom: scale(10) },
+  proxyOptionTitle: { fontFamily: fonts.heading.bold, fontSize: scale(15), color: colors.text, marginBottom: scale(4) },
+  proxyOptionDetail: { fontFamily: fonts.body.regular, fontSize: scale(13), color: colors.buttonPrimary, marginBottom: scale(4) },
+  proxyOptionReason: { fontFamily: fonts.body.regular, fontSize: scale(12), color: colors.textSecondary, lineHeight: scale(16) },
+  proxySkip: { alignItems: 'center', paddingVertical: scale(12) },
+  proxySkipText: { fontFamily: fonts.body.regular, fontSize: scale(14), color: colors.textSecondary, textDecorationLine: 'underline' },
 });
