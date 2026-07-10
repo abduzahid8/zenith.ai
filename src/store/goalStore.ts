@@ -2,13 +2,21 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { HobbyId } from '../data/lessonContent';
-import { GoalDefinition, GoalProgress, GoalSnapshot, BottleneckAnalysis, HelpMode, Milestone, GoalProgressEntry } from '../types/goals';
+import { GoalDefinition, GoalProgress, GoalSnapshot, BottleneckAnalysis, HelpMode, Milestone, GoalProgressEntry, DailyGoalContent, PlanOfAttack, CommitmentRecord } from '../types/goals';
 import { getHandler, skillHandler, executionHandler, rollingVelocity, computeNextMode } from '../services/goalHandlers';
+import { generateDailyContent, getFallbackContent } from '../services/dailyGoalCoach';
+import { generatePlanOfAttack, buildHeuristicPlan, parseCommitment, pickTodayStepIndex } from '../services/goalPlanService';
 
 // ── Helpers ──────────────────────────────────────────────
 
 function getTodayString(): string {
   return new Date().toISOString().split('T')[0];
+}
+
+function getYesterdayString(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().split('T')[0];
 }
 
 function daysBetween(date1: string, date2: string): number {
@@ -99,6 +107,19 @@ interface GoalState {
   advanceMilestone: (goalId: string) => void;
   setTroubleshoot: (goalId: string, blocker: string) => void;
   setBottleneck: (goalId: string, bottleneck: BottleneckAnalysis) => void;
+  getOrGenerateDailyContent: (goalId: string) => Promise<DailyGoalContent | null>;
+  completeDailyContent: (goalId: string) => void;
+  recordCoachFeedback: (goalId: string, feedback: 'helpful' | 'skipped' | 'not_helpful') => void;
+  /** Persist a Plan-of-Attack for a goal (called when LLM/heuristic produces it) */
+  setPlanOfAttack: (goalId: string, plan: PlanOfAttack) => void;
+  /** Record today's free-form commitment (parsed & surfaced tomorrow) */
+  setCommitment: (goalId: string, raw: string) => void;
+  /** Mark yesterday's commitment as honored/unhonored based on today's check-in */
+  rollCommitmentForward: (goalId: string) => void;
+  /** Async: build (heuristic) + enrich (LLM) PlanOfAttack in one call */
+  generateGoalPlan: (goalId: string) => Promise<PlanOfAttack | null>;
+  /** Advance the currentStepIndex of the plan to today's tile */
+  refreshPlanPointer: (goalId: string) => void;
 }
 
 export const useGoalStore = create<GoalState>()(
@@ -111,6 +132,17 @@ export const useGoalStore = create<GoalState>()(
 
       setGoal: (goal) => {
         const initialProgress = getInitialProgress(goal.id, goal.startingValue);
+
+        // Attach a heuristic plan synchronously so today's card has a
+        // meaningful tile immediately; LLM enrichment happens in background
+        // via generateGoalPlan().
+        try {
+          const plan = buildHeuristicPlan(goal);
+          plan.currentStepIndex = pickTodayStepIndex(plan, getTodayString(), goal.deadline);
+          initialProgress.planOfAttack = plan;
+        } catch {
+          // plan stays undefined; fallback content will still render
+        }
 
         const updates: Partial<GoalState> = {
           goals: { ...get().goals, [goal.id]: goal },
@@ -129,6 +161,10 @@ export const useGoalStore = create<GoalState>()(
         }
 
         set(updates);
+
+        // Async LLM enrichment — never blocks save flow. If it fails, the
+        // heuristic plan stays and the user can still progress today.
+        get().generateGoalPlan(goal.id).catch(() => {});
       },
 
       updateGoal: (goalId, updates) => {
@@ -226,6 +262,24 @@ export const useGoalStore = create<GoalState>()(
         const newHistory: GoalProgressEntry = { date: today, value: newValue, description, type: 'checkin' };
         const newStreak = computeStreak([...existing.history, newHistory]);
 
+        // ── Smart-commitment bridge ──
+        // If the description is from the "commit:" input field (set by
+        // GoalCheckinCard.handleTacticalCommit), parse it into a commitment
+        // record and slot it onto the goal. Today's commitments will appear
+        // tomorrow on the card for follow-through nags/wins.
+        const isCommitText = description.startsWith('commit:') || description.startsWith('committed:');
+        const commitment: CommitmentRecord | undefined =
+          isCommitText
+            ? parseCommitment(description.replace(/^commit(?:ted)?:\s*/i, ''))
+            : existing.commitment;
+        const honored = commitment
+          ? (newValue > existing.currentValue) // any forward motion counts as honored
+          : undefined;
+        const yesterdayCommitment = existing.commitment;
+        const yesterdayCommitmentHonored = commitment
+          ? honored
+          : existing.yesterdayCommitmentHonored;
+
         set({
           progress: {
             ...progress,
@@ -241,6 +295,9 @@ export const useGoalStore = create<GoalState>()(
               milestones: updatedMilestones,
               currentMilestoneIndex: updatedIndex,
               history: [...existing.history, newHistory],
+              commitment,
+              yesterdayCommitment: isCommitText ? yesterdayCommitment : existing.yesterdayCommitment,
+              yesterdayCommitmentHonored: isCommitText ? existing.yesterdayCommitmentHonored : yesterdayCommitmentHonored,
             },
           },
         });
@@ -432,7 +489,179 @@ export const useGoalStore = create<GoalState>()(
           return { progress: { ...state.progress, [goalId]: { ...prog, lastBottleneck: bottleneck } } };
         });
       },
-    }),
+
+      completeDailyContent: (goalId) => {
+        set(state => {
+          const p = state.progress[goalId];
+          if (!p) return state;
+          const today = getTodayString();
+          const existing = p.dailyContent?.[today];
+          if (!existing) return state;
+          const history = p.dailyCoachHistory ?? [];
+          if (history[history.length - 1] !== today) {
+            history.push(today);
+          }
+          return {
+            progress: {
+              ...state.progress,
+              [goalId]: {
+                ...p,
+                dailyContent: { ...p.dailyContent, [today]: { ...existing, completedAt: new Date().toISOString() } },
+                dailyCoachHistory: history,
+              },
+            },
+          };
+        });
+      },
+
+      recordCoachFeedback: (goalId, feedback) => {
+        set(state => {
+          const p = state.progress[goalId];
+          if (!p) return state;
+          const today = getTodayString();
+          return {
+            progress: {
+              ...state.progress,
+              [goalId]: {
+                ...p,
+                coachFeedback: { ...(p.coachFeedback || {}), [today]: feedback },
+              },
+            },
+          };
+        });
+      },
+
+      setPlanOfAttack: (goalId, plan) => {
+        set(state => {
+          const p = state.progress[goalId];
+          if (!p) return state;
+          return { progress: { ...state.progress, [goalId]: { ...p, planOfAttack: plan } } };
+        });
+      },
+
+      setCommitment: (goalId, raw) => {
+        set(state => {
+          const p = state.progress[goalId];
+          if (!p) return state;
+          const today = getTodayString();
+          const newCommitment = parseCommitment(raw);
+          return {
+            progress: {
+              ...state.progress,
+              [goalId]: {
+                ...p,
+                // Move whatever was previously "today's" commitment into
+                // yesterdayCommitment so tomorrow's card can show follow-through.
+                yesterdayCommitment: p.commitment && p.commitment.date !== today
+                  ? p.commitment
+                  : p.yesterdayCommitment,
+                commitment: newCommitment,
+                yesterdayCommitmentHonored: undefined,
+              },
+            },
+          };
+        });
+      },
+
+      rollCommitmentForward: (goalId) => {
+        // Called when a new day starts (or when card mounts). Promotes today's
+        // commitment into yesterdayCommitment and computes honored/unhonored
+        // from today's first check-in value.
+        set(state => {
+          const p = state.progress[goalId];
+          if (!p || !p.commitment) return state;
+          const today = getTodayString();
+          if (p.commitment.date === today) return state;
+          return {
+            progress: {
+              ...state.progress,
+              [goalId]: {
+                ...p,
+                yesterdayCommitment: p.commitment,
+                commitment: undefined,
+              },
+            },
+          };
+        });
+      },
+
+      refreshPlanPointer: (goalId) => {
+        const { goals, progress } = get();
+        const goal = goals[goalId];
+        const p = progress[goalId];
+        if (!goal || !p || !p.planOfAttack) return;
+        const newIdx = pickTodayStepIndex(p.planOfAttack, getTodayString(), goal.deadline);
+        if (newIdx === p.planOfAttack.currentStepIndex) return;
+        set(state => {
+          const cur = state.progress[goalId];
+          if (!cur || !cur.planOfAttack) return state;
+          return {
+            progress: {
+              ...state.progress,
+              [goalId]: {
+                ...cur,
+                planOfAttack: { ...cur.planOfAttack, currentStepIndex: newIdx },
+              },
+            },
+          };
+        });
+      },
+
+      generateGoalPlan: async (goalId) => {
+        const { goals, progress } = get();
+        const goal = goals[goalId];
+        if (!goal) return null;
+        const plan = await generatePlanOfAttack(goal);
+        plan.currentStepIndex = pickTodayStepIndex(plan, getTodayString(), goal.deadline);
+        // Only persist if the goal hasn't been deleted in the meantime and
+        // the caller hasn't set a newer plan already.
+        if (get().progress[goalId]) {
+          get().setPlanOfAttack(goalId, plan);
+        }
+        return plan;
+      },
+
+      getOrGenerateDailyContent: async (goalId) => {
+        const { goals, progress } = get();
+        const goal = goals[goalId];
+        const prog = progress[goalId];
+        if (!goal || !prog) return null;
+
+        const today = getTodayString();
+
+        // Roll yesterday→commitment forward if needed (idempotent)
+        if (prog.commitment && prog.commitment.date !== today) {
+          get().rollCommitmentForward(goalId);
+        }
+        // Refresh plan pointer in case days have elapsed
+        get().refreshPlanPointer(goalId);
+
+        const cached = prog.dailyContent?.[today];
+        if (cached) return cached;
+
+        const snapshot = get().getSnapshotById(goalId);
+        if (!snapshot) return null;
+
+        const fallback = getFallbackContent(snapshot);
+        set(state => {
+          const p = state.progress[goalId];
+          if (!p) return state;
+          return { progress: { ...state.progress, [goalId]: { ...p, dailyContent: { ...(p.dailyContent || {}), [today]: fallback } } } };
+        });
+
+        const generated = await generateDailyContent(snapshot);
+        if (generated) {
+          set(state => {
+            const p = state.progress[goalId];
+            if (!p) return state;
+            return { progress: { ...state.progress, [goalId]: { ...p, dailyContent: { ...(p.dailyContent || {}), [today]: generated } } } };
+          });
+          return generated;
+        }
+        return fallback;
+      },
+}),
+
     {
       name: 'goal-storage',
       storage: createJSONStorage(() => AsyncStorage),
@@ -455,6 +684,26 @@ export const useGoalStore = create<GoalState>()(
           if (p.currentMode === undefined) (p as any).currentMode = 'tactical';
           if (!p.milestones) (p as any).milestones = [];
           if (p.currentMilestoneIndex === undefined) (p as any).currentMilestoneIndex = 0;
+          // Legacy goals that predate the Plan-of-Attack engine — attach a
+          // heuristic plan on rehydrate so cards are immediately informative.
+          if (!p.planOfAttack) {
+            try {
+              const goal = state.goals[key];
+              if (goal) {
+                const plan = buildHeuristicPlan(goal);
+                plan.currentStepIndex = pickTodayStepIndex(plan, getTodayString(), goal.deadline);
+                p.planOfAttack = plan;
+                // Kick off async LLM enrichment in the background.
+                const goalId = key;
+                // setState here keeps the heuristic plan visible immediately
+                setTimeout(() => {
+                  useGoalStore.getState().generateGoalPlan(goalId).catch(() => {});
+                }, 50);
+              }
+            } catch {
+              // tolerate failure — card keeps generic fallback
+            }
+          }
         }
         if (!(state as any).executionGoalByHobby) (state as any).executionGoalByHobby = {};
       },

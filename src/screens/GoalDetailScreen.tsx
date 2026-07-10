@@ -8,6 +8,7 @@ import { useAppTheme } from '../theme/useAppTheme';
 import { useGoalStore, getInitialProgress } from '../store/goalStore';
 import { GoalSnapshot, GoalDefinition, GoalProgress, GoalCategory } from '../types/goals';
 import { ProgressRing, ActivitySparkline, StatusPill, statusVisuals, MilestoneTimelineDetailed } from '../components/goal/shared';
+import { DailyGoalCard } from '../components/goal/DailyGoalCard';
 import { GoalCheckinCard } from '../components/goal/GoalCheckinCard';
 
 // ── Main Screen ───────────────────────────────────────────
@@ -227,6 +228,17 @@ export default function GoalDetailScreen() {
             <Text style={styles.statLabel}>activity</Text>
           </View>
         </View>
+
+        {/* Daily coaching card — shown for skill goals only, since
+            execution goals already show their goal-aware prompt in
+            GoalCheckinCard below (avoid duplicating the same call to action). */}
+        {isSkill && goal.status === 'active' && (
+          <DailyGoalCard
+            snapshot={snapshot}
+            colors={colors}
+            onRefresh={(next) => setSnapshotOverride(next)}
+          />
+        )}
 
         {/* Milestones timeline */}
         {progress.milestones.length > 0 && (

@@ -30,11 +30,19 @@
 - **Empty puzzles guard**: `useTimer.ts` checks `puzzles.length > 0` before accessing `puzzles[0]`
 - **Puzzle content quality**: Fixed 10 violations (coordinates in soft/medium hints, direct command in prompt) across days 2, 3, 4, 7
 - **Dead code cleanup**: Removed unused `BlurView`, `APP_TAB_ROUTES` imports in SessionTimerScreen; unused `state` param in ChessBoard
-
 ### Done (continued)
+
 - **`adjustDifficulty` scaling**: Step is now `max(25, range * 5%)` of the goal's own range instead of a fixed 50 — a chess goal (400→1200) gets ~40/step, a small skill (0→100) gets 5/step
 - **`computeNextMode()`**: Extracted mode-transition logic from `recordCheckin` ternary into a documented pure function in `goalHandlers.ts` — takes `(currentMode, history, isBehind, dailyActions)` and returns `HelpMode`
 - **Index healing**: `getSnapshot`/`getSnapshotById` now repair `goalByHobby`/`executionGoalByHobby` after fallback — subsequent calls hit the direct index instead of scanning every time
+- **Goal-aware Plan-of-Attack**: New `PlanOfAttack` + `CommitmentRecord` types in `goals.ts`; `services/goalPlanService.ts` generates a per-goal roadmap from the user's free-form description (LLM with heuristic fallback) and parses free-form commits into structured actions
+- **Daily content is goal-aware**: `dailyGoalCoach.generateDailyContent` now feeds the AI the user's plan, yesterday's commitment, and today's commitment; `getFallbackContent` interpolates the plan tile into legacy mode-aware fallbacks; new `learnTitle`/`doTitle` reflect the user's *specific* step (e.g. "Read 20 pages of Meditations" instead of generic "Read more")
+- **Smart commit follow-through**: Free-form commits in `GoalCheckinCard` are parsed (verb, action, minutes), stashed as `progress.commitment`, surfaced back tomorrow on `DailyGoalCard`; honored-flag flips automatically when a check-in is logged the next day
+- **LLM bottleneck→tools**: `getBottleneckTools` now does: curated static pattern (preferred) → LLM with `GENERIC_TOOL_CATALOG` allowlist → local heuristic on the allowlist. New `GENERIC_TOOL_CATALOG` (Notion, Forest, Obsidian, ChatGPT, etc.) constrains the LLM to safe URLs
+- **AICoachScreen context**: now includes today's plan step + yesterday's commitment (honored/cold) when chatting with the coach
+- **`setGoal` is non-blocking**: attaches a heuristic plan immediately so today's tile shows instantly; LLM enrichment runs in the background and replaces it on success
+- **Daily content lifecycle**: `getOrGenerateDailyContent` rolls forward yesterday's commitment and refreshes `currentStepIndex` before serving cache, so the same card reload after midnight correctly shows follow-through on yesterday and a fresh step today
+- **Tests**: new `goalAware.test.ts` covers `parseCommitment`, `buildHeuristicPlan`, `pickTodayStepIndex`, `deriveDailyTile`, `generateDailyContent` (success/failure/parse error), `generatePlanOfAttack` (LLM / heuristic / malformed), `getBottleneckTools` (static / LLM / local fallback) — **148/148 pass, typecheck clean**
 
 ### In Progress
 - (none)

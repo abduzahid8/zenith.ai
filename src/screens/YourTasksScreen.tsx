@@ -13,6 +13,7 @@ import { useAuthStore } from '../store/authStore';
 import { useGoalStore } from '../store/goalStore';
 import { GoalSnapshot } from '../types/goals';
 import GoalProgressBar from '../components/goal/GoalProgressBar';
+import { DailyGoalCard } from '../components/goal/DailyGoalCard';
 import { GoalCheckinCard } from '../components/goal/GoalCheckinCard';
 import { TaskType } from '../services/supabase/types';
 import { getMaxTasksPerDay } from '../domain/tasks/rules';
@@ -21,6 +22,7 @@ import { fonts } from '../theme';
 import { scale } from '../constants';
 import { useAppTheme } from '../theme/useAppTheme';
 import { useT } from '../store/languageStore';
+import { deriveDailyTile } from '../services/goalPlanService';
 
 const categories: { type: TaskType; label: string; icon: any; bg: string; subtitle: string }[] = [
     {
@@ -53,6 +55,45 @@ const categories: { type: TaskType; label: string; icon: any; bg: string; subtit
     },
 ];
 
+// Derive a goal-aware subtitle for a category slot. Falls back to the
+// default category subtitle when no plan is attached, so legacy users
+// without a goal still see the hobby-curriculum copy.
+function goalAwareSubtitle(
+    cat: typeof categories[number],
+    snapshot: GoalSnapshot | null
+): string {
+    if (!snapshot) return cat.subtitle;
+    const tile = snapshot.progress.planOfAttack
+        ? deriveDailyTile(
+            snapshot.progress.planOfAttack,
+            snapshot.definition,
+            snapshot.progress.currentValue,
+            snapshot.daysRemaining
+          )
+        : undefined;
+    const stepLabel = tile?.step?.label?.toLowerCase();
+    const stepDetail = tile?.step?.detail?.toLowerCase();
+    const unit = (snapshot.definition.unitLabel || 'units').toLowerCase();
+    switch (cat.type) {
+        case 'theory':
+            return tile
+                ? `Tie today (step ${(tile.index ?? 0) + 1}/${tile.total}) into "${stepLabel}" — learn the principle first.`
+                : cat.subtitle;
+        case 'practice':
+            return tile
+                ? `Do the work: ${stepDetail || stepLabel || 'one chunk'} toward ${unit}.`
+                : cat.subtitle;
+        case 'analysis':
+            return tile
+                ? `Reflect on what worked, what didn't, and refine tomorrow's step.`
+                : cat.subtitle;
+        case 'puzzles':
+            return tile
+                ? `Stretch: try a related problem so the skill feels automatic.`
+                : cat.subtitle;
+    }
+}
+
 export const YourTasksScreen = () => {
     const router = useRouter();
     const { dailyTasks, addTask, loading } = useTaskStore();
@@ -64,6 +105,21 @@ export const YourTasksScreen = () => {
     const [goalSnapshot, setGoalSnapshot] = useState<GoalSnapshot | null>(null);
     const [showFollowUp, setShowFollowUp] = useState(false);
     const [followUpCommit, setFollowUpCommit] = useState('');
+
+    // Keep goalSnapshot fresh with store updates so plan-aware subtitles
+    // re-render when a plan attaches asynchronously.
+    const liveGoals = useGoalStore(s => s.goals);
+    const liveProgress = useGoalStore(s => s.progress);
+    useEffect(() => {
+        if (goalSnapshot) {
+            const fresh = useGoalStore.getState().getSnapshotById(goalSnapshot.definition.id);
+            if (fresh && fresh.progress !== goalSnapshot.progress) {
+                setGoalSnapshot(fresh);
+            }
+        }
+        // Re-run whenever any progress record changes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [liveGoals, liveProgress]);
 
     const selectedRef = useRef(selectedHobby);
     selectedRef.current = selectedHobby;
@@ -152,6 +208,14 @@ export const YourTasksScreen = () => {
                             onPress={() => router.push(`/goal-detail?goalId=${goalSnapshot.definition.id}${selectedHobby ? `&hobbyId=${selectedHobby}` : ''}` as any)}
                         />
 
+                        {goalSnapshot.definition.status === 'active' && (
+                          <DailyGoalCard
+                            snapshot={goalSnapshot}
+                            colors={colors}
+                            onRefresh={(next) => setGoalSnapshot(next)}
+                          />
+                        )}
+
                         {/* Tactical follow-up — separate concern from the mode card, shown above it */}
                         {goalSnapshot.definition.category === 'execution' && showFollowUp && followUpCommit && (
                             <View style={styles.followUpCard}>
@@ -208,15 +272,39 @@ export const YourTasksScreen = () => {
                 )}
 
                 <Text style={styles.subtitle}>
-                    {goalSnapshot?.definition.category === 'execution'
-                        ? t('Log your progress daily — we\'ll help you find what\'s slowing you down.')
-                        : t('Tasks for today — each one brings you closer to your goal.')}
+                    {(() => {
+                        if (!goalSnapshot) {
+                            return t('Tasks for today — each one brings you closer to your goal.');
+                        }
+                        if (goalSnapshot.definition.category === 'execution') {
+                            const tile = goalSnapshot.progress.planOfAttack
+                                ? deriveDailyTile(
+                                    goalSnapshot.progress.planOfAttack,
+                                    goalSnapshot.definition,
+                                    goalSnapshot.progress.currentValue,
+                                    goalSnapshot.daysRemaining
+                                )
+                                : undefined;
+                            if (tile && tile.step) {
+                                return `Today you advance "${goalSnapshot.definition.description}" — step ${(tile.index ?? 0) + 1} of ${tile.total}: ${tile.step.label}.`;
+                            }
+                            return t('Log your progress daily — we\'ll help you find what\'s slowing you down.');
+                        }
+                        return t('Tasks for today — each one brings you closer to your goal.');
+                    })()}
                 </Text>
 
                 <View style={styles.cardsContainer}>
                     {categories.map((cat) => {
                         const existingTask = dailyTasks.find(t => t.type === cat.type) ?? null;
                         const shouldShowLocked = !existingTask && engineTasksCount >= maxTasks;
+                        // When the user has an active execution goal, swap the
+                        // generic subtitle for a goal-aware one derived from the
+                        // Plan-of-Attack. This is the visible upgrade on the
+                        // "Твои задачи" page for users with real goals.
+                        const subtitle = (goalSnapshot && goalSnapshot.definition.category === 'execution')
+                            ? goalAwareSubtitle(cat, goalSnapshot)
+                            : cat.subtitle;
 
                         if (shouldShowLocked) {
                             return null;
@@ -225,7 +313,7 @@ export const YourTasksScreen = () => {
                         return (
                             <View key={cat.type} style={{ marginBottom: scale(16) }}>
                                 <CategoryCard
-                                    category={cat}
+                                    category={{ ...cat, subtitle }}
                                     existingTask={existingTask}
                                     isLocked={false}
                                     onAdd={() => handleAdd(cat.type)}

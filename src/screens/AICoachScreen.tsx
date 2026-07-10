@@ -71,6 +71,27 @@ export const AICoachScreen: React.FC = () => {
             list.push(`Progress: ${snapshot.percentComplete}% (${snapshot.progress.currentValue}/${snapshot.definition.target})`);
             list.push(`Days remaining: ${snapshot.daysRemaining}`);
             list.push(`Status: ${snapshot.projectedCompletion}`);
+            // Plan-of-Attack: surface today's tile so the AI coach can answer
+            // "what should I do now" with the user's *specific* plan step.
+            if (snapshot.progress.planOfAttack) {
+                const { deriveDailyTile } = require('../services/goalPlanService');
+                const tile = deriveDailyTile(
+                    snapshot.progress.planOfAttack,
+                    snapshot.definition,
+                    snapshot.progress.currentValue,
+                    snapshot.daysRemaining
+                );
+                if (tile && tile.step) {
+                    list.push(`Plan-of-Attack: step ${tile.index + 1}/${tile.total} — "${tile.step.label}"${tile.summary ? ` (${tile.summary})` : ''}`);
+                }
+            }
+            if (snapshot.progress.commitment) {
+                list.push(`Today's commitment: "${snapshot.progress.commitment.action}"`);
+            }
+            if (snapshot.progress.yesterdayCommitment) {
+                const honored = snapshot.progress.yesterdayCommitmentHonored;
+                list.push(`Yesterday's commitment: "${snapshot.progress.yesterdayCommitment.action}" (${typeof honored === 'boolean' ? (honored ? 'honored' : 'NOT honored') : 'no follow-through yet'})`);
+            }
         }
 
         if (hobby) {

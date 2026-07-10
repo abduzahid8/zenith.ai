@@ -22,6 +22,7 @@ import { useT } from '../../store/languageStore';
 import { useGoalStore } from '../../store/goalStore';
 import { GoalSnapshot } from '../../types/goals';
 import GoalProgressBar from '../../components/goal/GoalProgressBar';
+import { DailyGoalCard } from '../../components/goal/DailyGoalCard';
 
 interface WeeklyPlanTabProps {
     isPremium: boolean;
@@ -145,6 +146,13 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                 <>
                     <Text style={styles.yourDayTitle}>Твоя цель</Text>
                     <GoalProgressBar snapshot={goalSnapshot} />
+                    {goalSnapshot.definition.status === 'active' && (
+                        <DailyGoalCard
+                            snapshot={goalSnapshot}
+                            colors={colors}
+                            onRefresh={(next) => setGoalSnapshot(next)}
+                        />
+                    )}
                 </>
             )}
 

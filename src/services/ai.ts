@@ -136,6 +136,30 @@ export const aiService = {
         }
     },
 
+    // Generate personalised daily coaching content for a goal snapshot
+    generateDailyCoaching: async (prompt: string): Promise<string> => {
+      if (USE_LOCAL_AI) {
+        return (localAiService as any).generateDailyCoaching(prompt);
+      }
+      try {
+        // Worker returns raw text (or JSON-stringified text). We want the
+        // raw string — not auto-parsed JSON — because the caller parses it.
+        const response = await fetch(AI_PROXY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'generateDailyCoaching', prompt }),
+        });
+        const json = await response.json().catch(() => ({} as any));
+        if (!response.ok) return '';
+        const raw = json.data;
+        if (typeof raw === 'string') return raw;
+        if (raw && typeof raw === 'object') return JSON.stringify(raw);
+        return '';
+      } catch {
+        return '';
+      }
+    },
+
     // Generate substitute content when user tries to open social media
     generateSubstituteContent: async (
         blockedApp: string,
@@ -388,6 +412,76 @@ export const aiService = {
                 strengths: ['Determination'],
                 growth_areas: ['Regular practice'],
             };
+        }
+    },
+
+    // Generate a goal-specific Plan-of-Attack: a tile sequence sized to the
+    // user's free-form description, target, unit and deadline. Returns an
+    // empty array on any failure so the caller can fall back to a heuristic.
+    generatePlanOfAttack: async (input: {
+        description: string;
+        category: string;
+        target: number;
+        startingValue: number;
+        unit: string;
+        deadline: string;
+        startDate: string;
+    }): Promise<{ summary: string; steps: Array<{ label: string; detail?: string; day?: number; estimatedMinutes?: number }> }> => {
+        if (USE_LOCAL_AI) {
+            try {
+                return await (localAiService as any).generatePlanOfAttack(input);
+            } catch {
+                return { summary: '', steps: [] };
+            }
+        }
+        try {
+            const parsed = await invokeAI<{ summary?: string; steps?: Array<{ label?: string; detail?: string; day?: number; estimatedMinutes?: number }> }>(
+                'generatePlanOfAttack', input
+            );
+            const summary = typeof parsed.summary === 'string' ? parsed.summary : '';
+            const steps = Array.isArray(parsed.steps)
+                ? parsed.steps.map((s: any) => ({
+                    label: String(s?.label || '').slice(0, 120),
+                    detail: String(s?.detail || '').slice(0, 280),
+                    day: typeof s?.day === 'number' ? s.day : undefined,
+                    estimatedMinutes: typeof s?.estimatedMinutes === 'number' ? s.estimatedMinutes : undefined,
+                })).filter((s: any) => s.label)
+                : [];
+            return { summary, steps };
+        } catch {
+            return { summary: '', steps: [] };
+        }
+    },
+
+    // Recommend 1 ranked tool given a free-text bottleneck. The caller may
+    // pre-supply a catalog of tools/URLs to constrain the answer to safe picks.
+    recommendToolsForBottleneck: async (input: {
+        goalDescription: string;
+        bottleneck: string;
+        allowedTools?: Array<{ name: string; reason: string; url?: string; cost?: string; setup?: string }>;
+    }): Promise<Array<{ name: string; reason: string; url?: string; cost?: string; setup?: string }>> => {
+        if (USE_LOCAL_AI) {
+            try {
+                return await (localAiService as any).recommendToolsForBottleneck(input);
+            } catch {
+                return [];
+            }
+        }
+        try {
+            const parsed = await invokeAI<Array<{ name?: string; reason?: string; url?: string; cost?: string; setup?: string }>>(
+                'recommendToolsForBottleneck', input
+            );
+            return (Array.isArray(parsed) ? parsed : [])
+                .map((r: any) => ({
+                    name: String(r?.name || '').slice(0, 80),
+                    reason: String(r?.reason || '').slice(0, 200),
+                    url: r?.url && typeof r.url === 'string' ? r.url : undefined,
+                    cost: r?.cost && typeof r.cost === 'string' ? r.cost : undefined,
+                    setup: r?.setup && typeof r.setup === 'string' ? r.setup : undefined,
+                }))
+                .filter((r: any) => r.name);
+        } catch {
+            return [];
         }
     },
 };

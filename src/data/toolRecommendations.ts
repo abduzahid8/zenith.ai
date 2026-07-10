@@ -253,3 +253,56 @@ export function getRecommendations(description: string): {
     recommendations: best.recommendations,
   };
 }
+
+/**
+ * Generic-purpose tools allowlisted for any goal. Used as the safe catalog
+ * for LLM-driven bottleneck→tool recommendations and as a manual fallback
+ * when no specific pattern matches.
+ *
+ * Why an allowlist? Tool suggestions from a raw LLM can drift to sketchy
+ * URLs or hallucinated products. Constraining the model to a curated list
+ * keeps the user safe and reduces hallucinations to ~0.
+ */
+export interface GenericTool {
+  name: string;
+  category: string;
+  reason: string;          // what bottleneck this addresses
+  url?: string;
+  cost?: 'free' | 'low' | 'medium' | 'high';
+  setup?: 'instant' | 'minutes' | 'hours' | 'days';
+}
+
+export const GENERIC_TOOL_CATALOG: GenericTool[] = [
+  { name: 'Notion', category: 'organize', reason: 'Track your goal, milestones, and todos in one place.', url: 'https://notion.so', cost: 'free', setup: 'minutes' },
+  { name: 'Google Calendar', category: 'plan', reason: 'Block daily focus slots for your goal.', url: 'https://calendar.google.com', cost: 'free', setup: 'instant' },
+  { name: 'Habitica', category: 'track', reason: 'Gamify your daily check-ins and streaks.', url: 'https://habitica.com', cost: 'free', setup: 'minutes' },
+  { name: 'Todoist', category: 'organize', reason: 'Capture and prioritize today\'s one action.', url: 'https://todoist.com', cost: 'free', setup: 'minutes' },
+  { name: 'Forest', category: 'focus', reason: 'Stay off your phone while doing the work.', url: 'https://forestapp.cc', cost: 'low', setup: 'instant' },
+  { name: 'Toggl Track', category: 'track', reason: 'Measure how long you actually spend on the goal.', url: 'https://toggl.com/track', cost: 'free', setup: 'minutes' },
+  { name: 'Obsidian', category: 'reflect', reason: 'Journal decisions, blockers and progress over time.', url: 'https://obsidian.md', cost: 'free', setup: 'hours' },
+  { name: 'ChatGPT', category: 'ideate', reason: 'Brainstorm next concrete step when stuck.', url: 'https://chatgpt.com', cost: 'low', setup: 'instant' },
+  { name: 'Loom', category: 'reflect', reason: 'Record a 3-min video update on progress and blockers.', url: 'https://loom.com', cost: 'free', setup: 'minutes' },
+  { name: 'Anki', category: 'retention', reason: 'Spaced-repetition flashcards for any knowledge goal.', url: 'https://apps.ankiweb.net', cost: 'free', setup: 'hours' },
+  { name: 'Strava', category: 'track', reason: 'Auto-log training sessions for fitness goals.', url: 'https://strava.com', cost: 'free', setup: 'minutes' },
+];
+
+/**
+ * Find the catalog tools most relevant to a free-form description. Used as a
+ * pure-local fallback when LLM is unavailable.
+ */
+export function recommendGenericTools(description: string, max = 3): GenericTool[] {
+  const lower = description.toLowerCase();
+  const scored = GENERIC_TOOL_CATALOG.map(t => {
+    let score = 0;
+    if (/read|book|study|learn|memoriz|retention/i.test(lower) && /retention|reflect/.test(t.category)) score += 3;
+    if (/plan|organiz|schedule|time/i.test(lower) && /plan|organize/.test(t.category)) score += 3;
+    if (/distract|focus|concentrat|phone/i.test(lower) && t.category === 'focus') score += 4;
+    if (/time track|hour|minute/i.test(lower) && t.category === 'track') score += 2;
+    if (/fitness|run|workout|5k|10k|marathon/i.test(lower) && t.category === 'track') score += 2;
+    if (/stuck|block|overwhelm|don't know/i.test(lower) && t.category === 'ideate') score += 3;
+    if (t.category === 'track' || t.category === 'organize') score += 1;
+    return { t, score };
+  }).filter(s => s.score > 0)
+    .sort((a, b) => b.score - a.score);
+  return scored.slice(0, max).map(s => s.t);
+}
