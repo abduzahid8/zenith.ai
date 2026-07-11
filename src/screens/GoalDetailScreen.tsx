@@ -233,12 +233,10 @@ export default function GoalDetailScreen() {
           {/* ═══ STEP PROGRESS STRIP ═══ */}
           {plan && totalSteps > 0 && (
             <View style={ss.progressStrip}>
-              <Text style={ss.progressLabel}>Plan progress</Text>
               <View style={ss.progressBarRow}>
                 <View style={ss.progressBarTrack}>
                   <View style={[ss.progressBarFill, { width: `${Math.min(100, ((plan.currentStepIndex + 1) / totalSteps) * 100)}%` }]} />
                 </View>
-                <Text style={ss.progressText}>{plan.currentStepIndex + 1}/{totalSteps}</Text>
               </View>
             </View>
           )}
@@ -377,8 +375,7 @@ const ss = StyleSheet.create({
   msgCoachNudge: { fontFamily: fonts.body.regular, fontSize: scale(10), color: '#FFFFFF99', marginTop: scale(4), lineHeight: scale(13), fontStyle: 'italic' },
 
   /* ═══ STEP PROGRESS STRIP ═══ */
-  progressStrip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: scale(12), paddingHorizontal: scale(2) },
-  progressLabel: { fontFamily: fonts.body.regular, fontSize: scale(10), color: '#999', textTransform: 'uppercase', letterSpacing: scale(0.5) },
+  progressStrip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginBottom: scale(12), paddingHorizontal: scale(2) },
   progressBarRow: { flexDirection: 'row', alignItems: 'center', gap: scale(8) },
   progressBarTrack: { width: scale(80), height: scale(4), backgroundColor: '#D0D0D0', borderRadius: scale(2), overflow: 'hidden' },
   progressBarFill: { height: '100%', backgroundColor: '#059669', borderRadius: scale(2) },

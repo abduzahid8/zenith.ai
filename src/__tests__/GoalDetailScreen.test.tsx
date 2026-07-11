@@ -167,10 +167,9 @@ describe('GoalDetailScreen – coaching message layout', () => {
         expect(screen.getByText('Day 7 · 10%')).toBeTruthy();
     });
 
-    it('renders step progress strip', async () => {
+    it('renders step progress strip (no label)', async () => {
         const screen = await render(React.createElement(require('../screens/GoalDetailScreen').default));
-        expect(screen.getByText('Plan progress')).toBeTruthy();
-        expect(screen.getByText('1/40')).toBeTruthy();
+        expect(screen.queryByText('Plan progress')).toBeNull();
     });
 
     it('renders quick reply chips', async () => {
