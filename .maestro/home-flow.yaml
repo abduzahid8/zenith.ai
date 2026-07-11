@@ -1,0 +1,67 @@
+# Prerequisite: App is running on a booted iOS simulator, user is already
+# authenticated with an active goal.
+#
+# This flow tests the core coaching experience:
+#   1. Tab navigation (Home → Weekly → Coach)
+#   2. Goal detail screen with coach bubble, quick-reply chips, and agent tools
+#   3. The daily content lifecycle (learn + practice checkboxes → done → celebration)
+#
+# Run: maestro test .maestro/home-flow.yaml
+appId: com.zenyth.ai
+---
+- launchApp
+
+# ── ASSERT TAB BAR ────────────────────────────────────────
+- assertVisible: "Home"
+- assertVisible: "Weekly"
+- assertVisible: "Coach"
+
+# ── HOME TAB — daily coaching card ────────────────────────
+# The DailyGoalCard renders today's plan with a coach bubble
+- assertVisible: "Today"
+- tapOn: "Today"
+- tapOn:
+    point: "50%,6%"
+
+# ── WEEKLY PLAN ──────────────────────────────────────────
+- tapOn: "Weekly"
+# Weekly shows GoalCheckinCard + plan-of-attack preview
+- assertVisible: "Week"
+- swipe:
+    direction: DOWN
+
+# ── AI COACH ──────────────────────────────────────────────
+- tapOn: "Coach"
+- assertVisible: "Coach"
+
+# ── GOAL DETAIL — navigate from home card ───────────
+- tapOn: "Home"
+- tapOn:
+    point: "50%,30%"
+# The goal detail screen should show:
+#   • Green coach bubble with goal description + focus strategy
+#   • 📖 Learn section with bullet points (no label)
+#   • 🎯 Practice section with checkable steps (no label)
+#   • Quick-reply chips: ✓ Done, ⚡ Too much, 🔄 Give me another, 🔍 Research
+#   • Agent tool buttons (contextual to hobby)
+- assertVisible: "Plan progress"
+- assertVisible: "✓ Done"
+- assertVisible: "⚡ Too much"
+
+# ── CHECK OFF STEPS → DONE ─────────────────────────
+# Tap practice steps to mark them done
+- tapOn:
+    point: "50%,45%"
+- tapOn:
+    point: "50%,50%"
+
+# Hit the Done button
+- tapOn: "I'm finished"
+
+# ── CELEBRATION SCREEN ──────────────────────────────
+- assertVisible: "Today's work done."
+- assertVisible: "toward goal"
+- assertVisible: "streak"
+
+# Back to home
+- tapOn: "Back"

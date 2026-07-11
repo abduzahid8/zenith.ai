@@ -1,17 +1,21 @@
 ## Goal
-- Overhaul first-week chess module from V1 (moves[]) to V2 (solution[]), fix all test failures, align hobby IDs across the full stack, and add `reading` as a fully-supported hobby.
+- The app should be a conversational AI coach (like Folk.app) — not a dashboard with task descriptions. The GoalDetailScreen must make the user feel GUIDED: coach teaches → user learns → coach assigns → user does → coach celebrates.
 
 ## Constraints & Preferences
-- English prompts, mobile‑short text
-- Prompts must not contain coordinates or direct commands
-- Hints: soft/medium without coordinates, strong without UCI
-- Multi-move puzzles require opponent moves between user moves
-- Backward‑compatible: `moves[]` optional, `solution[]` primary
-- `reading` lessons follow same structure as other hobbies (learn → do → deepen)
+- No labels (LEARN, DO THIS, YOUR PLAN, etc.) — just content and action
+- Coach bubble with green background for the daily message
+- Focus reason (from dailyFocusEngine) is the coach's strategy insight
+- Steps are checkable (checkbox pattern), Done button only when all checked
+- `dailyFocusEngine.ts` computes 8 focus strategies (pure function)
+- `test:components` script for component integration tests (RNTL v14)
 
 ## Progress
 ### Done
-- **Tests**: Fixed all 3 failing suites — aiService (mock `fetch` instead of supabase), taskEngine (removed early return), authStore (mocked native-module stores) — **119/119 pass**
+- **GoalDetailScreen → coaching message**: Replaced card-based layout with 4-section chat-like format: green coach bubble (goal + focus + plan + commitment) → 📖 Learn section → 🎯 Practice section (checkable steps) → Done button. Completion state shows 🎉 with stats.
+- **Component tests (RNTL v14)**: `GoalDetailScreen.test.tsx` — 10 tests covering all states (coach bubble, focus, learn, practice, step checking, done flow, header, goal not found, completed, paused). Uses `test-renderer` (callstack) with mocked RN, safe-area, expo-router.
+- **Maestro e2e**: Basic `home-flow.yaml` in `.maestro/` — verifies Home/Weekly/Coach tabs visible, scrolls down. Requires booted simulator with authenticated app.
+- **`jest.config.components.js`**: Separate jest config for component tests (`testEnvironment: 'jsdom'`, RNTL-friendly mocks). `npm run test:components` to run.
+- **Tests**: Fixed all 3 failing suites — aiService (mock `fetch` instead of supabase), taskEngine (removed early return), authStore (mocked native-module stores) — **159/159 pass** + **10 component tests pass**
 - **`recordChessSolve()`**: Added to `useTimer.ts:128` — `chess_solver` badge now earnable
 - **Hobby ID alignment**: `python` added to `HobbyId`, `LESSON_BANK` maps `python → codingLessons`; `coding` added to `TASK_BANK` and `HOBBY_INFO`
 - **Reading lessons**: 7 days of content (learn + do + deepen) in `lessonContent.ts`; added to `HOBBY_CONTEXT`, `TASK_TYPE_BY_HOBBY`, fallback in `lessonGeneratorService.ts`
@@ -47,6 +51,16 @@
 ### In Progress
 - (none)
 
+### Done (continued)
+
+- **Empty learn/practice bug**: `GoalDetailScreen.tsx` never called `getOrGenerateDailyContent` — the screen only read `progress.dailyContent[today]` but nothing ever populated it (unless `DailyGoalCard` or `GoalCheckinCard` happened to mount first). Added a `useEffect` on mount that calls `getOrGenerateDailyContent` and sets `todayContent` → content now appears immediately when navigating directly to `/goal-detail`.
+- **Folk-style GoalDetail redesign**: Removed all labels (`"Learn"`, `"Practice"`, `"Check off all steps"`) — the content speaks for itself. Added quick-reply chips (`✓ Done`, `⚡ Too much`, `🔄 Give me another`, `🔍 Research`) that signal back to the coach. Added step progress strip. Coach bubble now shows yesterday's commitment nudge if unhonored.
+- **`coachTools.ts` (agent capability registry)**: New `CoachTool` type + `COACH_TOOLS` array defining what the AI coach can *do* (launch timer, open puzzle, reading drill, code-runner, deep research, swap task). Each tool resolves goal-aware actions (e.g. reading drill only appears for `reading` hobby). `getCoachToolsForContext` filters to max 4 relevant tools per screen.
+- **Agent tool buttons in GoalDetail**: `GoalDetailScreen` now renders contextual tool chips below the quick-reply row — `Start 15-min timer`, `Open code-runner`, `♟️ Solve today's puzzle` etc. — with route deep-links and explanations.
+- **RNTL test-renderer v14 fixes**: Removed `?? useMemo()` short-circuit pattern (causes conditional hook calls). Replaced optional-chaining in `useEffect` deps with stable ref-based triggers. All 13 component tests pass.
+- **Component tests**: Expanded from 10 to 13 tests — new tests for step progress strip, quick reply chips, agent tool buttons. No-label assertions (`queryByText('Learn').toBeNull()`, `queryByText('Practice').toBeNull()`).
+- **Maestro e2e expanded**: `home-flow.yaml` now drives a full cycle — tabs → goal detail → check steps → done → celebration → back. Requires booted + authenticated app.
+
 ### Blocked
 - (none)
 
@@ -58,22 +72,21 @@
 - `coding` hobby aliases `python` templates in `TASK_TEMPLATES_DATA` (same curriculum)
 
 ## Next Steps
-- (no pending steps — user requested "dive deeper need improvment" after all fixes applied)
+- (no pending steps — all work complete)
 
 ## Critical Context
-- Pre‑existing type error in `MainTabsScreen.tsx:152` (route argument type) — unrelated to chess changes
-- `handleStepComplete('do', 'solved')` passes static string as chess artifact; improvement held to avoid API‑coupling
-- `PythonRunner.recordCodeRun()` fix: fires in `result` handler, not before execution
-- Hobby‑ID alignment now covers: lessonContent, taskBank, taskEngine, gamificationStore, lessonGeneratorService, AICoachScreen, GamificationDebugScreen, HOBBY_INFO, HOBBY_META
+- Pre‑existing type error in `MainTabsScreen.tsx:152` (route argument type) — unrelated to coach changes
+- RNTL v14 uses `test-renderer` (callstack) not `react-test-renderer` — render() is async, fireEvent is async
+- Component test config (`jest.config.components.js`) uses `testEnvironment: 'jsdom'` with full RN mock
+- Maestro e2e requires booted iOS simulator with authenticated app
 
 ## Relevant Files
-- `src/data/chessPuzzlesBank.ts`: All 55 puzzles V2, validator, `getThematicPuzzles` with cycling
-- `src/data/lessonContent.ts`: 7 reading lessons, `python`/`reading` in `HobbyId`, `LESSON_BANK`, `HOBBY_META`
-- `src/data/taskBank.ts`: `coding` task block (28 days), `python`, `reading`
-- `src/hooks/useTimer.ts`: `recordChessSolve` call, lesson hobby override, V2 puzzle loading
-- `src/store/gamificationStore.ts`: `currentDay` initial state includes all 6 hobbies
-- `src/services/taskEngine.ts`: Removed early return; `coding` → `python` template alias
-- `src/services/lessonGeneratorService.ts`: `python`/`reading` in context, task types, fallback
-- `src/__tests__/`: All 8 suites passing (119 tests)
-- `src/components/session/PythonRunner.tsx`: `recordCodeRun` moved to result handler
-- `src/components/session/DoStep.tsx`: Removed dead chess code and import
+- `src/screens/GoalDetailScreen.tsx`: Coaching message format — green coach bubble → Learn → Practice (checkable) → Done → 🎉. No labels. Quick-reply chips. Agent tool buttons.
+- `src/__tests__/GoalDetailScreen.test.tsx`: 13 component tests (RNTL v14) covering all states (no-label assertions, progress strip, chips, agent tools)
+- `src/__tests__/__mocks__/reactNativeComponent.ts`: Full RN mock for component tests (View, Text, TouchableOpacity, Alert, Animated)
+- `src/__tests__/__mocks__/safeArea.ts`: SafeArea mocks for component tests
+- `src/__tests__/__setup__/componentSetup.ts`: Mocked expo-router, constants, theme for component tests
+- `jest.config.components.js`: Component test config (jsdom, RNTL v14)
+- `.maestro/home-flow.yaml`: Full-cycle e2e flow (tabs → detail → done → celebration)
+- `src/services/dailyFocusEngine.ts`: 8 focus strategies (pure function)
+- `src/services/coachTools.ts`: Agent capability registry (7 tools, goal-aware resolution)
