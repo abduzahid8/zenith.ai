@@ -200,7 +200,7 @@ export default function GoalDetailScreen() {
       </View>
       {showMenu && (
         <View style={ss.dropdown}>
-          <TouchableOpacity style={ss.dropItem} onPress={() => { setShowMenu(false); router.push(buildRoute(ROUTES.GOAL_SETUP, { edit: goal.id, hobbyId: goal.hobby })); }}><Text style={ss.dropText}>Edit</Text></TouchableOpacity>
+          <TouchableOpacity style={ss.dropItem} onPress={() => { setShowMenu(false); router.push(buildRoute(ROUTES.GOAL_SETUP, { edit: goal.id, hobbyId: goal.hobby }) as any); }}><Text style={ss.dropText}>Edit</Text></TouchableOpacity>
           <TouchableOpacity style={ss.dropItem} onPress={() => { setShowMenu(false); handlePause(); }}><Text style={ss.dropText}>Pause</Text></TouchableOpacity>
           <TouchableOpacity style={ss.dropItem} onPress={() => { setShowMenu(false); handleAbandon(); }}><Text style={[ss.dropText, { color: '#EF4444' }]}>Abandon</Text></TouchableOpacity>
         </View>
