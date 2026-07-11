@@ -27,3 +27,14 @@ export const ROUTES = {
 } as const;
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];
+
+/**
+ * Build a route with query params, keeping things type-checked.
+ * Example: buildRoute(ROUTES.GOAL_DETAIL, { goalId: 'abc', hobbyId: 'chess' })
+ *   => '/goal-detail?goalId=abc&hobbyId=chess'
+ */
+export function buildRoute(base: string, params: Record<string, string | null | undefined>): string {
+  const entries = Object.entries(params).filter(([, v]) => v != null);
+  if (entries.length === 0) return base;
+  return `${base}?${entries.map(([k, v]) => `${k}=${encodeURIComponent(v!)}`).join('&')}`;
+}

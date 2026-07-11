@@ -5,7 +5,9 @@ import { HobbyId } from '../data/lessonContent';
 import { GoalDefinition, GoalProgress, GoalSnapshot, BottleneckAnalysis, HelpMode, Milestone, GoalProgressEntry, DailyGoalContent, PlanOfAttack, CommitmentRecord } from '../types/goals';
 import { getHandler, skillHandler, executionHandler, rollingVelocity, computeNextMode } from '../services/goalHandlers';
 import { generateDailyContent, getFallbackContent } from '../services/dailyGoalCoach';
+import { computeDailyFocus } from '../services/dailyFocusEngine';
 import { generatePlanOfAttack, buildHeuristicPlan, parseCommitment, pickTodayStepIndex } from '../services/goalPlanService';
+import aiService from '../services/ai';
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -120,6 +122,8 @@ interface GoalState {
   generateGoalPlan: (goalId: string) => Promise<PlanOfAttack | null>;
   /** Advance the currentStepIndex of the plan to today's tile */
   refreshPlanPointer: (goalId: string) => void;
+  /** Regenerate milestones and plan for an existing goal (called on edit when target/desc changed) */
+  regeneratePlan: (goalId: string) => Promise<void>;
 }
 
 export const useGoalStore = create<GoalState>()(
@@ -237,6 +241,12 @@ export const useGoalStore = create<GoalState>()(
 
         const isBehind = rollingRate < dailyRateNeeded && existing.dailyActions >= 3;
 
+        // Build newHistory FIRST so computeNextMode can see today's entry
+        // (fixes troubleshoot off-by-one — the current checkin counts as
+        // the follow-up and should unblock immediately).
+        const newHistory: GoalProgressEntry = { date: today, value: newValue, description, type: 'checkin' };
+        const updatedHistory = [...existing.history, newHistory];
+
         // Mode transitions now live in one documented, pure function
         // (see goalHandlers.computeNextMode) instead of an inline ternary.
         const nextMode: HelpMode = existing.currentMode === 'milestone'
@@ -245,7 +255,7 @@ export const useGoalStore = create<GoalState>()(
             currentMode: existing.currentMode,
             isBehind,
             dailyActions: existing.dailyActions,
-            history: existing.history,
+            history: updatedHistory, // includes today's entry
           });
 
         // Auto-advance milestone
@@ -259,8 +269,7 @@ export const useGoalStore = create<GoalState>()(
           }
         }
 
-        const newHistory: GoalProgressEntry = { date: today, value: newValue, description, type: 'checkin' };
-        const newStreak = computeStreak([...existing.history, newHistory]);
+        const newStreak = computeStreak(updatedHistory);
 
         // ── Smart-commitment bridge ──
         // If the description is from the "commit:" input field (set by
@@ -294,7 +303,7 @@ export const useGoalStore = create<GoalState>()(
               currentMode: nextMode,
               milestones: updatedMilestones,
               currentMilestoneIndex: updatedIndex,
-              history: [...existing.history, newHistory],
+              history: updatedHistory,
               commitment,
               yesterdayCommitment: isCommitText ? yesterdayCommitment : existing.yesterdayCommitment,
               yesterdayCommitmentHonored: isCommitText ? existing.yesterdayCommitmentHonored : yesterdayCommitmentHonored,
@@ -621,6 +630,31 @@ export const useGoalStore = create<GoalState>()(
         return plan;
       },
 
+      regeneratePlan: async (goalId) => {
+        const { goals, progress } = get();
+        const goal = goals[goalId];
+        const prog = progress[goalId];
+        if (!goal || !prog) return;
+
+        // Regenerate milestones for execution goals (replace, don't merge)
+        if (goal.category === 'execution') {
+          const unit = goal.unitLabel || 'units';
+          try {
+            const milestones = await aiService.breakDownMilestones(
+              goal.description, unit, goal.target, unit
+            );
+            if (milestones.length > 0) {
+              get().setMilestones(goalId, milestones.map(m => ({ ...m, currentValue: 0 })));
+            }
+          } catch {
+            // Milestones stay as-is if generation fails
+          }
+        }
+
+        // Regenerate plan (background, heuristic immediately + LLM enrichment)
+        get().generateGoalPlan(goalId).catch(() => {});
+      },
+
       getOrGenerateDailyContent: async (goalId) => {
         const { goals, progress } = get();
         const goal = goals[goalId];
@@ -642,14 +676,15 @@ export const useGoalStore = create<GoalState>()(
         const snapshot = get().getSnapshotById(goalId);
         if (!snapshot) return null;
 
-        const fallback = getFallbackContent(snapshot);
+        const focus = computeDailyFocus({ goal: snapshot.definition, progress: snapshot.progress, todayStr: today });
+        const fallback = getFallbackContent(snapshot, focus);
         set(state => {
           const p = state.progress[goalId];
           if (!p) return state;
           return { progress: { ...state.progress, [goalId]: { ...p, dailyContent: { ...(p.dailyContent || {}), [today]: fallback } } } };
         });
 
-        const generated = await generateDailyContent(snapshot);
+        const generated = await generateDailyContent(snapshot, focus);
         if (generated) {
           set(state => {
             const p = state.progress[goalId];

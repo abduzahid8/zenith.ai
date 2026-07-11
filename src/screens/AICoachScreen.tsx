@@ -26,6 +26,7 @@ import { HOBBY_META, HobbyId } from '../data/lessonContent';
 import { useGoalStore } from '../store/goalStore';
 import { GoalSnapshot } from '../types/goals';
 import GoalProgressBar from '../components/goal/GoalProgressBar';
+import { ROUTES, buildRoute } from '../config/routes';
 
 interface DisplayMessage {
     id: string;
@@ -284,7 +285,7 @@ export const AICoachScreen: React.FC = () => {
                     ) : null}
                 </>
             ) : (
-                <TouchableOpacity style={styles.setGoalCard} onPress={() => router.push(`/goal-setup${selectedHobby ? `?hobbyId=${selectedHobby}` : ''}` as any)} activeOpacity={0.8}>
+                <TouchableOpacity style={styles.setGoalCard} onPress={() => router.push(buildRoute(ROUTES.GOAL_SETUP, { hobbyId: selectedHobby }))} activeOpacity={0.8}>
                     <Text style={styles.setGoalTitle}>Set a goal to track progress</Text>
                     <Text style={styles.setGoalSubtitle}>Define what you want to achieve and get a daily plan toward your finish line</Text>
                     <View style={styles.setGoalButton}>

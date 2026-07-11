@@ -213,24 +213,42 @@ describe('computeNextMode', () => {
     expect(mode).toBe('troubleshoot');
   });
 
-  it('[BUG] stays in troubleshoot even after a follow-up checkin (off-by-one)', () => {
-    // This documents the bug: a check-in after the blocker is logged
-    // but because `existing.history` (pre-append) is passed to computeNextMode,
-    // the new entry isn't visible yet.
+  it('[STORE FIX] exits troubleshoot when history includes the follow-up entry', () => {
+    // This documents the FIXED behavior: when the store passes history
+    // *including* today's new entry, the blocker is no longer the newest
+    // entry and the mode transitions to 'tactical'.
     const history: GoalProgressEntry[] = [
       { date: '2024-01-01', value: 5, description: 'checkin' },
       { date: '2024-01-02', value: 0, description: 'blocker: stuck', type: 'bottleneck' },
+      { date: '2024-01-03', value: 8, description: 'checkin after blocker', type: 'checkin' },
     ];
-    // Now user checks in on day 3. The new entry is NOT in `history` yet.
     const mode = computeNextMode({
       currentMode: 'troubleshoot',
       isBehind: false,
       dailyActions: 3,
       history,
     });
-    // reversedIdx = 0 (blocker is still the newest), hasFollowedUpSinceBlocker = false
-    // USER EXPECTATION: should be 'tactical' since there IS a follow-up checkin
-    // BUG: stays 'troubleshoot' because the new entry isn't in the array
+    // reversedIdx = 1 (checkin at index 2, bottleneck at index 1 from end)
+    // hasFollowedUpSinceBlocker = true
+    expect(mode).toBe('tactical');
+  });
+
+  it('[BUG DOC] stays troubleshoot when pre-append history is passed (pure function level)', () => {
+    // At the pure-function level, if the caller passes history WITHOUT the
+    // new entry, the blocker appears as the latest entry. The store fix in
+    // goalStore.ts.recordCheckin addresses this by building updatedHistory
+    // first. This test documents what happens at the function level when
+    // given incomplete data.
+    const history: GoalProgressEntry[] = [
+      { date: '2024-01-01', value: 5, description: 'checkin' },
+      { date: '2024-01-02', value: 0, description: 'blocker: stuck', type: 'bottleneck' },
+    ];
+    const mode = computeNextMode({
+      currentMode: 'troubleshoot',
+      isBehind: false,
+      dailyActions: 3,
+      history,
+    });
     expect(mode).toBe('troubleshoot');
   });
 
@@ -369,11 +387,8 @@ describe('guessCategory', () => {
     expect(guessCategory('generate more sales', null)).toBe('execution');
   });
 
-  it('[BUG] defaults to execution when description has a concrete count (broad heuristic) [currently fails — Phase 1.5 fix]', () => {
-    // "grow my newsletter subscribers to 5000" has a number + noun but
-    // extractCount doesn't find it because "5000" is at the end with no
-    // unit word after it. The broader heuristic doesn't catch this.
-    expect(guessCategory('grow my newsletter subscribers to 5000', null)).toBe('skill');
+  it('defaults to execution when description has a concrete count at the end', () => {
+    expect(guessCategory('grow my newsletter subscribers to 5000', null)).toBe('execution');
   });
 
   it('defaults to skill when description has a count but is skill-hobby', () => {
@@ -402,7 +417,7 @@ describe('guessCategory', () => {
     ['Write 100 blog posts', null, 'execution'],
     ['Collect 1000 email signups', null, 'execution'],
     ['Get 30 clients', null, 'execution'],
-    ['grow my newsletter subscribers to 5000', null, 'skill'], // bug: should be execution
+    ['grow my newsletter subscribers to 5000', null, 'execution'],
     ['sell 200 products', null, 'execution'],
     ['Read 12 books', 'reading', 'skill'],
     ['Reach 1800 rating', 'chess', 'skill'],
@@ -481,6 +496,7 @@ describe('extractCount', () => {
     ['', null],
     // "subscribers" in COUNT_PATTERN
     ['grow my newsletter to 5000 subscribers', { count: 5000, unit: 'subscribers' }],
+    ['grow my newsletter subscribers to 5000', { count: 5000, unit: 'subscribers' }],
   ];
 
   it.each(table)('extractCount("%s")', (desc, expected) => {

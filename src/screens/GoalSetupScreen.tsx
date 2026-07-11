@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,8 @@ import { useUserProfileStore } from '../store/userProfileStore';
 import { GoalCategory } from '../types/goals';
 import aiService from '../services/ai';
 import { guessCategory, extractCount } from '../services/goalSetupHeuristics';
+import { daysBetween } from '../services/goalHandlers';
+import { ROUTES, buildRoute } from '../config/routes';
 
 // ── Quick deadlines ──────────────────────────────────────
 
@@ -64,6 +66,7 @@ export default function GoalSetupScreen() {
 
   // Core fields
   const [description, setDescription] = useState(editGoal?.description ?? '');
+  const [debouncedDescription, setDebouncedDescription] = useState(editGoal?.description ?? '');
   const [category, setCategory] = useState<GoalCategory>(editGoal?.category ?? 'skill');
   const [target, setTarget] = useState(editGoal ? String(editGoal.target) : '');
   const [startingValue, setStartingValue] = useState(editGoal ? String(editGoal.startingValue) : '0');
@@ -90,6 +93,12 @@ export default function GoalSetupScreen() {
     }
   }, [editGoal?.id]);
 
+  // Debounce description so proxy-metric AI calls don't fire per keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedDescription(description), 400);
+    return () => clearTimeout(timer);
+  }, [description]);
+
   const [saving, setSaving] = useState(false);
 
   // Proxy metric state
@@ -100,11 +109,18 @@ export default function GoalSetupScreen() {
 
   const isSkill = category === 'skill';
 
-  // When execution is selected and description changes, detect count or show proxy
+  // When execution is selected and debounced description changes, detect count or show proxy
   useEffect(() => {
-    if (category !== 'execution' || description.length < 5) return;
+    if (category !== 'execution' || debouncedDescription.length < 5) return;
 
-    const extracted = extractCount(description);
+    // Reset proxy state when debounced description changes
+    setProxyOptions([]);
+    setShowProxyPicker(false);
+    setProxyFailed(false);
+    setTarget('');
+    setUnitLabel('');
+
+    const extracted = extractCount(debouncedDescription);
     if (extracted) {
       setShowProxyPicker(false);
       setTarget(String(extracted.count));
@@ -114,7 +130,7 @@ export default function GoalSetupScreen() {
 
     if (!proxyLoading && proxyOptions.length === 0 && !proxyFailed) {
       setProxyLoading(true);
-      aiService.proposeMetrics(description).then((options) => {
+      aiService.proposeMetrics(debouncedDescription).then((options) => {
         setProxyOptions(options);
         setProxyLoading(false);
         if (options.length > 0) {
@@ -127,19 +143,13 @@ export default function GoalSetupScreen() {
         setProxyFailed(true);
       });
     }
-  }, [description, category]);
+  }, [debouncedDescription, category]);
 
   const handleDescriptionChange = useCallback((text: string) => {
     setDescription(text);
     if (text.length > 3) {
       const guessed = guessCategory(text, hobbyId);
       setCategory(guessed);
-      // Reset proxy state when description changes
-      setProxyOptions([]);
-      setShowProxyPicker(false);
-      setProxyFailed(false);
-      setTarget('');
-      setUnitLabel('');
     }
   }, [hobbyId]);
 
@@ -180,6 +190,13 @@ export default function GoalSetupScreen() {
         targetDifficulty: isSkill ? targetNum : undefined,
         difficultyScore: isSkill ? startNum || 400 : undefined,
       });
+      // Regenerate milestones/plan if target, description, or unit changed
+      const targetChanged = targetNum !== editGoal.target;
+      const descChanged = description.trim() !== editGoal.description;
+      const unitChanged = (unitLabel.trim() || 'units') !== (editGoal.unitLabel || 'units');
+      if (targetChanged || descChanged || unitChanged) {
+        useGoalStore.getState().regeneratePlan(editGoal.id);
+      }
     } else {
       const goalId = `goal_${Date.now()}`;
       savedGoalId = goalId;
@@ -200,25 +217,15 @@ export default function GoalSetupScreen() {
         unitLabel: isSkill ? 'pts' : (unitLabel.trim() || 'units'),
       });
 
-      // Set milestones for execution goals
+      // Set milestones for execution goals (uses store's regeneratePlan path)
       if (category === 'execution') {
-        aiService.breakDownMilestones(description.trim(), unitLabel || 'units', targetNum, unitLabel || 'units')
-          .then((milestones) => {
-            if (milestones.length > 0) {
-              useGoalStore.getState().setMilestones(goalId, milestones.map(m => ({
-                ...m,
-                currentValue: 0,
-              })));
-            }
-          })
-          .catch(() => { });
+        useGoalStore.getState().regeneratePlan(goalId);
       }
     }
 
     setSaving(false);
     if (savedGoalId) {
-      const params = `goalId=${savedGoalId}${hobbyId ? `&hobbyId=${hobbyId}` : ''}`;
-      router.push(`/goal-detail?${params}`);
+      router.push(buildRoute(ROUTES.GOAL_DETAIL, { goalId: savedGoalId, hobbyId: hobbyId ?? undefined }));
     } else {
       router.back();
     }
@@ -464,7 +471,13 @@ export default function GoalSetupScreen() {
             <View style={styles.reviewRow}>
               <Text style={styles.reviewLabel}>Daily pace</Text>
               <Text style={styles.reviewValue}>
-                ~{Math.ceil((parseInt(target, 10) - (parseInt(startingValue, 10) || 0)) / quickDays)} per day
+                ~{(() => {
+                  const effectiveDays = deadlineOption === 'quick'
+                    ? quickDays
+                    : Math.max(1, daysBetween(formatDate(new Date()), customDate));
+                  const range = parseInt(target, 10) - (parseInt(startingValue, 10) || 0);
+                  return Math.ceil(range / effectiveDays);
+                })()} per day
               </Text>
             </View>
           </View>

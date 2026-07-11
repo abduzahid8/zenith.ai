@@ -13,6 +13,7 @@ import { dbService } from '../services/supabase';
 import { scale } from '../constants';
 import { useAppTheme } from '../theme/useAppTheme';
 import { useT } from '../store/languageStore';
+import { ROUTES, buildRoute } from '../config/routes';
 
 // Custom circle indicator matching Figma design
 const SelectionCircle: React.FC<{ isSelected: boolean, colors: any }> = ({ isSelected, colors }) => (
@@ -76,7 +77,7 @@ export default function HobbySelectionScreen() {
         } finally {
             resetTasks(); // Clear stale task cache from previous hobby
             setSelectedHobby(selectedId);
-            router.push(`/goal-setup?hobbyId=${selectedId}`);
+            router.push(buildRoute(ROUTES.GOAL_SETUP, { hobbyId: selectedId }));
         }
     };
 

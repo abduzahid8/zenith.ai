@@ -23,6 +23,7 @@ import { scale } from '../constants';
 import { useAppTheme } from '../theme/useAppTheme';
 import { useT } from '../store/languageStore';
 import { deriveDailyTile } from '../services/goalPlanService';
+import { ROUTES, buildRoute } from '../config/routes';
 
 const categories: { type: TaskType; label: string; icon: any; bg: string; subtitle: string }[] = [
     {
@@ -204,8 +205,8 @@ export const YourTasksScreen = () => {
                     <>
                         <GoalProgressBar
                             snapshot={goalSnapshot}
-                            onEdit={() => router.push(`/goal-setup?edit=${goalSnapshot.definition.id}${selectedHobby ? `&hobbyId=${selectedHobby}` : ''}` as any)}
-                            onPress={() => router.push(`/goal-detail?goalId=${goalSnapshot.definition.id}${selectedHobby ? `&hobbyId=${selectedHobby}` : ''}` as any)}
+                            onEdit={() => router.push(buildRoute(ROUTES.GOAL_SETUP, { edit: goalSnapshot.definition.id, hobbyId: selectedHobby }))}
+                            onPress={() => router.push(buildRoute(ROUTES.GOAL_DETAIL, { goalId: goalSnapshot.definition.id, hobbyId: selectedHobby }))}
                         />
 
                         {goalSnapshot.definition.status === 'active' && (
@@ -253,7 +254,7 @@ export const YourTasksScreen = () => {
                                 </Text>
                                 <TouchableOpacity
                                     style={styles.checkinButton}
-                                    onPress={() => router.push(`/goal-setup${selectedHobby ? `?hobbyId=${selectedHobby}` : ''}` as any)}
+                                    onPress={() => router.push(buildRoute(ROUTES.GOAL_SETUP, { hobbyId: selectedHobby }))}
                                     activeOpacity={0.8}
                                 >
                                     <Text style={styles.checkinButtonText}>Set a new goal</Text>
@@ -262,7 +263,7 @@ export const YourTasksScreen = () => {
                         )}
                     </>
                 ) : (
-                    <TouchableOpacity style={styles.setGoalCard} onPress={() => router.push(`/goal-setup${selectedHobby ? `?hobbyId=${selectedHobby}` : ''}` as any)} activeOpacity={0.8}>
+                    <TouchableOpacity style={styles.setGoalCard} onPress={() => router.push(buildRoute(ROUTES.GOAL_SETUP, { hobbyId: selectedHobby }))} activeOpacity={0.8}>
                         <Text style={styles.setGoalTitle}>Set your goal</Text>
                         <Text style={styles.setGoalSubtitle}>Define what you want to achieve and get daily tasks sequenced toward your finish line</Text>
                         <View style={styles.setGoalButton}>

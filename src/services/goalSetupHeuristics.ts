@@ -19,7 +19,9 @@ const SKILL_HOBBIES = ['chess', 'python', 'coding', 'reading'];
 
 // ── Patterns ────────────────────────────────────────────────
 
-export const COUNT_PATTERN = /(\d+)\s*(influencers|leads|clients|posts|pages|sales|calls|emails|deals|signups|accounts|dms|messages|projects|articles|videos|episodes|guests|reviews|downloads|users|customers|members|subscribers|followers|views|hours|meetings|apps|features|commits|prs|issues)/i;
+const UNIT_WORDS = 'influencers|leads|clients|posts|pages|sales|calls|emails|deals|signups|accounts|dms|messages|projects|articles|videos|episodes|guests|reviews|downloads|users|customers|members|subscribers|followers|views|hours|meetings|apps|features|commits|prs|issues';
+export const COUNT_PATTERN = new RegExp(`(\\d+)\\s*(${UNIT_WORDS})`, 'i');
+export const COUNT_WORD_BEFORE_PATTERN = new RegExp(`(${UNIT_WORDS})\\s*(?:to|of|at|:)?\\s*(\\d+)\\s*$`, 'i');
 
 export const COUNT_ACTION_PATTERN = /(find|get|invite|collect|reach|earn|write|create|build|launch|make|sell|close|send|publish|record|hire|interview|review|test|ship|deploy)\s+(\d+)/i;
 
@@ -57,6 +59,11 @@ export function extractCount(description: string): { count: number; unit: string
   const countMatch = description.match(COUNT_PATTERN);
   if (countMatch) {
     return { count: parseInt(countMatch[1], 10), unit: countMatch[2].toLowerCase() };
+  }
+  // Try unit-word-before-number pattern: "subscribers to 5000"
+  const wordBeforeMatch = description.match(COUNT_WORD_BEFORE_PATTERN);
+  if (wordBeforeMatch) {
+    return { count: parseInt(wordBeforeMatch[2], 10), unit: wordBeforeMatch[1].toLowerCase() };
   }
   return null;
 }

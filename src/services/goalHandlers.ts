@@ -66,6 +66,8 @@ export function stepSizeForGoal(goal: GoalDefinition): number {
  * 1. Once in 'troubleshoot', stay there until the user has logged at least
  *    one check-in *after* the blocker entry (i.e. they came back and acted
  *    on the advice) — otherwise drop back to 'tactical'.
+ *    The current check-in counts as the follow-up if it's newer than the
+ *    latest blocker entry. Pass `history` *including* the new entry.
  * 2. Otherwise, only escalate to 'tools' (behind-pace help) once we have
  *    enough history (>= MIN_ACTIONS_BEFORE_PACE_CHECK check-ins) to trust
  *    the pace signal — a single slow day shouldn't trigger it.
@@ -82,9 +84,12 @@ export function computeNextMode(params: {
   const { currentMode, isBehind, dailyActions, history } = params;
 
   if (currentMode === 'troubleshoot') {
+    // The caller is expected to pass history *including* today's new entry.
+    // reversedIdx === 0 means the blocker is the most recent entry (no
+    // follow-up yet, even counting the current entry).
+    // reversedIdx > 0 means something newer than the latest blocker exists
+    // (i.e. the current entry — or an earlier one — is a follow-up).
     const reversedIdx = [...history].reverse().findIndex(h => h.type === 'bottleneck');
-    // reversedIdx === 0 means the blocker entry is the most recent entry
-    // (no follow-up yet). Anything > 0 means something newer exists.
     const hasFollowedUpSinceBlocker = reversedIdx > 0;
     return hasFollowedUpSinceBlocker ? 'tactical' : 'troubleshoot';
   }
