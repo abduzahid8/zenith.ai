@@ -20,51 +20,7 @@ import { useGoalStore } from '../store/goalStore';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { GoalCategory } from '../types/goals';
 import aiService from '../services/ai';
-
-// ── Keyword heuristic helpers ────────────────────────────
-
-const SKILL_KEYWORDS = [
-  'reach', 'improve', 'get better', 'learn', 'master',
-  'rating', 'rank', 'level', 'score', 'speed', 'accuracy',
-  'be able to', 'complete course', 'finish course', 'certification',
-  'run.*km', '5k', '10k', 'marathon',
-];
-
-const EXECUTION_KEYWORDS = [
-  'find', 'get.*leads', 'get.*clients', 'launch', 'build',
-  'create', 'write.*posts', 'collect', 'landing page',
-  'influencers', 'outreach', 'signups', 'sales',
-];
-
-function guessCategory(description: string, hobbyId: string | null): GoalCategory {
-  const lower = description.toLowerCase();
-  const skillHobbies = ['chess', 'python', 'coding', 'reading'];
-  if (skillHobbies.includes(hobbyId ?? '')) return 'skill';
-  for (const kw of SKILL_KEYWORDS) {
-    if (new RegExp(kw, 'i').test(lower)) return 'skill';
-  }
-  for (const kw of EXECUTION_KEYWORDS) {
-    if (new RegExp(kw, 'i').test(lower)) return 'execution';
-  }
-  return 'skill';
-}
-
-// Detect if description already has a natural countable unit
-const COUNT_PATTERN = /(\d+)\s*(influencers|leads|clients|posts|pages|sales|calls|emails|deals|signups|accounts|dms|messages|projects|articles|videos|episodes|guests|reviews|downloads|users|customers|members|subscribers|followers|views|hours|meetings|apps|features|commits|prs|issues)/i;
-
-const COUNT_ACTION_PATTERN = /(find|get|invite|collect|reach|earn|write|create|build|launch|make|sell|close|send|publish|record|hire|interview|review|test|ship|deploy)\s+(\d+)/i;
-
-function extractCount(description: string): { count: number; unit: string } | null {
-  const actionMatch = description.match(COUNT_ACTION_PATTERN);
-  if (actionMatch) {
-    return { count: parseInt(actionMatch[2], 10), unit: 'units' };
-  }
-  const countMatch = description.match(COUNT_PATTERN);
-  if (countMatch) {
-    return { count: parseInt(countMatch[1], 10), unit: countMatch[2].toLowerCase() };
-  }
-  return null;
-}
+import { guessCategory, extractCount } from '../services/goalSetupHeuristics';
 
 // ── Quick deadlines ──────────────────────────────────────
 
