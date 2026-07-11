@@ -5,6 +5,7 @@ import { fonts } from '../../theme';
 import { useGoalStore } from '../../store/goalStore';
 import { GoalSnapshot, DailyGoalContent } from '../../types/goals';
 import { deriveDailyTile } from '../../services/goalPlanService';
+import { modeTitle } from './modeCopy';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -28,13 +29,6 @@ function computeCoachStreak(history: string[]): number {
   }
   return streak;
 }
-
-const COACH_QUOTES: Record<string, string> = {
-  milestone: 'Every master started as a beginner.',
-  tactical: 'Small steps, repeated daily, create results.',
-  tools: 'The right approach makes the hard things easy.',
-  troubleshoot: 'Obstacles are just detours in disguise.',
-};
 
 export const DailyGoalCard: React.FC<DailyGoalCardProps> = ({ snapshot, colors, onRefresh }) => {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -140,14 +134,12 @@ export const DailyGoalCard: React.FC<DailyGoalCardProps> = ({ snapshot, colors, 
           <View style={styles.doneRing}>
             <Text style={styles.doneCheckmark}>✓</Text>
           </View>
-          <Text style={styles.doneTitle}>Today's coaching complete</Text>
           {coachStreak > 0 && (
             <View style={styles.doneStreakRow}>
               <Text style={styles.doneStreakEmoji}>🔥</Text>
               <Text style={styles.doneStreakText}>{coachStreak}-day streak</Text>
             </View>
           )}
-          <Text style={styles.doneSubtext}>Come back tomorrow for your next session.</Text>
           {liveProgress.coachFeedback?.[content.date] === 'not_helpful' && (
             <Text style={styles.notedText}>Noted — tomorrow's content will adjust.</Text>
           )}
@@ -162,8 +154,6 @@ export const DailyGoalCard: React.FC<DailyGoalCardProps> = ({ snapshot, colors, 
       <View style={styles.card}>
         <View style={styles.ratingContainer}>
           <Text style={styles.ratingEmoji}>💪</Text>
-          <Text style={styles.ratingTitle}>How did it go?</Text>
-          <Text style={styles.ratingSubtext}>Your feedback helps me tailor tomorrow's coaching.</Text>
           <View style={styles.ratingRow}>
             {isSkill ? (
               <>
@@ -194,7 +184,7 @@ export const DailyGoalCard: React.FC<DailyGoalCardProps> = ({ snapshot, colors, 
 
   // ── Content phase ──
   const tool = content.doNow.toolRecommendation;
-  const coachQuote = COACH_QUOTES[mode] || COACH_QUOTES.tactical;
+  const coachTitle = modeTitle(mode);
 
   // Goal-aware extras: derive today's tile from the user's plan + show
   // follow-through on yesterday's commitment.
@@ -212,26 +202,24 @@ export const DailyGoalCard: React.FC<DailyGoalCardProps> = ({ snapshot, colors, 
   return (
     <View style={styles.card}>
       {/* Coach header */}
-      <View style={styles.coachHeader}>
-        <View style={styles.coachAvatar}>
-          <Text style={styles.coachAvatarEmoji}>✦</Text>
-        </View>
-        <View style={styles.coachHeaderText}>
-          <Text style={styles.coachTitle}>Your daily coach</Text>
-          <Text style={styles.coachQuote}>"{coachQuote}"</Text>
-        </View>
-        {coachStreak > 0 && (
-          <View style={styles.streakPill}>
-            <Text style={styles.streakPillText}>🔥 {coachStreak}</Text>
+        <View style={styles.coachHeader}>
+          <View style={styles.coachAvatar}>
+            <Text style={styles.coachAvatarEmoji}>✦</Text>
           </View>
-        )}
-      </View>
+          <View style={styles.coachHeaderText}>
+            <Text style={styles.coachQuote}>{coachTitle}</Text>
+          </View>
+          {coachStreak > 0 && (
+            <View style={styles.streakPill}>
+              <Text style={styles.streakPillText}>🔥 {coachStreak}</Text>
+            </View>
+          )}
+        </View>
 
       {/* Plan banner: shows where we are in the user's specific plan */}
       {tile && (
         <View style={styles.planBanner}>
           <View style={styles.planBannerLeft}>
-            <Text style={styles.planBannerLabel}>YOUR PLAN</Text>
             <Text style={styles.planBannerTitle}>
               Step {tile.index + 1} of {tile.total} · {tile.isAhead ? 'Ahead of pace' : tile.isLast ? 'Final stretch' : 'On track'}
             </Text>
@@ -282,7 +270,6 @@ export const DailyGoalCard: React.FC<DailyGoalCardProps> = ({ snapshot, colors, 
       <View style={styles.learnSection}>
         <View style={[styles.accentBar, { backgroundColor: colors.accent }]} />
         <View style={styles.learnContent}>
-          <Text style={styles.sectionLabel}>LEARN</Text>
           <Text style={styles.learnTitle}>{content.learn.title}</Text>
           <Text style={styles.learnBody}>{content.learn.body}</Text>
         </View>
@@ -292,7 +279,6 @@ export const DailyGoalCard: React.FC<DailyGoalCardProps> = ({ snapshot, colors, 
       <View style={styles.doSection}>
         <View style={[styles.accentBar, { backgroundColor: colors.buttonPrimary }]} />
         <View style={styles.doContent}>
-          <Text style={styles.sectionLabel}>DO THIS</Text>
           <Text style={styles.doTitle}>{content.doNow.title}</Text>
           <Text style={styles.doInstructions}>{content.doNow.instructions}</Text>
           <View style={styles.minutesRow}>
@@ -307,7 +293,6 @@ export const DailyGoalCard: React.FC<DailyGoalCardProps> = ({ snapshot, colors, 
         <View style={styles.toolCard}>
           <View style={styles.toolHeader}>
             <Text style={styles.toolIcon}>🔧</Text>
-            <Text style={styles.sectionLabel}>RECOMMENDED TOOL</Text>
           </View>
           <Text style={styles.toolName}>{tool.name}</Text>
           <Text style={styles.toolReason}>{tool.reason}</Text>
@@ -332,7 +317,7 @@ export const DailyGoalCard: React.FC<DailyGoalCardProps> = ({ snapshot, colors, 
           ) : (
             <>
               <Text style={styles.markButtonIcon}>✓</Text>
-              <Text style={styles.markButtonText}>Mark done</Text>
+              <Text style={styles.markButtonText}>Done</Text>
             </>
           )}
         </TouchableOpacity>
@@ -343,7 +328,7 @@ export const DailyGoalCard: React.FC<DailyGoalCardProps> = ({ snapshot, colors, 
           disabled={actionInFlight}
           activeOpacity={0.6}
         >
-          <Text style={styles.skipButtonText}>Not now</Text>
+          <Text style={styles.skipButtonText}>Skip</Text>
         </TouchableOpacity>
       </View>
     </View>

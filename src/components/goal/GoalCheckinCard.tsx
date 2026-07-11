@@ -7,6 +7,7 @@ import { fonts } from '../../theme';
 import { statusVisuals } from './shared';
 import { deriveDailyTile, buildHeuristicPlan, pickTodayStepIndex } from '../../services/goalPlanService';
 import { HOBBY_META, HobbyId } from '../../data/lessonContent';
+import { modeTitle } from './modeCopy';
 
 interface GoalCheckinCardProps {
   snapshot: GoalSnapshot;
@@ -135,15 +136,11 @@ export const GoalCheckinCard: React.FC<GoalCheckinCardProps> = ({ snapshot, colo
   const { color: statusColor } = statusVisuals(snapshot.projectedCompletion);
   const learnTitle = dailyContent?.learn?.title;
   const learnBody = dailyContent?.learn?.body;
-  const isLessonAI = dailyContent?.isAIGenerated === true;
 
   // Header label: dynamic based on whether a plan exists yet
   const headerLabel = todayStep
     ? `Step ${(tile?.index ?? 0) + 1} of ${tile?.total ?? '?'}`
-    : mode === 'milestone' ? 'Today\'s progress'
-      : mode === 'tools' ? 'Find the bottleneck'
-        : mode === 'troubleshoot' ? 'Troubleshooting'
-          : 'Today\'s Plan';
+    : modeTitle(mode);
   const doTitle = todayStep?.label || 'Take your next small step';
   const doBody = todayStep?.detail || 'One concrete chunk of progress toward your goal — keep it small enough to finish.';
   const doMinutes = todayStep?.estimatedMinutes;
@@ -189,9 +186,6 @@ export const GoalCheckinCard: React.FC<GoalCheckinCardProps> = ({ snapshot, colo
           backgroundColor: (colors.accent || '#7CB9FF') + '15',
           borderLeftWidth: 3, borderLeftColor: colors.accent || '#7CB9FF',
         }}>
-          <Text style={{ fontFamily: fonts.heading.bold, fontSize: scale(9), color: colors.accent, letterSpacing: 1.5, marginBottom: 4 }}>
-            LEARN {isLessonAI ? '·' : ''}
-          </Text>
           {learnTitle ? (
             <Text style={{ fontFamily: fonts.heading.bold, fontSize: scale(14), color: colors.text, marginBottom: 4, lineHeight: 19 }}>
               {learnTitle}
@@ -213,9 +207,6 @@ export const GoalCheckinCard: React.FC<GoalCheckinCardProps> = ({ snapshot, colo
         borderLeftWidth: 3, borderLeftColor: colors.buttonPrimary,
       }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ fontFamily: fonts.heading.bold, fontSize: scale(9), color: colors.buttonPrimary, letterSpacing: 1.5 }}>
-            DO TODAY
-          </Text>
           {doMinutes ? (
             <Text style={{ fontFamily: fonts.body.regular, fontSize: scale(11), color: colors.textSecondary }}>
               ⏱ ~{doMinutes} min
@@ -315,9 +306,6 @@ export const GoalCheckinCard: React.FC<GoalCheckinCardProps> = ({ snapshot, colo
 
       {/* Quick log — for users who want to record a count without committing to the full task */}
       <View style={{ borderTopWidth: 1, borderTopColor: colors.surfaceLight, paddingTop: scale(10) }}>
-        <Text style={{ fontFamily: fonts.heading.bold, fontSize: scale(9), color: colors.textSecondary, letterSpacing: 1.5, marginBottom: 6 }}>
-          LOG UNITS
-        </Text>
         <View style={{ flexDirection: 'row', gap: scale(8) }}>
           <TextInput
             style={{
