@@ -2,6 +2,7 @@ import { GoalSnapshot, DailyGoalContent, HelpMode, PlanOfAttack } from '../types
 import aiService from './ai';
 import { deriveDailyTile, buildHeuristicPlan, parseCommitment } from './goalPlanService';
 import { getRecommendations, recommendGenericTools } from '../data/toolRecommendations';
+import { DailyFocusResult } from './dailyFocusEngine';
 
 function getTodayString(): string {
   return new Date().toISOString().split('T')[0];
@@ -85,7 +86,7 @@ function getFallbackEntry(mode: HelpMode, category: 'skill' | 'execution'): Fall
   return { ...base, ...overrides };
 }
 
-export function getFallbackContent(snapshot: GoalSnapshot): DailyGoalContent {
+export function getFallbackContent(snapshot: GoalSnapshot, focus?: DailyFocusResult): DailyGoalContent {
   const mode = snapshot.progress.currentMode;
   const category = snapshot.definition.category;
   const f = getFallbackEntry(mode, category);
@@ -116,6 +117,7 @@ export function getFallbackContent(snapshot: GoalSnapshot): DailyGoalContent {
       toolRecommendation: mode === 'tools' ? snapshot.progress.lastBottleneck?.recommendations?.[0] : undefined,
     },
     isFallback: true,
+    focusReason: focus?.reason,
   };
 }
 
@@ -170,7 +172,7 @@ export async function getBottleneckTools(input: {
 
 // ── Prompt construction ──────────────────────────────────
 
-function buildGoalAwarePrompt(snapshot: GoalSnapshot): string {
+function buildGoalAwarePrompt(snapshot: GoalSnapshot, focus?: DailyFocusResult): string {
   const { definition, progress } = snapshot;
   const isSkill = definition.category === 'skill';
 
@@ -215,6 +217,10 @@ Give them ONE concrete concept worth understanding before they start, and ONE sm
 ${contextByMode[progress.currentMode]}
 ${planBlock}${commitmentBlock}${followUpBlock}${yesterdayBlock}
 
+${focus && focus.focus !== 'steady'
+  ? `\nToday's focus: "${focus.reason}". Shape the learn/do pair around this purpose — do NOT ignore it in favour of generic advice.`
+  : ''}
+
 Respond ONLY with JSON (no markdown, no preamble):
 {"learnTitle": "...", "learnBody": "... (2-4 sentences)", "doTitle": "...", "doInstructions": "... (1-3 sentences, concrete and specific)", "estimatedMinutes": <number>}`;
 }
@@ -242,9 +248,9 @@ function parseResponse(raw: string): { learnTitle: string; learnBody: string; do
  * mode-aware prompt. Never throws — returns null on AI failure so the
  * caller keeps its fallback.
  */
-export async function generateDailyContent(snapshot: GoalSnapshot): Promise<DailyGoalContent | null> {
+export async function generateDailyContent(snapshot: GoalSnapshot, focus?: DailyFocusResult): Promise<DailyGoalContent | null> {
   try {
-    const prompt = buildGoalAwarePrompt(snapshot);
+    const prompt = buildGoalAwarePrompt(snapshot, focus);
     const raw = await (aiService as any).generateDailyCoaching(prompt);
     const parsed = parseResponse(raw);
     if (!parsed) return null;
@@ -263,6 +269,7 @@ export async function generateDailyContent(snapshot: GoalSnapshot): Promise<Dail
       },
       isFallback: false,
       isAIGenerated: true,
+      focusReason: focus?.reason,
     };
   } catch {
     return null;

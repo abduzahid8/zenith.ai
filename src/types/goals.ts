@@ -83,6 +83,9 @@ export interface DailyGoalContent {
   isFallback: boolean;
   isAIGenerated?: boolean;
   completedAt?: string;
+  /** Plain-language reason *why* the system picked today's content strategy.
+   * Computed by dailyFocusEngine, safe to show directly in the mode banner. */
+  focusReason?: string;
 }
 
 export interface PlanStep {
