@@ -27,6 +27,9 @@ export default function GoalDetailScreen() {
 
   useEffect(() => { Animated.timing(fade, { toValue: 1, duration: 600, useNativeDriver: true }).start(); }, []);
 
+  // Reset retryCount when goalId changes (fixes stale retries across navigation)
+  useEffect(() => { setRetryCount(0); }, [goalId]);
+
   useEffect(() => {
     if (!goals[goalId] && !hobbyFallback && !Object.values(goals).find(g => g.status === 'active')) {
       if (retryCount < 3) { const t = setTimeout(() => setRetryCount(c => c + 1), 500); return () => clearTimeout(t); }
