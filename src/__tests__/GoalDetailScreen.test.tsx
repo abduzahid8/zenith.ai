@@ -87,7 +87,6 @@ function seedStore() {
             value: i * 10,
             description: 'Daily progress',
         }));
-        // Attach a plan so the progress strip renders
         snap.progress.planOfAttack = {
             goalId: mockGoal.id,
             generatedAt: new Date().toISOString(),
@@ -111,12 +110,12 @@ describe('GoalDetailScreen – coaching message layout', () => {
         seedStore();
     });
 
-    it('renders the goal description in the coach bubble', async () => {
+    it('renders the goal description', async () => {
         const screen = await render(React.createElement(require('../screens/GoalDetailScreen').default));
         expect(screen.getByText('Build a full-stack app')).toBeTruthy();
     });
 
-    it('renders the focus reason inside the coach bubble', async () => {
+    it('renders the focus reason in the coach section', async () => {
         const screen = await render(React.createElement(require('../screens/GoalDetailScreen').default));
         expect(screen.getByText('You are building momentum — keep the streak alive.')).toBeTruthy();
     });
@@ -139,12 +138,12 @@ describe('GoalDetailScreen – coaching message layout', () => {
         expect(screen.getByText('Wire up the database')).toBeTruthy();
     });
 
-    it('shows the Done button disabled when no steps checked', async () => {
+    it('shows the Complete button disabled when no steps checked', async () => {
         const screen = await render(React.createElement(require('../screens/GoalDetailScreen').default));
-        expect(screen.getByText('Check off each step above')).toBeTruthy();
+        expect(screen.getByText('Complete each step above')).toBeTruthy();
     });
 
-    it('enables Done after checking all steps, then shows completion', async () => {
+    it('enables Complete after checking all steps, then shows completion', async () => {
         const screen = await render(React.createElement(require('../screens/GoalDetailScreen').default));
 
         const steps = ['Create the repo', 'Install dependencies', 'Wire up the database'];
@@ -153,38 +152,39 @@ describe('GoalDetailScreen – coaching message layout', () => {
             await fireEvent.press(step);
         }
 
-        expect(screen.getByText("✓ Done — I'm finished")).toBeTruthy();
+        expect(screen.getByText('Complete → +50 XP')).toBeTruthy();
 
-        await fireEvent.press(screen.getByText("✓ Done — I'm finished"));
+        await fireEvent.press(screen.getByText('Complete → +50 XP'));
 
-        expect(screen.getByText("Today's work done.")).toBeTruthy();
-        expect(screen.getByText('You learned + practiced. One more day closer to your goal.')).toBeTruthy();
+        expect(screen.getByText('Day 7 complete')).toBeTruthy();
+        expect(screen.getByText('+50 XP')).toBeTruthy();
         expect(screen.getByText('🔥5')).toBeTruthy();
     });
 
-    it('shows day count and percentage in the header', async () => {
+    it('shows level and streak in the HUD', async () => {
         const screen = await render(React.createElement(require('../screens/GoalDetailScreen').default));
-        expect(screen.getByText('Day 7 · 10%')).toBeTruthy();
+        expect(screen.getByText('LVL 2')).toBeTruthy();
+        expect(screen.getByText('🔥')).toBeTruthy();
     });
 
-    it('renders step progress strip (no label)', async () => {
+    it('renders quick action buttons', async () => {
         const screen = await render(React.createElement(require('../screens/GoalDetailScreen').default));
-        expect(screen.queryByText('Plan progress')).toBeNull();
-    });
-
-    it('renders quick reply chips', async () => {
-        const screen = await render(React.createElement(require('../screens/GoalDetailScreen').default));
-        expect(screen.getByText('✓ Done')).toBeTruthy();
-        expect(screen.getByText('⚡ Too much')).toBeTruthy();
-        expect(screen.getByText('🔄 Give me another')).toBeTruthy();
-        expect(screen.getByText('🔍 Research')).toBeTruthy();
+        expect(screen.getByText('✓ Complete')).toBeTruthy();
+        expect(screen.getByText('⚡ Stuck')).toBeTruthy();
+        expect(screen.getByText('↻ Swap')).toBeTruthy();
+        expect(screen.getByText('🔍 Dig')).toBeTruthy();
     });
 
     it('shows agent tool buttons for coding hobby', async () => {
         const screen = await render(React.createElement(require('../screens/GoalDetailScreen').default));
-        // coding hobby should show "Open code-runner" or "Start 15-min timer"
         expect(screen.getByText('Start 15-min timer')).toBeTruthy();
         expect(screen.getByText('Open code-runner')).toBeTruthy();
+    });
+
+    it('shows coach created marker labels', async () => {
+        const screen = await render(React.createElement(require('../screens/GoalDetailScreen').default));
+        expect(screen.getByText('Coach prepared a lesson')).toBeTruthy();
+        expect(screen.getByText('Coach created a drill')).toBeTruthy();
     });
 });
 

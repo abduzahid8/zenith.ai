@@ -138,6 +138,34 @@ export interface GoalProgress {
   yesterdayCommitment?: CommitmentRecord;
   /** Whether the user logged follow-through on yesterday's commitment */
   yesterdayCommitmentHonored?: boolean;
+  /** Persistent daily plan (steps + assets) */
+  dailyPlan?: DailyPlan;
+}
+
+// ── Daily plan types (shared between orchestrator, coach, goal-detail) ──
+export interface StepInstruction {
+  step: number;
+  title: string;
+  description: string;
+  duration: string;
+  type: 'learn' | 'practice' | 'review' | 'log';
+  assetRefs: string[];
+}
+
+export interface BuiltAsset {
+  id: string;
+  type: 'research' | 'code' | 'image' | 'deployment' | 'summary';
+  title: string;
+  description: string;
+  action: string;
+  content?: string;
+  supportsStep: number;
+}
+
+export interface DailyPlan {
+  steps: StepInstruction[];
+  assets: BuiltAsset[];
+  focusReason: string;
 }
 
 export interface GoalSnapshot {

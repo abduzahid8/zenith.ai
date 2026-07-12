@@ -124,6 +124,8 @@ interface GoalState {
   refreshPlanPointer: (goalId: string) => void;
   /** Regenerate milestones and plan for an existing goal (called on edit when target/desc changed) */
   regeneratePlan: (goalId: string) => Promise<void>;
+  /** Persist today's daily plan (steps + assets) */
+  setDailyPlan: (goalId: string, plan: import('../types/goals').DailyPlan) => void;
 }
 
 export const useGoalStore = create<GoalState>()(
@@ -611,6 +613,19 @@ export const useGoalStore = create<GoalState>()(
                 ...cur,
                 planOfAttack: { ...cur.planOfAttack, currentStepIndex: newIdx },
               },
+            },
+          };
+        });
+      },
+
+      setDailyPlan: (goalId, plan) => {
+        set(state => {
+          const cur = state.progress[goalId];
+          if (!cur) return state;
+          return {
+            progress: {
+              ...state.progress,
+              [goalId]: { ...cur, dailyPlan: plan },
             },
           };
         });

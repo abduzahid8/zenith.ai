@@ -38,7 +38,7 @@ import ScreenTimeTab from './tabs/ScreenTimeTab';
 
 const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24), marginTop: -scale(2) }} resizeMode="contain" />;
 
-export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab = 0 }) => {
+export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab = 2 }) => {
     const router = useRouter();
     const pagerRef = useRef<typeof PagerView>(null);
     const [activeTab, setActiveTab] = useState(initialTab);

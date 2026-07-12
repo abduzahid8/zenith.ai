@@ -14,6 +14,23 @@ jest.mock('../../constants', () => ({
     scale: (n: number) => Math.round(n * (390 / 402)),
 }));
 
+jest.mock('react-native-svg', () => {
+    const React = require('react');
+    const svg = {
+        __esModule: true,
+        default: 'SvgMock',
+        Svg: (props: any) => React.createElement('View', props, props.children),
+        Circle: (props: any) => React.createElement('View', props),
+        Path: (props: any) => React.createElement('View', props),
+        Defs: (props: any) => React.createElement('View', props, props.children),
+        LinearGradient: (props: any) => React.createElement('View', props),
+        Stop: (props: any) => React.createElement('View', props),
+        Polyline: (props: any) => React.createElement('View', props),
+        Line: (props: any) => React.createElement('View', props),
+    };
+    return svg;
+});
+
 jest.mock('../../theme', () => ({
     fonts: {
         heading: {

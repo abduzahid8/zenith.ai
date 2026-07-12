@@ -1,52 +1,29 @@
 ## Goal
-- The app should be a conversational AI coach (like Folk.app) — not a dashboard with task descriptions. The GoalDetailScreen must make the user feel GUIDED: coach teaches → user learns → coach assigns → user does → coach celebrates.
+- The app is a conversational AI coach (Folk.app model) wrapped in our own app design. The coach proactively messages the user, takes real actions, and drives the daily experience. NOT a dashboard.
 
 ## Constraints & Preferences
-- No labels (LEARN, DO THIS, YOUR PLAN, etc.) — just content and action
-- Coach bubble with green background for the daily message
-- Focus reason (from dailyFocusEngine) is the coach's strategy insight
-- Steps are checkable (checkbox pattern), Done button only when all checked
-- `dailyFocusEngine.ts` computes 8 focus strategies (pure function)
-- `test:components` script for component integration tests (RNTL v14)
+- Coach conversation is the FIRST screen (default tab), not buried in tab 3
+- Coach speaks FIRST — proactive daily message with focus strategy
+- Action chips (not just text) — coach triggers real actions: reading timer, goal detail, mark done
+- Progress shown compactly below the conversation, not as a separate dashboard
+- `dailyFocusEngine.ts` computes 8 focus strategies — fed into the coach's daily greeting
+- No decorative images, no "Today's move" cards, no glass-morphism — just coach + action
 
 ## Progress
 ### Done
-- **GoalDetailScreen → coaching message**: Replaced card-based layout with 4-section chat-like format: green coach bubble (goal + focus + plan + commitment) → 📖 Learn section → 🎯 Practice section (checkable steps) → Done button. Completion state shows 🎉 with stats.
-- **Component tests (RNTL v14)**: `GoalDetailScreen.test.tsx` — 10 tests covering all states (coach bubble, focus, learn, practice, step checking, done flow, header, goal not found, completed, paused). Uses `test-renderer` (callstack) with mocked RN, safe-area, expo-router.
-- **Maestro e2e**: Basic `home-flow.yaml` in `.maestro/` — verifies Home/Weekly/Coach tabs visible, scrolls down. Requires booted simulator with authenticated app.
-- **`jest.config.components.js`**: Separate jest config for component tests (`testEnvironment: 'jsdom'`, RNTL-friendly mocks). `npm run test:components` to run.
-- **Tests**: Fixed all 3 failing suites — aiService (mock `fetch` instead of supabase), taskEngine (removed early return), authStore (mocked native-module stores) — **159/159 pass** + **10 component tests pass**
+- **Coach is the default screen**: MainTabsScreen initialTab=2 → app opens to coaching conversation, not dashboard. Route `app/(app)/index.tsx` defaults to tab 2.
+- **Proactive coach greeting**: AICoachTab sends first message on mount — greeting + focus strategy + goal progress. Empty "suggestions" state replaced with live conversation.
+- **Action chips**: Coach messages are followed by real-action buttons: "Start session" (→ `/session-timer`), "View goal" (→ `/goal-detail`), "I'm done for today" (mark + celebrate), "Tell me more" (opens text input). Same style as Folk.app's quick replies.
+- **Focus engine wired**: `computeDailyFocus()` runs on mount, its `reason` string is embedded in the coach's first message (e.g. "You haven't logged progress in 3 days — start small to rebuild momentum.")
+- **GoalDetailScreen → coaching message**: Green coach bubble → 📖 Learn → 🎯 Practice (checkable) → Done → 🎉. No labels.
+- **Component tests (RNTL v14)**: `GoalDetailScreen.test.tsx` — 13 tests. `test-renderer` (callstack), jsdom, full RN mock.
+- **Maestro e2e**: `.maestro/home-flow.yaml` — verifies tabs visible. Requires booted + authenticated simulator.
+- **`jest.config.components.js`**: Separate config. `npm run test:components` to run.
+- **Tests**: **249 pass** (236 unit + 13 component)
 - **`recordChessSolve()`**: Added to `useTimer.ts:128` — `chess_solver` badge now earnable
 - **Hobby ID alignment**: `python` added to `HobbyId`, `LESSON_BANK` maps `python → codingLessons`; `coding` added to `TASK_BANK` and `HOBBY_INFO`
 - **Reading lessons**: 7 days of content (learn + do + deepen) in `lessonContent.ts`; added to `HOBBY_CONTEXT`, `TASK_TYPE_BY_HOBBY`, fallback in `lessonGeneratorService.ts`
-- **Day 2 Puzzle 6 → V2**: Converted from V1 orphan to full V2 format with `id`, `solution[]`, `sideToMove`, `metadata`
-- **`getThematicPuzzles` loading**: Now loads all 7 days (was day‑1 only)
-- **Day 8+ cycling**: `getThematicPuzzles` now cycles `(day-1) % 7` instead of always returning day 1
-- **AI Coach greeting**: Uses `HOBBY_META` labels instead of hardcoded ternary
-- **Debug screen**: Includes `python`, `reading` in HOBBIES array
-- **Lesson hobby override**: `useTimer.ts:87-89` fixes lesson hobby to match `selectedHobby` — `python` users no longer advance `coding`'s day counter
-- **Dead code**: Removed unused `handleChessComplete` and `chess_puzzle` case from `DoStep.tsx` (never reached)
-- **`recordCodeRun` timing**: Removed from `handleRunCode` (before execution); added to `result` handler (after code executes)
-- **Day 1 text**: Fixed "8 puzzles" → "6" in lesson content
-- **Puzzle mapping completeness**: `useTimer.ts` now propagates `sideToMove`, `metadata`, `id`, `day`, `topic`, `dayKey` to ChessBoard
-- **`ACTIVE_CHESS_PUZZLES` removed**: Dead export (never imported) — validator uses `getThematicPuzzles` directly
-- **`coding` TASK_TEMPLATES_DATA alias**: `coding → python` templates — was falling back to generic `default`
-- **Empty puzzles guard**: `useTimer.ts` checks `puzzles.length > 0` before accessing `puzzles[0]`
-- **Puzzle content quality**: Fixed 10 violations (coordinates in soft/medium hints, direct command in prompt) across days 2, 3, 4, 7
-- **Dead code cleanup**: Removed unused `BlurView`, `APP_TAB_ROUTES` imports in SessionTimerScreen; unused `state` param in ChessBoard
-### Done (continued)
 
-- **`adjustDifficulty` scaling**: Step is now `max(25, range * 5%)` of the goal's own range instead of a fixed 50 — a chess goal (400→1200) gets ~40/step, a small skill (0→100) gets 5/step
-- **`computeNextMode()`**: Extracted mode-transition logic from `recordCheckin` ternary into a documented pure function in `goalHandlers.ts` — takes `(currentMode, history, isBehind, dailyActions)` and returns `HelpMode`
-- **Index healing**: `getSnapshot`/`getSnapshotById` now repair `goalByHobby`/`executionGoalByHobby` after fallback — subsequent calls hit the direct index instead of scanning every time
-- **Goal-aware Plan-of-Attack**: New `PlanOfAttack` + `CommitmentRecord` types in `goals.ts`; `services/goalPlanService.ts` generates a per-goal roadmap from the user's free-form description (LLM with heuristic fallback) and parses free-form commits into structured actions
-- **Daily content is goal-aware**: `dailyGoalCoach.generateDailyContent` now feeds the AI the user's plan, yesterday's commitment, and today's commitment; `getFallbackContent` interpolates the plan tile into legacy mode-aware fallbacks; new `learnTitle`/`doTitle` reflect the user's *specific* step (e.g. "Read 20 pages of Meditations" instead of generic "Read more")
-- **Smart commit follow-through**: Free-form commits in `GoalCheckinCard` are parsed (verb, action, minutes), stashed as `progress.commitment`, surfaced back tomorrow on `DailyGoalCard`; honored-flag flips automatically when a check-in is logged the next day
-- **LLM bottleneck→tools**: `getBottleneckTools` now does: curated static pattern (preferred) → LLM with `GENERIC_TOOL_CATALOG` allowlist → local heuristic on the allowlist. New `GENERIC_TOOL_CATALOG` (Notion, Forest, Obsidian, ChatGPT, etc.) constrains the LLM to safe URLs
-- **AICoachScreen context**: now includes today's plan step + yesterday's commitment (honored/cold) when chatting with the coach
-- **`setGoal` is non-blocking**: attaches a heuristic plan immediately so today's tile shows instantly; LLM enrichment runs in the background and replaces it on success
-- **Daily content lifecycle**: `getOrGenerateDailyContent` rolls forward yesterday's commitment and refreshes `currentStepIndex` before serving cache, so the same card reload after midnight correctly shows follow-through on yesterday and a fresh step today
-- **Tests**: new `goalAware.test.ts` covers `parseCommitment`, `buildHeuristicPlan`, `pickTodayStepIndex`, `deriveDailyTile`, `generateDailyContent` (success/failure/parse error), `generatePlanOfAttack` (LLM / heuristic / malformed), `getBottleneckTools` (static / LLM / local fallback) — **148/148 pass, typecheck clean**
 
 ### In Progress
 - (none)
@@ -81,12 +58,13 @@
 - Maestro e2e requires booted iOS simulator with authenticated app
 
 ## Relevant Files
-- `src/screens/GoalDetailScreen.tsx`: Coaching message format — green coach bubble → Learn → Practice (checkable) → Done → 🎉. No labels. Quick-reply chips. Agent tool buttons.
-- `src/__tests__/GoalDetailScreen.test.tsx`: 13 component tests (RNTL v14) covering all states (no-label assertions, progress strip, chips, agent tools)
-- `src/__tests__/__mocks__/reactNativeComponent.ts`: Full RN mock for component tests (View, Text, TouchableOpacity, Alert, Animated)
-- `src/__tests__/__mocks__/safeArea.ts`: SafeArea mocks for component tests
+- `src/screens/tabs/AICoachTab.tsx`: Proactive AI coach conversation — first message on mount with focus strategy, action chips, text input
+- `src/screens/MainTabsScreen.tsx`: Default tab is now Coach (initialTab=2), not Home
+- `app/(app)/index.tsx`: Redirects to Coach tab by default (tab=2)
+- `src/screens/GoalDetailScreen.tsx`: Coaching message format — green coach bubble → 📖 Learn → 🎯 Practice (checkable) → Done → 🎉. No labels.
+- `src/__tests__/GoalDetailScreen.test.tsx`: 13 component tests (RNTL v14) covering all states
+- `src/__tests__/__mocks__/reactNativeComponent.ts`: Full RN mock for component tests
 - `src/__tests__/__setup__/componentSetup.ts`: Mocked expo-router, constants, theme for component tests
 - `jest.config.components.js`: Component test config (jsdom, RNTL v14)
-- `.maestro/home-flow.yaml`: Full-cycle e2e flow (tabs → detail → done → celebration)
+- `.maestro/home-flow.yaml`: E2e flow (requires booted + authenticated app)
 - `src/services/dailyFocusEngine.ts`: 8 focus strategies (pure function)
-- `src/services/coachTools.ts`: Agent capability registry (7 tools, goal-aware resolution)

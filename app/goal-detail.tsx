@@ -1,2 +1,2 @@
-import GoalDetailScreen from '../src/screens/GoalDetailScreen';
-export default GoalDetailScreen;
+import GoalJourneyScreen from '../src/screens/GoalJourneyScreen';
+export default GoalJourneyScreen;

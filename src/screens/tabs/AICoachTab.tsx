@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -10,16 +10,19 @@ import {
     ActivityIndicator,
     Platform,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
-import { BlurView } from 'expo-blur';
 import { scale } from '../../constants';
 import { fonts } from '../../theme';
 import { aiService, ChatMessage } from '../../services/ai';
-import { useUserProfileStore } from '../../store/userProfileStore';
+import { useUserProfileStore, getGreeting } from '../../store/userProfileStore';
 import { useGamificationStore } from '../../store/gamificationStore';
 import { useLanguageStore } from '../../store/languageStore';
 import { useGoalStore } from '../../store/goalStore';
-import { GoalSnapshot } from '../../types/goals';
+import { GoalSnapshot, DailyGoalContent } from '../../types/goals';
+import { computeDailyFocus, DailyFocusResult } from '../../services/dailyFocusEngine';
+import { orchestrateDailyPlan } from '../../services/agentOrchestrator';
+import { DailyPlan } from '../../types/goals';
 import GoalProgressBar from '../../components/goal/GoalProgressBar';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useT } from '../../store/languageStore';
@@ -31,7 +34,13 @@ interface DisplayMessage {
     content: string;
 }
 
-const SendIcon = ({ color = "white" }) => (
+interface ActionChip {
+    label: string;
+    icon: string;
+    action: () => void;
+}
+
+const SendIcon = ({ color = "white" }: { color?: string }) => (
     <Svg width={scale(15)} height={scale(15)} viewBox="0 0 25 25" fill="none">
         <Path
             d="M1.7207 24.4697C1.93894 24.5358 2.28825 24.5079 2.95801 24.2549C3.61366 24.0072 4.46761 23.5888 5.64941 23.0088L20.751 15.5977C21.9079 15.0299 22.7428 14.619 23.3359 14.2549C23.9356 13.8868 24.2008 13.6166 24.3135 13.3682C24.5622 12.8197 24.5621 12.1725 24.3135 11.624C24.2008 11.3755 23.9356 11.1044 23.3359 10.7363C22.7428 10.3723 21.9077 9.96223 20.751 9.39453L5.67578 1.99512C4.49043 1.41344 3.63313 0.994551 2.97559 0.746094C2.3035 0.492175 1.95364 0.464832 1.73535 0.53125C1.22288 0.687411 0.788236 1.10412 0.582031 1.68066C0.485874 1.94949 0.484274 2.3675 0.649414 3.12402C0.811859 3.86815 1.11147 4.84445 1.52344 6.18652L3.01758 11.0557C3.14237 11.4622 3.22438 11.7304 3.26367 11.9961H11.8428C12.1189 11.9961 12.3428 12.22 12.3428 12.4961C12.3427 12.7721 12.1188 12.9961 11.8428 12.9961H3.24414C3.19983 13.2234 3.12483 13.4678 3.02051 13.8105L1.49414 18.8262C1.08662 20.1652 0.791068 21.1394 0.630859 21.8818C0.468108 22.6362 0.470007 23.0538 0.566406 23.3223C0.773359 23.8977 1.20872 24.3144 1.7207 24.4697Z"
@@ -40,450 +49,406 @@ const SendIcon = ({ color = "white" }) => (
     </Svg>
 );
 
+function buildFocusMessage(focus: DailyFocusResult | null, snapshot: GoalSnapshot | null, greeting: string, plan?: DailyPlan): string {
+    if (!snapshot) return `${greeting}! Ready to make progress today?`;
+    const p = snapshot.progress;
+    const streak = p.streak;
+    const todayVal = p.currentValue;
+    const target = snapshot.definition.target;
+    const goal = snapshot.definition.description;
+    const focusLine = focus?.reason ? `\n\n${focus.reason}` : '';
+    const planLine = plan && plan.steps.length > 0
+        ? `\n\n📋 Today's plan:\n${plan.steps.map(s => `  ${s.step}. ${s.title} (${s.duration})`).join('\n')}`
+        : '';
+    const assetsLine = plan && plan.assets.length > 0
+        ? `\n\n🛠️ I've prepared ${plan.assets.length} asset(s) for you:\n${plan.assets.map(a => `  • ${a.title}`).join('\n')}`
+        : '';
+    if (streak > 0) return `🔥 ${streak}-day streak! "${goal}" — ${todayVal}/${target} today.${focusLine}${planLine}${assetsLine}\n\nWhat's your move?`;
+    return `👋 ${greeting}! "${goal}" — ${todayVal}/${target} so far.${focusLine}${planLine}${assetsLine}\n\nLet's get started.`;
+}
+
+function buildUserContext(selectedHobby: HobbyId | null): string {
+    const g = useGamificationStore.getState();
+    const p = useUserProfileStore.getState();
+    const hobby = (selectedHobby || p.selectedHobby) as HobbyId | null;
+    const list: string[] = [];
+    if (p.userName) list.push(`Name: ${p.userName}`);
+    list.push(`Streak: ${g.currentStreak} days`);
+    list.push(`Sessions today: ${g.sessionsCompletedToday}`);
+    list.push(`Artifacts saved: ${g.artifacts.length}`);
+    list.push(`Badges earned: ${g.unlockedBadges.length}`);
+    list.push(`Code runs: ${g.codeRunCount}`);
+    if (g.chessTaskSolved) list.push(`Chess puzzles solved: yes`);
+    if (g.dailyChecklist.learn) list.push(`Today: learn done`);
+    if (g.dailyChecklist.do) list.push(`Today: main task done`);
+    if (g.dailyChecklist.deepen1) list.push(`Today: deepen done`);
+    const goalState = useGoalStore.getState();
+    const snapshot = hobby ? goalState.getSnapshot(hobby) : null;
+    if (snapshot) {
+        list.push(`Goal: ${snapshot.definition.description}`);
+        list.push(`Progress: ${snapshot.percentComplete}% (${snapshot.progress.currentValue}/${snapshot.definition.target})`);
+        list.push(`Days remaining: ${snapshot.daysRemaining}`);
+        list.push(`Status: ${snapshot.projectedCompletion}`);
+        const plan = snapshot.progress.dailyPlan;
+        if (plan && plan.steps.length > 0) {
+            list.push(`Today's plan (${plan.steps.length} steps):`);
+            plan.steps.forEach(s => list.push(`  Step ${s.step}: ${s.title} (${s.duration}, ${s.type})`));
+            if (plan.assets.length > 0) {
+                list.push(`Prepared assets (${plan.assets.length}):`);
+                plan.assets.forEach(a => {
+                    const contentSnippet = a.content ? a.content.substring(0, 120) : '';
+                    list.push(`  [${a.id}] ${a.type}: ${a.title} — supports step ${a.supportsStep}${contentSnippet ? `\n    Content: ${contentSnippet}...` : ''}`);
+                });
+            }
+        }
+    }
+    if (hobby) {
+        const meta = HOBBY_META[hobby];
+        const day = g.currentDay[hobby] || 1;
+        const week = Math.ceil(day / 7);
+        list.push(`Current hobby: ${meta?.label || hobby} (day ${day}, week ${week})`);
+    } else {
+        const lines = (Object.keys(g.currentDay) as HobbyId[])
+            .filter(h => h !== 'coding')
+            .map(h => `${HOBBY_META[h]?.label || h} (day ${g.currentDay[h] || 1})`);
+        if (lines.length) list.push(`Hobbies: ${lines.join(', ')}`);
+    }
+    return list.map(s => `- ${s}`).join('\n');
+}
+
+function getGreetingTime(): string {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 18) return 'Good afternoon';
+    return 'Good evening';
+}
+
 const AICoachTab: React.FC = () => {
+    const router = useRouter();
     const [messages, setMessages] = useState<DisplayMessage[]>([]);
+    const [coachSeeded, setCoachSeeded] = useState(false);
     const [inputText, setInputText] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [goalSnapshot, setGoalSnapshot] = useState<GoalSnapshot | null>(null);
-    const [todaysMove, setTodaysMove] = useState('');
+    const [focusResult, setFocusResult] = useState<DailyFocusResult | null>(null);
+    const [dailyPlan, setDailyPlan] = useState<DailyPlan | null>(null);
+    const [showInput, setShowInput] = useState(false);
     const chatListRef = useRef<FlatList>(null);
     const { selectedHobby } = useUserProfileStore();
 
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
     const t = useT();
+    const greeting = getGreetingTime();
 
-    const buildUserContext = (): string => {
-        const g = useGamificationStore.getState();
-        const p = useUserProfileStore.getState();
-        const hobby = (selectedHobby || p.selectedHobby) as HobbyId | null;
-        const list: string[] = [];
-        if (p.userName) list.push(`Name: ${p.userName}`);
-        list.push(`Streak: ${g.currentStreak} days`);
-        list.push(`Sessions today: ${g.sessionsCompletedToday}`);
-        list.push(`Artifacts saved: ${g.artifacts.length}`);
-        list.push(`Badges earned: ${g.unlockedBadges.length}`);
-        list.push(`Code runs: ${g.codeRunCount}`);
-        if (g.chessTaskSolved) list.push(`Chess puzzles solved: yes`);
-        if (g.dailyChecklist.learn) list.push(`Today: learn done`);
-        if (g.dailyChecklist.do) list.push(`Today: main task done`);
-        if (g.dailyChecklist.deepen1) list.push(`Today: deepen done`);
-
-        const goalState = useGoalStore.getState();
-        const snapshot = hobby ? goalState.getSnapshot(hobby) : null;
-        if (snapshot) {
-            list.push(`Goal: ${snapshot.definition.description}`);
-            list.push(`Progress: ${snapshot.percentComplete}% (${snapshot.progress.currentValue}/${snapshot.definition.target})`);
-            list.push(`Days remaining: ${snapshot.daysRemaining}`);
-            list.push(`Status: ${snapshot.projectedCompletion}`);
-        }
-
-        if (hobby) {
-            const meta = HOBBY_META[hobby];
-            const day = g.currentDay[hobby] || 1;
-            const week = Math.ceil(day / 7);
-            list.push(`Current hobby: ${meta?.label || hobby} (day ${day}, week ${week})`);
-        } else {
-            const lines = (Object.keys(g.currentDay) as HobbyId[])
-                .filter(h => h !== 'coding')
-                .map(h => `${HOBBY_META[h]?.label || h} (day ${g.currentDay[h] || 1})`);
-            if (lines.length) list.push(`Hobbies: ${lines.join(', ')}`);
-        }
-        return list.map(s => `- ${s}`).join('\n');
-    };
-
-    // Load goal + today's move on mount
+    // Load goal, focus + daily plan on mount
     useEffect(() => {
-        const hobby = selectedHobby as HobbyId;
+        const hobby = (selectedHobby || useUserProfileStore.getState().selectedHobby) as HobbyId | null;
         if (!hobby) return;
-
-        const snapshot = useGoalStore.getState().getSnapshot(hobby);
+        const goalState = useGoalStore.getState();
+        const snapshot = goalState.getSnapshot(hobby);
         setGoalSnapshot(snapshot);
-
         if (snapshot) {
-            const move = `Today's move: complete today's lesson — ${snapshot.unitsRemaining} ${snapshot.definition.type === 'reading_books' ? 'books' : 'units'} remain toward "${snapshot.definition.description}"`;
-            setTodaysMove(move);
-
-            const g = useGamificationStore.getState();
-            const day = g.currentDay[hobby] || 1;
-            aiService.decomposeDailyAction({
-                hobby,
-                goalDescription: snapshot.definition.description,
-                percentComplete: snapshot.percentComplete,
-                daysRemaining: snapshot.daysRemaining,
-                projectedCompletion: snapshot.projectedCompletion,
-                unitsRemaining: snapshot.unitsRemaining,
-                dailyRateNeeded: snapshot.dailyRateNeeded,
-                currentDay: day,
-                category: snapshot.definition.category,
-            }).then((aiMove) => {
-                setTodaysMove(aiMove || move);
-            }).catch(() => {});
+            const todayStr = new Date().toISOString().split('T')[0];
+            try {
+                const focus = computeDailyFocus({ goal: snapshot.definition, progress: snapshot.progress, todayStr });
+                setFocusResult(focus);
+            } catch {}
+            // Read stored plan first; generate if missing
+            const stored = goalState.progress[snapshot.definition.id]?.dailyPlan;
+            if (stored && stored.steps.length > 0) {
+                setDailyPlan(stored);
+            } else {
+                const todayContent = snapshot.progress.dailyContent?.[todayStr] ?? null;
+                orchestrateDailyPlan(snapshot.definition, snapshot.progress, todayContent).then(plan => {
+                    goalState.setDailyPlan(snapshot.definition.id, plan);
+                    setDailyPlan(plan);
+                }).catch(() => {});
+            }
         }
     }, [selectedHobby]);
 
-    const handleSend = async () => {
-        const trimmedInput = inputText.trim();
-        console.log('[AICoachTab] handleSend pressed - input:', trimmedInput.substring(0, 50));
-        if (!trimmedInput || isLoading) {
-            console.log('[AICoachTab] Cannot send - empty input or already loading');
-            return;
+    // Proactive coach message — updates when plan arrives
+    useEffect(() => {
+        if (!goalSnapshot) return;
+        const msg = buildFocusMessage(focusResult, goalSnapshot, greeting, dailyPlan ?? undefined);
+        if (!coachSeeded) {
+            setCoachSeeded(true);
+            setMessages([{ id: 'coach-proactive', role: 'assistant', content: msg }]);
+        } else if (messages.length === 1 && messages[0].id === 'coach-proactive') {
+            // Update existing message when plan loads after initial seed
+            setMessages([{ id: 'coach-proactive', role: 'assistant', content: msg }]);
         }
+    }, [goalSnapshot, focusResult, dailyPlan]);
 
-        const userMessage: DisplayMessage = {
-            id: Date.now().toString(),
-            role: 'user',
-            content: trimmedInput,
-        };
+    const scrollToEnd = () => setTimeout(() => chatListRef.current?.scrollToEnd({ animated: true }), 100);
 
-        setMessages(prev => [...prev, userMessage]);
+    const handleSend = async (text?: string) => {
+        const content = (text || inputText).trim();
+        if (!content || isLoading) return;
+        setShowInput(false);
+        const userMsg: DisplayMessage = { id: Date.now().toString(), role: 'user', content };
+        setMessages(prev => [...prev, userMsg]);
         setInputText('');
         setIsLoading(true);
-
-        setTimeout(() => {
-            chatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-
+        scrollToEnd();
         try {
-            console.log('[AICoachTab] Sending message to AI service');
             const chatMessages: ChatMessage[] = messages
                 .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
-                .concat([{ role: 'user', content: userMessage.content }]);
-
-            const userContext = buildUserContext();
-            const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined, userContext);
-            console.log('[AICoachTab] AI response received');
-
-            const assistantMessage: DisplayMessage = {
-                id: (Date.now() + 1).toString(),
-                role: 'assistant',
-                content: response,
-            };
-
-            setMessages(prev => [...prev, assistantMessage]);
-        } catch (error) {
-            console.log('[AICoachTab] Error sending message:', error);
-            const errorMessage: DisplayMessage = {
-                id: (Date.now() + 1).toString(),
-                role: 'assistant',
-                content: t('Извините, произошла ошибка. Попробуйте еще раз.'),
-            };
-            setMessages(prev => [...prev, errorMessage]);
+                .concat([{ role: 'user', content }]);
+            const context = buildUserContext(selectedHobby as HobbyId);
+            const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined, context);
+            setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: response }]);
+        } catch {
+            setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: 'Sorry, I hit an error. Try again?' }]);
         } finally {
             setIsLoading(false);
-            setTimeout(() => {
-                chatListRef.current?.scrollToEnd({ animated: true });
-            }, 100);
+            scrollToEnd();
         }
     };
 
-    const handleSuggestionPress = async (suggestion: string) => {
-        console.log('[AICoachTab] handleSuggestionPress - suggestion:', suggestion);
-        if (isLoading) return;
-
-        const userMessage: DisplayMessage = {
-            id: Date.now().toString(),
-            role: 'user',
-            content: suggestion,
-        };
-
-        setMessages(prev => [...prev, userMessage]);
-        setIsLoading(true);
-
-        setTimeout(() => {
-            chatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-
-        try {
-            const chatMessages: ChatMessage[] = [{ role: 'user', content: suggestion }];
-            const userContext = buildUserContext();
-            const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined, userContext);
-
-            const assistantMessage: DisplayMessage = {
-                id: (Date.now() + 1).toString(),
-                role: 'assistant',
-                content: response,
-            };
-
-            setMessages(prev => [...prev, assistantMessage]);
-        } catch (error) {
-            const errorMessage: DisplayMessage = {
-                id: (Date.now() + 1).toString(),
-                role: 'assistant',
-                content: t('Извините, произошла ошибка. Попробуйте еще раз.'),
-            };
-            setMessages(prev => [...prev, errorMessage]);
-        } finally {
-            setIsLoading(false);
-            setTimeout(() => {
-                chatListRef.current?.scrollToEnd({ animated: true });
-            }, 100);
+    const hobby = (selectedHobby || useUserProfileStore.getState().selectedHobby) as HobbyId | null;
+    const actionChips: ActionChip[] = useMemo(() => {
+        const chips: ActionChip[] = [];
+        if (goalSnapshot?.definition.id) {
+            const goalId = goalSnapshot.definition.id;
+            chips.push(
+                { label: 'Today\'s plan', icon: '📋', action: () => router.push(`/goal-detail?goalId=${goalId}`) },
+                { label: 'Start session', icon: '▶️', action: () => router.push(`/goal-detail?goalId=${goalId}&startSession=1`) },
+            );
+            if (hobby === 'reading') {
+                chips.push({ label: 'Reading timer', icon: '⏱', action: () => router.push('/session-timer') });
+            }
+            if (dailyPlan && dailyPlan.steps.length > 0) {
+                dailyPlan.steps.slice(0, 2).forEach(s => {
+                    chips.push({
+                        label: `Step ${s.step}: ${s.title.substring(0, 22)}`,
+                        icon: s.type === 'learn' ? '📖' : s.type === 'practice' ? '🎯' : '📦',
+                        action: () => handleSend(`Tell me more about step ${s.step}: ${s.title}`),
+                    });
+                });
+            }
+            if (dailyPlan && dailyPlan.assets.length > 0) {
+                chips.push({ label: `${dailyPlan.assets.length} assets`, icon: '📦', action: () => router.push(`/goal-detail?goalId=${goalId}&page=assets`) });
+            }
         }
-    };
+        chips.push(
+            {
+                label: 'Done for today', icon: '✓',
+                action: () => {
+                    const hobby = (selectedHobby || useUserProfileStore.getState().selectedHobby) as HobbyId | null;
+                    if (goalSnapshot && hobby) {
+                        useGoalStore.getState().recordDailyAction(hobby, 1, 'completed');
+                        useGoalStore.getState().completeDailyContent(goalSnapshot.definition.id);
+                        const dayNum = goalSnapshot.progress.history.length + 1;
+                        setMessages(prev => [...prev, { id: 'user-done', role: 'user', content: 'Mark today as done' }]);
+                        setMessages(prev => [...prev, {
+                            id: 'coach-celebrate', role: 'assistant',
+                            content: `🎉 **Day ${dayNum} complete!**\n\n🔥 ${goalSnapshot.progress.streak + 1}-day streak!\n📊 ${Math.round(goalSnapshot.percentComplete)}% to goal\n\nYou're building momentum. What's your next focus?`,
+                        }]);
+                    } else {
+                        handleSend('Mark today as done and celebrate progress');
+                    }
+                },
+            },
+            { label: 'Ask me', icon: '💬', action: () => setShowInput(true) },
+        );
+        return chips;
+    }, [goalSnapshot, dailyPlan]);
 
     return (
         <KeyboardAvoidingView
-            style={styles.aiContent}
+            style={styles.coachContainer}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={0}
         >
-            {goalSnapshot ? (
-                <>
+            {/* Compact progress card */}
+            {goalSnapshot && (
+                <View style={styles.progressCard}>
                     <GoalProgressBar snapshot={goalSnapshot} />
-                    {todaysMove ? (
-                        <View style={styles.todaysMoveCard}>
-                            <Text style={styles.todaysMoveLabel}>Today's move</Text>
-                            <Text style={styles.todaysMoveText}>{todaysMove}</Text>
-                        </View>
-                    ) : null}
-                </>
-            ) : null}
-
-            {messages.length === 0 && (
-                <>
-                    <View style={styles.aiTitleContainer}>
-                        <Text style={styles.aiTitle}>{t('Достигни\nсвоего зенита!')}</Text>
-                    </View>
-                    <View style={styles.suggestionsContainer}>
-                        <View style={styles.suggestionRowLeft}>
-                            <TouchableOpacity
-                                style={styles.suggestionButton}
-                                activeOpacity={0.8}
-                                onPress={() => handleSuggestionPress(t('Как быстрее прогрессировать?'))}
-                            >
-                                <BlurView intensity={80} tint={'light'} style={styles.glassBackground} />
-                                <Text style={styles.suggestionText}>{t('Как быстрее прогрессировать?')}</Text>
-                            </TouchableOpacity>
-                        </View>
-                        <View style={styles.suggestionRowLeft}>
-                            <TouchableOpacity
-                                style={styles.suggestionButton}
-                                activeOpacity={0.8}
-                                onPress={() => handleSuggestionPress(t('Объясни мой прогресс'))}
-                            >
-                                <BlurView intensity={80} tint={'light'} style={styles.glassBackground} />
-                                <Text style={styles.suggestionText}>{t('Объясни мой прогресс')}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.suggestionButton, { marginLeft: scale(10) }]}
-                                activeOpacity={0.8}
-                                onPress={() => handleSuggestionPress(t('Что сделать сегодня?'))}
-                            >
-                                <BlurView intensity={80} tint={'light'} style={styles.glassBackground} />
-                                <Text style={styles.suggestionText}>{t('Что сделать сегодня?')}</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </>
-            )}
-
-
-
-            {messages.length > 0 && (
-                <FlatList
-                    ref={chatListRef}
-                    data={messages}
-                    keyExtractor={(item) => item.id}
-                    style={styles.aiChatList}
-                    contentContainerStyle={styles.aiChatContent}
-                    renderItem={({ item }) => (
-                        <View style={[
-                            styles.aiMessageBubble,
-                            item.role === 'user' ? styles.aiUserMessage : styles.aiAssistantMessage
-                        ]}>
-                            <Text style={[
-                                styles.aiMessageText,
-                                item.role === 'user' ? styles.aiUserMessageText : styles.aiAssistantMessageText
-                            ]}>
-                                {item.content}
-                            </Text>
-                        </View>
-                    )}
-                />
-            )}
-
-            {isLoading && (
-                <View style={styles.aiLoadingContainer}>
-                    <ActivityIndicator size="small" color={colors.aiCoach.darkText} />
-                    <Text style={styles.aiLoadingText}>{t('Думаю...')}</Text>
                 </View>
             )}
 
-            <View style={styles.aiInputContainer}>
-                <View style={styles.inputButton}>
-                    <BlurView intensity={80} tint={'light'} style={styles.glassBackground} />
+            {/* Chat messages */}
+            <FlatList
+                ref={chatListRef}
+                data={messages}
+                keyExtractor={(item) => item.id}
+                style={styles.chatList}
+                contentContainerStyle={styles.chatContent}
+                ListHeaderComponent={messages.length === 0 && goalSnapshot && !coachSeeded ? (
+                    <View style={styles.greetingCard}>
+                        <Text style={styles.greetingEmoji}>👋</Text>
+                        <Text style={styles.greetingTitle}>{greeting}</Text>
+                    </View>
+                ) : null}
+                renderItem={({ item }) => (
+                    <View style={[
+                        styles.bubble,
+                        item.role === 'user' ? styles.userBubble : styles.coachBubble,
+                    ]}>
+                        <Text style={[
+                            styles.bubbleText,
+                            item.role === 'user' ? styles.userText : styles.coachText,
+                        ]}>
+                            {item.content}
+                        </Text>
+                    </View>
+                )}
+                ListFooterComponent={
+                    isLoading ? (
+                        <View style={styles.thinking}>
+                            <ActivityIndicator size="small" color="#666" />
+                            <Text style={styles.thinkingText}>Thinking...</Text>
+                        </View>
+                    ) : messages.length > 0 && !showInput ? (
+                        <View style={styles.chipRow}>
+                            {actionChips.map((chip, i) => (
+                                <TouchableOpacity key={i} style={styles.chip} onPress={chip.action} activeOpacity={0.7}>
+                                    <Text style={styles.chipLabel}>{chip.icon} {chip.label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    ) : null
+                }
+            />
+
+            {/* Input bar */}
+            {showInput && (
+                <View style={styles.inputBar}>
                     <TextInput
-                        style={styles.aiInput}
-                        placeholder={t('Чем я могу помочь?')}
-                        placeholderTextColor={colors.aiCoach.text}
+                        style={styles.input}
+                        placeholder="Ask your coach..."
+                        placeholderTextColor="#999"
                         value={inputText}
                         onChangeText={setInputText}
-                        onSubmitEditing={handleSend}
+                        onSubmitEditing={() => handleSend()}
                         returnKeyType="send"
                         autoCapitalize="sentences"
                         autoCorrect={false}
                         editable={!isLoading}
-                        multiline={false}
+                        autoFocus
                     />
                     <TouchableOpacity
-                        onPress={handleSend}
-                        activeOpacity={0.8}
-                        style={[styles.sendButton, isLoading && { opacity: 0.5 }]}
-                        disabled={isLoading || !inputText.trim()}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        onPress={() => handleSend()}
+                        style={[styles.sendBtn, (!inputText.trim() || isLoading) && { opacity: 0.4 }]}
+                        disabled={!inputText.trim() || isLoading}
                     >
                         <SendIcon color="white" />
                     </TouchableOpacity>
                 </View>
-            </View>
+            )}
         </KeyboardAvoidingView>
     );
 };
 
 const createStyles = (colors: any) => StyleSheet.create({
-    todaysMoveCard: {
-        marginHorizontal: scale(4),
+    coachContainer: {
+        flex: 1,
+        paddingHorizontal: scale(16),
+    },
+    progressCard: {
         marginBottom: scale(8),
-        padding: scale(14),
-        borderRadius: scale(12),
-        backgroundColor: '#4F8EF7' + '15',
-        borderLeftWidth: 3,
-        borderLeftColor: '#4F8EF7',
     },
-    todaysMoveLabel: {
+    greetingCard: {
+        alignItems: 'center',
+        paddingVertical: scale(40),
+    },
+    greetingEmoji: {
+        fontSize: scale(48),
+        marginBottom: scale(8),
+    },
+    greetingTitle: {
         fontFamily: fonts.heading.bold,
-        fontSize: scale(11),
-        color: '#4F8EF7',
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-        marginBottom: scale(4),
+        fontSize: scale(28),
+        color: colors.text,
     },
-    todaysMoveText: {
+    chatList: {
+        flex: 1,
+    },
+    chatContent: {
+        paddingBottom: scale(12),
+    },
+    bubble: {
+        maxWidth: '88%',
+        padding: scale(14),
+        borderRadius: scale(18),
+        marginBottom: scale(8),
+    },
+    coachBubble: {
+        alignSelf: 'flex-start',
+        backgroundColor: '#059669',
+        borderBottomLeftRadius: scale(4),
+    },
+    userBubble: {
+        alignSelf: 'flex-end',
+        backgroundColor: colors.aiCoach?.bubble || '#E8E8EE',
+        borderBottomRightRadius: scale(4),
+    },
+    bubbleText: {
         fontFamily: fonts.body.regular,
         fontSize: scale(14),
         lineHeight: scale(20),
+    },
+    coachText: {
+        color: '#FFF',
+    },
+    userText: {
         color: '#000',
     },
-    aiContent: {
-        flex: 1,
-        paddingHorizontal: scale(20),
-    },
-    aiTitleContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        paddingBottom: scale(100),
-    },
-    aiTitle: {
-        fontFamily: fonts.heading.bold,
-        fontSize: scale(36),
-        lineHeight: scale(36),
-        color: colors.aiCoach.darkText,
-        width: scale(276),
-    },
-    suggestionsContainer: {
-        gap: scale(10),
-        marginBottom: scale(20),
-    },
-    suggestionRowLeft: {
-        flexDirection: 'row',
-        justifyContent: 'flex-start',
-    },
-    suggestionButton: {
-        paddingVertical: scale(8),
-        paddingHorizontal: scale(14),
-        borderRadius: scale(30),
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: scale(10),
-    },
-    glassBackground: {
-        ...StyleSheet.absoluteFillObject,
-        borderRadius: scale(30),
-        overflow: 'hidden',
-        backgroundColor: 'rgba(255, 255, 255, 0.25)',
-        borderWidth: 2,
-        borderColor: 'rgba(255, 255, 255, 0.4)',
-        borderTopColor: 'rgba(255, 255, 255, 1)',
-        borderLeftColor: 'rgba(255, 255, 255, 0.9)',
-    },
-    suggestionText: {
-        fontFamily: fonts.body.light,
-        fontSize: scale(13),
-        lineHeight: scale(22),
-        color: colors.text,
-        textAlign: 'right',
-    },
-    aiChatList: {
-        flex: 1,
-        marginBottom: scale(10),
-    },
-    aiChatContent: {
-        paddingBottom: scale(10),
-    },
-    aiMessageBubble: {
-        maxWidth: '80%',
-        padding: scale(12),
-        borderRadius: scale(20),
-        marginBottom: scale(8),
-    },
-    aiUserMessage: {
-        alignSelf: 'flex-end',
-        backgroundColor: colors.aiCoach.bubble,
-        borderBottomRightRadius: scale(5),
-    },
-    aiAssistantMessage: {
-        alignSelf: 'flex-start',
-        backgroundColor: colors.aiCoach.bubbleFaded,
-        borderBottomLeftRadius: scale(5),
-    },
-    aiMessageText: {
-        fontFamily: fonts.body.light,
-        fontSize: scale(15),
-        lineHeight: scale(20),
-    },
-    aiUserMessageText: {
-        color: colors.black,
-    },
-    aiAssistantMessageText: {
-        color: colors.black,
-    },
-    aiLoadingContainer: {
+    thinking: {
         flexDirection: 'row',
         alignItems: 'center',
         padding: scale(10),
-        marginLeft: scale(4),
-        marginBottom: scale(10),
     },
-    aiLoadingText: {
+    thinkingText: {
         marginLeft: scale(8),
-        fontFamily: fonts.body.light,
-        fontSize: scale(14),
-        color: colors.aiCoach.text,
+        fontFamily: fonts.body.regular,
+        fontSize: scale(13),
+        color: '#999',
     },
-    aiInputContainer: {
-        paddingBottom: scale(90),
-    },
-    inputButton: {
-        width: '100%',
-        paddingVertical: scale(5),
-        paddingLeft: scale(22),
-        paddingRight: scale(5),
-        borderRadius: scale(30),
+    chipRow: {
         flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    aiInput: {
-        flex: 1,
-        fontFamily: fonts.body.light,
-        fontSize: scale(18),
-        color: colors.text,
+        flexWrap: 'wrap',
+        gap: scale(8),
         paddingVertical: scale(8),
     },
-    sendButton: {
-        width: scale(35),
-        height: scale(35),
-        borderRadius: scale(17.5),
+    chip: {
+        paddingVertical: scale(8),
+        paddingHorizontal: scale(14),
+        borderRadius: scale(20),
+        backgroundColor: '#F0F0F5',
+        borderWidth: 1,
+        borderColor: '#E0E0E8',
+    },
+    chipLabel: {
+        fontFamily: fonts.body.regular,
+        fontSize: scale(13),
+        color: '#333',
+    },
+    inputBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: scale(8),
+        paddingBottom: scale(100),
+        gap: scale(8),
+    },
+    input: {
+        flex: 1,
+        height: scale(44),
+        paddingHorizontal: scale(16),
+        borderRadius: scale(22),
+        backgroundColor: '#FFF',
+        fontFamily: fonts.body.regular,
+        fontSize: scale(15),
+        color: '#000',
+        borderWidth: 1,
+        borderColor: '#E0E0E8',
+    },
+    sendBtn: {
+        width: scale(44),
+        height: scale(44),
+        borderRadius: scale(22),
         backgroundColor: '#2E2E43',
         justifyContent: 'center',
         alignItems: 'center',

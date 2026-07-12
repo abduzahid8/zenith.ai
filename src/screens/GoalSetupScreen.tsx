@@ -21,6 +21,7 @@ import aiService from '../services/ai';
 import { guessCategory, extractCount } from '../services/goalSetupHeuristics';
 import { daysBetween } from '../services/goalHandlers';
 import { ROUTES, buildRoute } from '../config/routes';
+import { useT } from '../store/languageStore';
 
 // ── Quick deadlines ──────────────────────────────────────
 
