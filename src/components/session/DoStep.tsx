@@ -16,6 +16,7 @@ import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useT } from '../../store/languageStore';
 import { aiService } from '../../services/ai';
+import { parseVerdict, StepOutcome } from '../../domain/sessions/sessionBlueprint';
 import ChessBoard from './ChessBoard';
 import PythonRunner from './PythonRunner';
 import { TaskStep } from '../../data/lessonContent';
@@ -23,8 +24,10 @@ import { TaskStep } from '../../data/lessonContent';
 interface DoStepProps {
     hobbyId: string;
     task: TaskStep;
-    onNext: (userInput: string, aiFeedback: string) => void;
+    onNext: (userInput: string, aiFeedback: string, outcome: StepOutcome) => void;
     isLastStep?: boolean;
+    /** Retry budget for failed work (Improve loop). Defaults to 1. */
+    maxRetries?: number;
 }
 
 export const DoStep: React.FC<DoStepProps> = ({
@@ -32,6 +35,7 @@ export const DoStep: React.FC<DoStepProps> = ({
     task,
     onNext,
     isLastStep,
+    maxRetries = 1,
 }) => {
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
@@ -45,6 +49,7 @@ export const DoStep: React.FC<DoStepProps> = ({
     const [isChecking, setIsChecking] = useState(false);
     const [aiFeedback, setAiFeedback] = useState<string | null>(null);
     const [isSolved, setIsSolved] = useState(false); // Used for chess or automatic correct verification
+    const [checksUsed, setChecksUsed] = useState(0);
 
     // Reset state when task changes
     useEffect(() => {
@@ -54,6 +59,7 @@ export const DoStep: React.FC<DoStepProps> = ({
         setAiFeedback(null);
         setIsChecking(false);
         setIsSolved(false);
+        setChecksUsed(0);
     }, [task]);
 
     // Handle python code output
@@ -116,17 +122,29 @@ export const DoStep: React.FC<DoStepProps> = ({
             const feedback = await aiService.sendMessage(checkPrompt, hobbyId);
             setAiFeedback(feedback);
             setIsSolved(true);
+            setChecksUsed((c) => c + 1);
         } catch (e) {
             console.error('[DoStep] Error checking answer:', e);
             setAiFeedback('Не удалось связаться с AI-наставником. Отличная попытка! Давайте продолжим.');
             setIsSolved(true);
+            setChecksUsed((c) => c + 1);
         } finally {
             setIsChecking(false);
         }
     };
 
+    const verdict: StepOutcome = aiFeedback ? parseVerdict(aiFeedback) : 'unknown';
+    const canRetry = verdict === 'fail' && checksUsed <= maxRetries;
+
+    const handleRetry = () => {
+        // Improve loop: keep the answer editable, clear the verdict, check again.
+        console.log('[DoStep] Retry pressed - attempt:', checksUsed + 1);
+        setAiFeedback(null);
+        setIsSolved(false);
+    };
+
     const handleContinue = () => {
-        onNext(answer, aiFeedback || 'Выполнено отлично!');
+        onNext(answer, aiFeedback || 'Выполнено отлично!', aiFeedback ? verdict : 'unknown');
     };
 
     // Render interactive practice element based on type
@@ -267,13 +285,24 @@ export const DoStep: React.FC<DoStepProps> = ({
 
                 {/* Next Step / Continue Action */}
                 {isSolved && (
-                    <TouchableOpacity
-                        style={styles.continueButton}
-                        onPress={handleContinue}
-                        activeOpacity={0.8}
-                    >
-                        <Text style={styles.continueButtonText}>{t('Далее')}</Text>
-                    </TouchableOpacity>
+                    <>
+                        {canRetry && (
+                            <TouchableOpacity
+                                style={styles.retryButton}
+                                onPress={handleRetry}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={styles.retryButtonText}>{t('Try again')}</Text>
+                            </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                            style={styles.continueButton}
+                            onPress={handleContinue}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.continueButtonText}>{t('Далее')}</Text>
+                        </TouchableOpacity>
+                    </>
                 )}
             </ScrollView>
         </KeyboardAvoidingView>
@@ -381,6 +410,21 @@ const createStyles = (colors: any) => StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginTop: scale(20),
+    },
+    retryButton: {
+        backgroundColor: 'transparent',
+        borderRadius: 9999,
+        borderWidth: 1.5,
+        borderColor: colors.buttonPrimary || '#1E1E2E',
+        height: scale(56),
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: scale(20),
+    },
+    retryButtonText: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(18),
+        color: colors.buttonPrimary || '#1E1E2E',
     },
     continueButtonText: {
         fontFamily: fonts.heading.bold,

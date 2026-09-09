@@ -58,6 +58,8 @@ export const YourTasksScreen = () => {
     const ENGINE_TYPES: TaskType[] = ['theory', 'practice', 'analysis', 'puzzles'];
     const engineTasksCount = dailyTasks.filter(t => ENGINE_TYPES.includes(t.type as TaskType)).length;
     const maxTasks = getMaxTasksPerDay(isPremium);
+    // Only upsell Premium when it actually unlocks more tasks than the free plan
+    const premiumAllowsMore = maxTasks < getMaxTasksPerDay(true);
 
     const handleAdd = async (type: TaskType) => {
         console.log('[YourTasksScreen] handleAdd pressed - type:', type);
@@ -125,8 +127,8 @@ export const YourTasksScreen = () => {
                         );
                     })}
                     
-                    {/* Always show locked card in the last position if limit is reached (free users only) */}
-                    {!isPremium && engineTasksCount >= maxTasks && (
+                    {/* Show locked card in the last position if the limit is reached and Premium unlocks more */}
+                    {!isPremium && premiumAllowsMore && engineTasksCount >= maxTasks && (
                         <View key="locked-last" style={{ marginBottom: scale(16) }}>
                             <CategoryCard
                                 category={categories[3]} // Use last category for icon/styling
@@ -146,7 +148,7 @@ export const YourTasksScreen = () => {
                     <ActivityIndicator color={colors.primary} style={{ marginTop: scale(16) }} />
                 )}
 
-                {!isPremium && engineTasksCount >= getMaxTasksPerDay(false) && (
+                {!isPremium && premiumAllowsMore && engineTasksCount >= getMaxTasksPerDay(false) && (
                     <TouchableOpacity
                         style={styles.upgradeCard}
                         onPress={() => {

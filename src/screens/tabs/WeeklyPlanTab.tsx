@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     View,
     ScrollView,
@@ -9,15 +9,21 @@ import {
     Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { scale, SCREEN_WIDTH } from '../../constants';
 import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useTaskStore } from '../../store/taskStore';
 import { useAuthStore } from '../../store/authStore';
 import { useUserProfileStore } from '../../store/userProfileStore';
+import { useCredentialStore } from '../../store/credentialStore';
+import { getProgramForHobby, programShortTitle } from '../../domain/credentials/catalog';
+import { canonicalAnchorForEnrollment } from '../../domain/credentials/anchor';
+import { taskSkillKey } from '../../services/credentialService';
+import { useCertificateProgress } from '../../hooks/useCertificateProgress';
+import { ProgressBar } from '../../components/credentials/SkillBar';
 import { Task, TaskType } from '../../services/supabase/types';
 import { getMaxTasksPerDay } from '../../domain/tasks/rules';
+import { TaskFeedbackModal } from '../../components/TaskFeedbackModal';
 import { useT } from '../../store/languageStore';
 
 interface WeeklyPlanTabProps {
@@ -28,8 +34,8 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
     const router = useRouter();
     const { user } = useAuthStore();
     const userId = user?.id;
-    const { dailyTasks, loading, error, fetchDailyPlan } = useTaskStore();
-    const { isPremium: profilePremium } = useUserProfileStore();
+    const { dailyTasks, loading, error, fetchDailyPlan, completeTask } = useTaskStore();
+    const { isPremium: profilePremium, selectedHobby } = useUserProfileStore();
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
     const t = useT();
@@ -38,15 +44,77 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
     const allEngineTasks = ENGINE_TYPES
         .flatMap(type => dailyTasks.filter(task => task.type === type));
 
+    // ONE BAR (2-branch model): daily tasks ARE the certificate progress.
+    // Branch 1 = certificate (Your Day 30-min tasks + Quick bites, same bar).
+    // Branch 2 = discovery (weightless, never touches this bar).
+    // No separate certificate list here — one header bar + same task cards.
+    // Progress comes ONLY from useCertificateProgress (canonical 28-day engine).
+    const credentialPrograms = useCredentialStore(s => s.programs);
+    const headerProgramSlug = selectedHobby ? (getProgramForHobby(selectedHobby)?.slug ?? null) : null;
+    const headerCert = useCertificateProgress(headerProgramSlug);
+
+    const certHeader = useMemo(() => {
+        if (!headerCert.eligible || !headerCert.program) return null;
+        const pct = Math.round(headerCert.overall);
+        const weakest = headerCert.skills.find(s => !s.passed) ?? headerCert.skills[0];
+        return { program: headerCert.program, pct, weakestName: weakest?.name ?? null };
+    }, [headerCert.eligible, headerCert.program, headerCert.overall, headerCert.skills]);
+
+    /** Which bank-week skill today's task grows (canonical anchor + taskSkillKey). */
+    const skillTagFor = (task: Task): string | null => {
+        if (!task.hobby_id || !task.scheduled_date) return null;
+        const program = getProgramForHobby(task.hobby_id);
+        if (!program) return null;
+        const st = credentialPrograms[program.slug];
+        const anchor = canonicalAnchorForEnrollment(!!st?.enrolled, st?.enrolledAt);
+        if (!anchor) return null;
+        const tagged = taskSkillKey({ hobby_id: task.hobby_id, scheduled_date: task.scheduled_date }, anchor);
+        if (!tagged || tagged.programSlug !== program.slug) return null;
+        const skill = program.skills.find(s => s.key === tagged.skillKey);
+        return skill ? `+ ${skill.name}` : null;
+    };
+
     // Enforce display limit based on subscription
     const maxTasks = getMaxTasksPerDay(isPremium || profilePremium);
     const engineTasks = allEngineTasks.slice(0, maxTasks);
+    // Upgrade upsell only makes sense when Premium actually allows more tasks
+    const premiumAllowsMore = maxTasks < getMaxTasksPerDay(true);
 
     useEffect(() => {
         if (userId) {
             fetchDailyPlan(userId);
         }
     }, [userId, fetchDailyPlan]);
+
+    const [modalTask, setModalTask] = useState<Task | null>(null);
+
+    const handleTaskPress = (task: Task) => {
+        if (task.status === 'completed') return;
+        console.log('[WeeklyPlanTab] Task pressed - opening session options:', task.id);
+        setModalTask(task);
+    };
+
+    const handleModalClose = () => setModalTask(null);
+
+    const handleFeedbackSubmit = async (feedback: { difficulty_rating: number; engagement_rating: number; user_notes: string }) => {
+        if (userId && modalTask?.id) {
+            await completeTask(userId, modalTask.id, feedback);
+            setModalTask(null);
+        }
+    };
+
+    // Recommended path: run the task inside the shared Session Engine.
+    // The task completes only on a rewarded session outcome (see useTimer).
+    const handleStartTaskSession = () => {
+        if (!modalTask) return;
+        console.log('[WeeklyPlanTab] Start session for task:', modalTask.id);
+        const minutes = modalTask.duration_minutes && modalTask.duration_minutes > 0
+            ? modalTask.duration_minutes
+            : 15;
+        const taskParam = modalTask.id ? `&taskId=${modalTask.id}` : '';
+        setModalTask(null);
+        router.push(`/session-timer?minutes=${minutes}${taskParam}&kind=structured&origin=your_day` as any);
+    };
 
 
 
@@ -55,10 +123,10 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
 
         console.log('[WeeklyPlanTab] handleAddPress pressed - canAddMore:', canAddMore, 'engineTasks:', engineTasks.length, 'maxTasks:', maxTasks);
 
-        if (!canAddMore && !(isPremium || profilePremium)) {
+        if (!canAddMore && premiumAllowsMore && !(isPremium || profilePremium)) {
             console.log('[WeeklyPlanTab] Task limit reached - navigating to subscription');
             router.push('/subscription' as any);
-        } else {
+        } else if (canAddMore) {
             console.log('[WeeklyPlanTab] Navigating to your-tasks');
             router.push('/your-tasks');
         }
@@ -125,12 +193,36 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
     }
 
     return (
+        <>
         <ScrollView
             style={styles.yourDayPage}
             contentContainerStyle={{ paddingBottom: scale(100) }}
             showsVerticalScrollIndicator={false}
         >
             <Text style={styles.yourDayTitle}>{t('Твой день')}</Text>
+
+            {certHeader && (
+                <TouchableOpacity
+                    style={styles.certHeader}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                        console.log('[WeeklyPlanTab] Cert header pressed:', certHeader.program.slug);
+                        router.push(`/credential/${certHeader.program.slug}` as any);
+                    }}
+                >
+                    <View style={styles.certHeaderRow}>
+                        <Text style={styles.certHeaderTitle} numberOfLines={1}>
+                            {programShortTitle(certHeader.program.title)} · {certHeader.pct}%
+                        </Text>
+                    </View>
+                    <ProgressBar value={certHeader.pct} />
+                    <Text style={styles.certHeaderHint} numberOfLines={2}>
+                        {certHeader.weakestName
+                            ? `Узнай/Сделай двигают этот бар · слабее всего: ${certHeader.weakestName}`
+                            : 'Узнай/Сделай двигают этот бар — отдельной ветки нет'}
+                    </Text>
+                </TouchableOpacity>
+            )}
 
             {engineTasks.length === 0 && (
                 <View style={styles.emptyState}>
@@ -189,11 +281,14 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                             ? styles.tasksTitle
                             : styles.taskCardTitle;
 
+                const skillTag = skillTagFor(task);
+
                 return (
                     <TouchableOpacity
                         key={task.id || task.title}
                         style={[cardStyle, isCompleted && styles.completedCard]}
                         activeOpacity={0.8}
+                        onPress={() => handleTaskPress(task)}
                     >
                         <View style={styles.taskCardContent}>
                             <View style={styles.taskCardTextContainer}>
@@ -201,6 +296,7 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                                 <Text style={descriptionStyle}>
                                     {t(task.title)}
                                 </Text>
+                                {skillTag && <Text style={styles.skillTag}>{skillTag}</Text>}
                             </View>
                             <View style={iconContainerStyle}>
                                 {isCompleted ? (
@@ -218,10 +314,8 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                 );
             })}
 
-            {/* Add Task button:
-                - Free users: always visible; shows lock when at 2-task limit, plus when below
-                - Premium users: visible only when below 4 tasks */}
-            {(!(isPremium || profilePremium) || orderedTasks.length < 4) && (
+            {/* Add Task button: visible only while below the daily task limit */}
+            {orderedTasks.length < maxTasks && (
                 <TouchableOpacity
                     style={[
                         styles.addTaskCard,
@@ -235,14 +329,21 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                     }}
                 >
                     <Image
-                        source={(!(isPremium || profilePremium) && orderedTasks.length >= maxTasks) ? require('../../../icons/lock.png') : require('../../../icons/plus.png')}
+                        source={(premiumAllowsMore && !(isPremium || profilePremium) && orderedTasks.length >= maxTasks) ? require('../../../icons/lock.png') : require('../../../icons/plus.png')}
                         style={{ width: scale(32), height: scale(32), tintColor: colors.iconMuted }}
                         resizeMode="contain"
                     />
                 </TouchableOpacity>
             )}
         </ScrollView>
-    );
+        <TaskFeedbackModal
+            visible={modalTask !== null}
+            onClose={handleModalClose}
+            onSubmit={handleFeedbackSubmit}
+            taskTitle={modalTask?.title || ''}
+            onStartSession={handleStartTaskSession}
+        />
+    </>);
 };
 
 const createStyles = (colors: any) => StyleSheet.create({
@@ -472,6 +573,41 @@ const createStyles = (colors: any) => StyleSheet.create({
     completedCard: {
         backgroundColor: '#3CEB59',
         borderWidth: 0,
+    },
+    certHeader: {
+        backgroundColor: '#D1FAE5',
+        borderRadius: scale(25),
+        paddingHorizontal: scale(20),
+        paddingVertical: scale(16),
+        marginBottom: scale(16),
+    },
+    certHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: scale(10),
+    },
+    certHeaderTitle: {
+        flex: 1,
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(17),
+        lineHeight: scale(22),
+        color: '#1E1E2E',
+    },
+    certHeaderHint: {
+        fontFamily: fonts.body.regular,
+        fontSize: scale(13),
+        lineHeight: scale(18),
+        color: '#1E1E2E',
+        opacity: 0.7,
+        marginTop: scale(8),
+    },
+    skillTag: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(13),
+        lineHeight: scale(18),
+        color: '#102852',
+        opacity: 0.7,
+        marginTop: scale(6),
     },
 });
 

@@ -281,7 +281,7 @@ const createStyles = (colors: any, bottomInset: number) => StyleSheet.create({
         overflow: 'hidden',
     },
     chatMenuGlass: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         borderRadius: scale(24),
         overflow: 'hidden',
         backgroundColor: 'rgba(255, 255, 255, 0.25)',
@@ -309,7 +309,7 @@ const createStyles = (colors: any, bottomInset: number) => StyleSheet.create({
         paddingRight: scale(5),
     },
     glassBackground: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         borderRadius: scale(30),
         overflow: 'hidden',
         backgroundColor: 'rgba(255, 255, 255, 0.25)',

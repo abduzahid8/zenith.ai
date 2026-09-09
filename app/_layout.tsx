@@ -247,7 +247,9 @@ export default function RootLayout() {
                             <Stack.Screen name="privacy" options={{ presentation: 'modal' }} />
                             <Stack.Screen name="quiz-intro" />
                             <Stack.Screen name="quiz" />
-
+                            <Stack.Screen name="onboarding-goals" />
+                            <Stack.Screen name="onboarding-session-length" />
+                            <Stack.Screen name="onboarding-experience" />
                             <Stack.Screen name="hobby-selection" />
                             <Stack.Screen name="subscription" />
                             <Stack.Screen name="manage-subscription" />
@@ -257,6 +259,7 @@ export default function RootLayout() {
                                     animation: 'slide_from_bottom',
                                 }}
                             />
+                            <Stack.Screen name="quick-session" />
                             <Stack.Screen
                                 name="your-tasks"
                                 options={{
@@ -266,6 +269,37 @@ export default function RootLayout() {
                             />
                             <Stack.Screen
                                 name="category/[id]"
+                                options={{
+                                    presentation: 'card',
+                                    animation: 'slide_from_right',
+                                    title: ''
+                                }}
+                            />
+                            <Stack.Screen
+                                name="credentials"
+                                options={{
+                                    presentation: 'card',
+                                    animation: 'slide_from_right',
+                                }}
+                            />
+                            <Stack.Screen
+                                name="credential/[slug]"
+                                options={{
+                                    presentation: 'card',
+                                    animation: 'slide_from_right',
+                                    title: ''
+                                }}
+                            />
+                            <Stack.Screen
+                                name="assessment/[slug]"
+                                options={{
+                                    presentation: 'card',
+                                    animation: 'slide_from_right',
+                                    title: ''
+                                }}
+                            />
+                            <Stack.Screen
+                                name="verify/[id]"
                                 options={{
                                     presentation: 'card',
                                     animation: 'slide_from_right',

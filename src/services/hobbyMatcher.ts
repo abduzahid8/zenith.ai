@@ -1,4 +1,5 @@
 import { Hobby, HOBBIES_DATABASE } from '../data/hobbies';
+import { goalAffinityBonus, UserGoalId } from '../domain/onboarding/goals';
 
 export interface HobbyMatch {
     hobby: Hobby;
@@ -105,14 +106,20 @@ function toPercent(raw: number): number {
     return Math.round((raw / MAX_SCORE_PER_HOBBY) * 100);
 }
 
-export function matchHobbies(answers: Record<number, number>, count: number = 3): HobbyMatch[] {
+export function matchHobbies(
+    answers: Record<number, number>,
+    count: number = 3,
+    goals: readonly UserGoalId[] = [],
+): HobbyMatch[] {
     const scoredHobbies = HOBBIES_DATABASE
         .filter((hobby) => HOBBY_SCORE_TABLE[hobby.id] !== undefined)
         .map((hobby) => {
             const raw = getRawScore(hobby.id, answers);
+            // Goals only bias the recommendation; quiz answers stay primary.
+            const bonus = goals.length > 0 ? goalAffinityBonus(goals, hobby.id) : 0;
             return {
                 hobby,
-                matchScore: toPercent(raw),
+                matchScore: Math.min(100, toPercent(raw) + bonus),
                 matchReasons: hobby.whyFitsYou.slice(0, 3),
             };
         })

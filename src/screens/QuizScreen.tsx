@@ -51,9 +51,9 @@ export default function QuizScreen() {
                     console.log('[QuizScreen] Error saving quiz answers (proceeding offline/locally):', e);
                 }
             }
-            console.log('[QuizScreen] Completing quiz - navigating to /hobby-selection');
+            console.log('[QuizScreen] Completing quiz - navigating to /onboarding-goals');
             completeQuiz();
-            router.push('/hobby-selection');
+            router.push('/onboarding-goals');
         } else {
             console.log('[QuizScreen] Moving to next question');
             nextQuestion();
@@ -123,6 +123,7 @@ export default function QuizScreen() {
                     title={isLastQuestion ? 'Finish' : 'Next'}
                     onPress={handleNext}
                     disabled={!canProceed || saving}
+                    loading={saving}
                     size="large"
                 />
             </View>

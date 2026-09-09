@@ -1,14 +1,18 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, Image } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput } from 'react-native';
 import { fonts } from '../theme';
 import { scale } from '../constants';
 import { useAppTheme } from '../theme/useAppTheme';
+import { useT } from '../store/languageStore';
+import { Button } from './Button';
 
 interface TaskFeedbackModalProps {
     visible: boolean;
     onClose: () => void;
     onSubmit: (feedback: { difficulty_rating: number; engagement_rating: number; user_notes: string }) => void;
     taskTitle: string;
+    /** When provided, offers the recommended path: run the task in the Session Engine. */
+    onStartSession?: () => void;
 }
 
 const StarRating = ({ rating, onRate, maxStars = 5, label, colors }: { rating: number, onRate: (r: number) => void, maxStars?: number, label: string, colors: any }) => {
@@ -18,13 +22,14 @@ const StarRating = ({ rating, onRate, maxStars = 5, label, colors }: { rating: n
             <View style={styles.starsRow}>
                 {[...Array(maxStars)].map((_, i) => (
                     <TouchableOpacity key={i} onPress={() => onRate(i + 1)}>
-                        <Image
-                            source={require('../../icons/star.png')}
+                        <Text
                             style={[
                                 styles.starIcon,
-                                { tintColor: i < rating ? '#FFD700' : colors.surface }
+                                { color: i < rating ? '#FFD700' : colors.surface },
                             ]}
-                        />
+                        >
+                            ★
+                        </Text>
                     </TouchableOpacity>
                 ))}
             </View>
@@ -57,11 +62,12 @@ const EmojiRating = ({ rating, onRate, label, colors }: { rating: number, onRate
 };
 
 
-export const TaskFeedbackModal = ({ visible, onClose, onSubmit, taskTitle }: TaskFeedbackModalProps) => {
+export const TaskFeedbackModal = ({ visible, onClose, onSubmit, taskTitle, onStartSession }: TaskFeedbackModalProps) => {
     const [difficulty, setDifficulty] = useState(3);
     const [engagement, setEngagement] = useState(3);
     const [notes, setNotes] = useState('');
     const { colors } = useAppTheme();
+    const t = useT();
     const dynamicStyles = useMemo(() => createStyles(colors), [colors]);
 
     const handleSubmit = () => {
@@ -81,6 +87,12 @@ export const TaskFeedbackModal = ({ visible, onClose, onSubmit, taskTitle }: Tas
                 <View style={dynamicStyles.container}>
                     <Text style={dynamicStyles.title}>Task completed!</Text>
                     <Text style={dynamicStyles.subtitle}>{taskTitle}</Text>
+
+                    {onStartSession && (
+                        <View style={styles.startWrap}>
+                            <Button title={t('Start')} onPress={onStartSession} size="small" />
+                        </View>
+                    )}
 
                     <StarRating
                         label="How difficult was it?"
@@ -140,6 +152,9 @@ const styles = StyleSheet.create({
     starIcon: {
         width: scale(32),
         height: scale(32),
+        fontSize: scale(30),
+        lineHeight: scale(32),
+        textAlign: 'center',
     },
     ratingText: {
         fontFamily: fonts.body.regular,
@@ -178,6 +193,10 @@ const styles = StyleSheet.create({
         width: '100%',
         justifyContent: 'space-between',
         alignItems: 'center',
+    },
+    startWrap: {
+        width: '100%',
+        marginBottom: scale(16),
     },
     skipButton: {
         padding: scale(12),

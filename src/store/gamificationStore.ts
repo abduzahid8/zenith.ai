@@ -59,6 +59,9 @@ export const BADGE_DEFINITIONS: Record<string, { title: string; emoji: string; d
 
 export type BadgeId = keyof typeof BADGE_DEFINITIONS;
 
+/** Сколько сессий в день доступно без Premium. У Premium — безлимит. */
+export const FREE_DAILY_SESSION_LIMIT = 3;
+
 // ─────────────────────────────────────────────
 // Вспомогательные функции для работы с датами
 // ─────────────────────────────────────────────
@@ -214,7 +217,7 @@ const initialState: Omit<GamificationState,
   freezeActivatedToday: false,
   sessionsCompletedToday: 0,
   lastSessionDate: null,
-  currentDay: { english: 1, chess: 1, chinese: 1, coding: 1 },
+  currentDay: { english: 1, chess: 1, chinese: 1, coding: 1, python: 1, reading: 1 },
   unitProgress: {},
   artifacts: [],
   repetitionItems: [],
@@ -512,11 +515,13 @@ export const useGamificationStore = create<GamificationState>()(
         const today = getTodayString();
         const { lastSessionDate, sessionsCompletedToday } = get();
 
+        // У Premium — безлимитные сессии
+        if (isPremium) return true;
+
         // Если сегодня еще не было сессий, то можно начать
         if (lastSessionDate !== today) return true;
 
-        const maxSessions = isPremium ? 3 : 1;
-        return sessionsCompletedToday < maxSessions;
+        return sessionsCompletedToday < FREE_DAILY_SESSION_LIMIT;
       },
 
       // ── recordChessSolve ──────────────────────────────────────

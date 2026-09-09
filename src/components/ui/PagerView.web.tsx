@@ -20,6 +20,9 @@ const PagerView = forwardRef<any, PagerViewProps>(({
 }, ref) => {
     const scrollViewRef = useRef<ScrollView>(null);
     const [layoutWidth, setLayoutWidth] = React.useState(0);
+    // setPage() is often called before layout is measured (e.g. tab screens
+    // select their initial page on mount) — park it and apply once measured.
+    const pendingPageRef = useRef<number | null>(initialPage > 0 ? initialPage : null);
 
     useImperativeHandle(ref, () => ({
         setPage: (index: number) => {
@@ -28,6 +31,8 @@ const PagerView = forwardRef<any, PagerViewProps>(({
                 if (onPageSelected) {
                     onPageSelected({ nativeEvent: { position: index } });
                 }
+            } else {
+                pendingPageRef.current = index;
             }
         },
         setPageWithoutAnimation: (index: number) => {
@@ -36,9 +41,19 @@ const PagerView = forwardRef<any, PagerViewProps>(({
                 if (onPageSelected) {
                     onPageSelected({ nativeEvent: { position: index } });
                 }
+            } else {
+                pendingPageRef.current = index;
             }
         }
     }));
+
+    React.useEffect(() => {
+        if (layoutWidth > 0 && pendingPageRef.current != null) {
+            const index = pendingPageRef.current;
+            pendingPageRef.current = null;
+            scrollViewRef.current?.scrollTo({ x: index * layoutWidth, animated: false });
+        }
+    }, [layoutWidth]);
 
     const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
         if (onPageScroll) {

@@ -37,6 +37,23 @@ This creates:
 - ~~`002_daily_task_engine.sql`~~ - Already included in 000
 - ~~`003_task_system_upgrade.sql`~~ - Already included in 000
 
+## 3. Third: Verified Credentials
+**File:** `migrations/009_credential_system.sql`
+
+This creates:
+- `credential_programs` (catalog + seed of the first 5 credentials)
+- `user_credential_progress`
+- `credential_attempts`
+- `credential_evidence`
+- `issued_credentials` + `public_credential_verification` view
+- All RLS policies (user tables filtered by `user_id = auth.uid()`, catalog readable by all)
+
+## 4. Fourth: Hobby-anchored credential programs
+**File:** `migrations/010_credential_hobby_programs.sql`
+
+Replaces the seed catalog with one program per real hobby (bank weeks =
+skills). User tables untouched.
+
 ## Verification Query
 
 After running both migrations, verify all tables exist:

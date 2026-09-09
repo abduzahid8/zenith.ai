@@ -19,6 +19,9 @@ import { PRIVACY_POLICY_URL, scale, TERMS_OF_USE_URL } from '../constants';
 import { ROUTES } from '../config/routes';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { useSubscriptionStore } from '../store/subscriptionStore';
+import { useAuthStore } from '../store/authStore';
+import { useUserGoalsStore } from '../store/userGoalsStore';
+import { dbService } from '../services/supabase';
 import { PRODUCT_IDS } from '../services/iapService';
 import { useAppTheme } from '../theme/useAppTheme';
 
@@ -58,6 +61,28 @@ const PREMIUM_FEATURES = [
     'Progress breakdown',
     'Weekly AI report',
 ];
+
+async function persistOnboardingGoals(): Promise<void> {
+    try {
+        const userId = useAuthStore.getState().user?.id;
+        const { goals, preferredSessionMinutes, experiencePreference } =
+            useUserGoalsStore.getState();
+        if (!userId) return;
+        // Skip when the user never entered the extended steps.
+        if (goals.length === 0 && preferredSessionMinutes === null && experiencePreference === null) {
+            return;
+        }
+        await dbService.upsertUserGoals(userId, {
+            goals,
+            preferredSessionMinutes,
+            experiencePreference,
+        });
+        console.log('[SubscriptionScreen] Onboarding goals persisted');
+    } catch (e) {
+        // Local store remains source of truth — never block completion.
+        console.log('[SubscriptionScreen] Failed to persist goals (local-only):', e);
+    }
+}
 
 // ── Component ───────────────────────────────────────────
 
@@ -118,14 +143,16 @@ export const SubscriptionScreen: React.FC = () => {
 
         if (nowActive && !nowError) {
             console.log('[SubscriptionScreen] Purchase succeeded — navigating to app');
+            await persistOnboardingGoals();
             completeOnboarding();
             router.replace(ROUTES.APP as any);
         }
     };
 
-    const handleSelectFree = () => {
+    const handleSelectFree = async () => {
         console.log('[SubscriptionScreen] handleSelectFree pressed - selecting free plan');
         useUserProfileStore.getState().setPremium(false);
+        await persistOnboardingGoals();
         completeOnboarding();
         router.replace(ROUTES.APP as any);
     };
@@ -137,6 +164,7 @@ export const SubscriptionScreen: React.FC = () => {
 
         if (useSubscriptionStore.getState().isActive) {
             console.log('[SubscriptionScreen] Restore succeeded — navigating to app');
+            await persistOnboardingGoals();
             completeOnboarding();
             router.replace(ROUTES.APP as any);
         }

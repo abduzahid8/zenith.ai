@@ -53,6 +53,8 @@ interface EncouragementBannerProps {
     feedback?: string;
     title?: string;
     buttonText?: string;
+    /** Show the feedback block for incorrect answers too (default: correct only). */
+    showFeedbackOnIncorrect?: boolean;
 }
 
 export const EncouragementBanner: React.FC<EncouragementBannerProps> = ({
@@ -63,6 +65,7 @@ export const EncouragementBanner: React.FC<EncouragementBannerProps> = ({
     feedback,
     title,
     buttonText,
+    showFeedbackOnIncorrect = false,
 }) => {
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
@@ -127,7 +130,7 @@ export const EncouragementBanner: React.FC<EncouragementBannerProps> = ({
 
     if (!visible && (opacityAnim as any)._value === 0) return null;
 
-    const showFeedback = !!(feedback && isCorrect);
+    const showFeedback = !!(feedback && (isCorrect || showFeedbackOnIncorrect));
 
     const bannerStyle = isCorrect
         ? styles.bannerCorrect

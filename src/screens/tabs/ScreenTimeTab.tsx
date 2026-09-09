@@ -13,7 +13,8 @@ import {
     Image,
     AppState,
 } from 'react-native';
-import PagerView from 'react-native-pager-view';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import PagerView from '../../components/ui/PagerView';
 import { WeeklyBarChart } from '../../components/WeeklyBarChart';
 import { HobbyTimeBarChart } from '../../components/HobbyTimeBarChart';
 import { useDeviceScreenTimeStore } from '../../store/deviceScreenTimeStore';
@@ -27,8 +28,27 @@ import { isScreenTimeAvailable } from '../../../modules/device-activity';
 const WEEK_DAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEK_DAYS_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
+// Web has no UsageStats/ DeviceActivity permission flow — asking every launch
+// only blocks the app behind an uncompletable prompt. Remember a web
+// dismissal; native behavior is intentionally unchanged.
+const WEB_PROMPT_DISMISSED_KEY = 'screentime-prompt-dismissed-v1';
+
+async function isWebPromptDismissed(): Promise<boolean> {
+    try {
+        if (Platform.OS !== 'web') return false;
+        return (await AsyncStorage.getItem(WEB_PROMPT_DISMISSED_KEY)) === '1';
+    } catch {
+        return false;
+    }
+}
+
+function persistWebPromptDismissed(): void {
+    if (Platform.OS !== 'web') return;
+    AsyncStorage.setItem(WEB_PROMPT_DISMISSED_KEY, '1').catch(() => {});
+}
+
 export const ScreenTimeTab: React.FC = () => {
-    const pagerRef = useRef<PagerView>(null);
+    const pagerRef = useRef<any>(null);
     const t = useT();
     const language = useLanguageStore((s) => s.language);
     const weekDays = language === 'ru' ? WEEK_DAYS_RU : WEEK_DAYS_EN;
@@ -127,7 +147,7 @@ export const ScreenTimeTab: React.FC = () => {
             console.log('[ScreenTimeTab] Initializing screen time data');
             const granted = await checkPermission();
             console.log('[ScreenTimeTab] Permission check result:', granted);
-            if (!granted) {
+            if (!granted && !(await isWebPromptDismissed())) {
                 setShowPermissionModal(true);
             }
             await Promise.all([fetchWeeklyData(), fetchTodayData()]);
@@ -291,7 +311,7 @@ export const ScreenTimeTab: React.FC = () => {
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={styles.modalLaterBtn}
-                                    onPress={() => setShowPermissionModal(false)}
+                                    onPress={() => { persistWebPromptDismissed(); setShowPermissionModal(false); }}
                                     activeOpacity={0.7}
                                 >
                                     <Text style={styles.modalLaterText}>{t('Не сейчас')}</Text>
@@ -319,7 +339,7 @@ export const ScreenTimeTab: React.FC = () => {
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={styles.modalLaterBtn}
-                                    onPress={() => { setShowPermissionModal(false); setShowManualSteps(false); }}
+                                    onPress={() => { persistWebPromptDismissed(); setShowPermissionModal(false); setShowManualSteps(false); }}
                                     activeOpacity={0.7}
                                 >
                                     <Text style={styles.modalLaterText}>{t('Закрыть')}</Text>

@@ -93,7 +93,7 @@ const StopConfirmationModal: React.FC<StopConfirmationModalProps> = ({
 
 const createStyles = (colors: any) => StyleSheet.create({
     modalOverlay: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
         justifyContent: 'center',
         alignItems: 'center',

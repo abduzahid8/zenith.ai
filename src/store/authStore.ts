@@ -5,12 +5,14 @@ import { useUserProfileStore, SubscriptionLevel } from './userProfileStore';
 import { useTaskStore } from './taskStore';
 import { useHobbyTimeStore } from './hobbyTimeStore';
 import { useQuizStore } from './quizStore';
+import { useUserGoalsStore } from './userGoalsStore';
 import { useScreenTimeStore } from './screenTimeStore';
 import { useEarningsStore } from './earningsStore';
 import { useContentStore } from './contentStore';
 import { useDeviceScreenTimeStore } from './deviceScreenTimeStore';
 import { useSubscriptionStore } from './subscriptionStore';
 import { toAppError } from '../shared/errors';
+import { isE2EBypassEnabled, E2E_MOCK_USER_ID, E2E_MOCK_USER_EMAIL } from '../utils/e2eBypass';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Module-level guards — survive store re-creation in dev hot-reload
@@ -41,6 +43,7 @@ async function syncUserProfile(userId: string, email?: string): Promise<void> {
                 useTaskStore.getState().resetTasks();
                 useHobbyTimeStore.getState().reset();
                 useQuizStore.getState().resetQuiz();
+                useUserGoalsStore.getState().resetGoals();
                 useScreenTimeStore.getState().reset();
                 useEarningsStore.getState().reset();
                 useContentStore.getState().reset();
@@ -113,6 +116,23 @@ async function syncUserProfile(userId: string, email?: string): Promise<void> {
             isPremium: isBypassed ? true : !!profile.is_premium,
             subscriptionLevel: (isBypassed ? 'premium' : (profile.subscription_level || 'free')) as SubscriptionLevel,
         });
+
+        // Progressive profiling (Onboarding 2.0): hydrate extended preferences
+        // when present. Missing rows are normal for existing users — never
+        // force them back through onboarding.
+        try {
+            const remoteGoals = await dbService.getUserGoals(userId);
+            if (remoteGoals) {
+                const { useUserGoalsStore } = require('./userGoalsStore');
+                useUserGoalsStore.getState().hydrateFromRemote({
+                    goals: remoteGoals.goals,
+                    preferredSessionMinutes: remoteGoals.preferred_session_minutes,
+                    experiencePreference: remoteGoals.experience_preference,
+                });
+            }
+        } catch (goalsErr) {
+            console.warn('[authStore] user_goals hydration skipped:', goalsErr);
+        }
     } catch (err) {
         console.warn('[authStore] syncUserProfile failed:', err);
     }
@@ -340,6 +360,7 @@ export const useAuthStore = create<AuthState>()(
                 useTaskStore.getState().resetTasks();
                 useHobbyTimeStore.getState().reset();
                 useQuizStore.getState().resetQuiz();
+                useUserGoalsStore.getState().resetGoals();
                 useScreenTimeStore.getState().reset();
                 useEarningsStore.getState().reset();
                 useContentStore.getState().reset();
@@ -360,6 +381,35 @@ export const useAuthStore = create<AuthState>()(
         },
 
         initialize: async () => {
+            // ── Step 0: dev-only E2E bypass (skip login) ─────────────────────
+            // Unreachable in production: isE2EBypassEnabled() requires __DEV__.
+            if (isE2EBypassEnabled()) {
+                console.log('[authStore] E2E bypass active — mock session, no network');
+                const mockUser = {
+                    id: E2E_MOCK_USER_ID,
+                    email: E2E_MOCK_USER_EMAIL,
+                    app_metadata: {},
+                    user_metadata: {},
+                    aud: 'authenticated',
+                    created_at: new Date().toISOString(),
+                };
+                const mockSession = {
+                    access_token: 'e2e-bypass',
+                    refresh_token: 'e2e-bypass',
+                    expires_in: 3600,
+                    token_type: 'bearer',
+                    user: mockUser,
+                };
+                useUserProfileStore.getState().setUserName('Tester');
+                set({
+                    session: mockSession as any,
+                    user: mockUser as any,
+                    isAuthenticated: true,
+                    isLoading: false,
+                });
+                return;
+            }
+
             // ── Step 1: register the Supabase auth listener ───────────────────
             // Done at most once for the entire app lifetime so we never accumulate
             // duplicate listeners.  The guard is set BEFORE the try so that even a
@@ -465,6 +515,7 @@ export const useAuthStore = create<AuthState>()(
                     useTaskStore.getState().resetTasks();
                     useHobbyTimeStore.getState().reset();
                     useQuizStore.getState().resetQuiz();
+                    useUserGoalsStore.getState().resetGoals();
                     useScreenTimeStore.getState().reset();
                     useEarningsStore.getState().reset();
                     useContentStore.getState().reset();

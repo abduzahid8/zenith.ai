@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { scale } from '../../constants';
 import { fonts } from '../../theme';
@@ -22,6 +23,8 @@ import { useTaskStore } from '../../store/taskStore';
 import { TaskType } from '../../services/supabase/types';
 import { useGamificationStore } from '../../store/gamificationStore';
 import { useUserProfileStore } from '../../store/userProfileStore';
+import { useUserGoalsStore } from '../../store/userGoalsStore';
+import { findNextIncompleteTask } from '../../domain/sessions/sessionCompletion';
 
 const booksImage = require('../../../assets/images/home-books.png');
 const targetImage = require('../../../assets/images/home-target.png');
@@ -66,7 +69,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 t('Лимит сессий'),
                 isPremium 
                     ? t('Вы выполнили дневной лимит (3 сессии). Возвращайтесь завтра!')
-                    : t('Вы выполнили дневной лимит (1 сессия). Перейдите на Premium, чтобы выполнять больше сессий, или возвращайтесь завтра!'),
+                    : t('Вы выполнили дневной лимит (3 сессии). Перейдите на Premium для безлимитных сессий, или возвращайтесь завтра!'),
                 [{ text: 'ОК' }]
             );
             return;
@@ -84,8 +87,20 @@ const HomeTab: React.FC<HomeTabProps> = ({
             console.log('[HomeTab] All tasks completed - showing all-done modal');
             setShowAllDoneModal(true);
         } else {
-            console.log('[HomeTab] Not all done - navigating to session-timer');
-            handleNavigate('/session-timer');
+            // Structured continuation: the SAME next DailyPlan task Your Day shows
+            // (INVARIANT 1/5) — never an independently generated lesson.
+            const nextTask = findNextIncompleteTask(dailyTasks);
+            if (!nextTask?.id) {
+                setShowAllDoneModal(true);
+                return;
+            }
+            const minutes = nextTask.duration_minutes && nextTask.duration_minutes > 0
+                ? nextTask.duration_minutes
+                : (useUserGoalsStore.getState().preferredSessionMinutes ?? 30);
+            console.log('[HomeTab] Continuing structured plan - task:', nextTask.id);
+            handleNavigate(
+                `/session-timer?minutes=${minutes}&taskId=${nextTask.id}&kind=structured&origin=home_start`,
+            );
         }
     };
 
@@ -137,6 +152,17 @@ const HomeTab: React.FC<HomeTabProps> = ({
                     style={styles.startSessionCard}
                 >
                     <Text style={styles.cardTitle}>{t('Начать занятие')}</Text>
+                    {(() => {
+                        const nextTask = dailyTasks.find((task) =>
+                            ENGINE_TYPES.includes(task.type as TaskType) && task.status !== 'completed',
+                        );
+                        if (!nextTask) return null;
+                        return (
+                            <Text style={styles.cardSubtitle} numberOfLines={1}>
+                                {nextTask.title} · ~{nextTask.duration_minutes ?? 15} {t('min')}
+                            </Text>
+                        );
+                    })()}
                     <Animated.Image
                         source={booksImage}
                         style={[
@@ -151,6 +177,28 @@ const HomeTab: React.FC<HomeTabProps> = ({
                         ]}
                         resizeMode="contain"
                     />
+                </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Slim entry to the time-based picker (full selector lives on its own page) */}
+            <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.cardShadowProp}
+                onPress={() => {
+                    console.log('[HomeTab] Quick Session entry pressed');
+                    handleNavigate('/quick-session');
+                }}
+            >
+                <LinearGradient
+                    start={{ x: 0, y: 0.5 }}
+                    end={{ x: 1, y: 0.5 }}
+                    colors={['#D6D7F8', '#E0E2FF']}
+                    locations={[0.0125, 1.0]}
+                    style={styles.quickSessionButton}
+                >
+                    <Ionicons name="time-outline" size={scale(26)} color="#1E1E2E" />
+                    <Text style={styles.quickSessionTitle}>{t('Quick session')}</Text>
+                    <Ionicons name="chevron-forward" size={scale(22)} color="#1E1E2E" />
                 </LinearGradient>
             </TouchableOpacity>
 
@@ -283,12 +331,38 @@ const createStyles = (colors: any) => StyleSheet.create({
         color: '#1E1E2E',
         zIndex: 1,
     },
+    cardSubtitle: {
+        fontFamily: fonts.heading.medium,
+        fontSize: scale(16),
+        lineHeight: scale(22),
+        color: '#1E1E2E',
+        opacity: 0.75,
+        zIndex: 1,
+        marginTop: scale(4),
+        maxWidth: '70%',
+    },
     dailyGoalButton: {
         height: scale(74),
         borderRadius: scale(50),
         paddingHorizontal: scale(25),
         justifyContent: 'center',
         overflow: 'hidden',
+    },
+    quickSessionButton: {
+        height: scale(74),
+        borderRadius: scale(50),
+        paddingHorizontal: scale(25),
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: scale(12),
+        overflow: 'hidden',
+    },
+    quickSessionTitle: {
+        flex: 1,
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(20),
+        lineHeight: scale(24),
+        color: '#1E1E2E',
     },
     targetImage: {
         position: 'absolute',

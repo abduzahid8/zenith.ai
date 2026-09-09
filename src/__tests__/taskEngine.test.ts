@@ -12,10 +12,10 @@ describe('taskEngine', () => {
         is_primary: true,
     };
 
-    it('generates a valid daily plan with 2 tasks', () => {
+    it('generates a valid daily plan with 4 tasks', () => {
         const tasks = taskEngine.generateDailyPlan(userId, date, null, [primaryHobby]);
 
-        expect(tasks).toHaveLength(2);
+        expect(tasks).toHaveLength(4);
         tasks.forEach((task) => {
             expect(task.user_id).toBe(userId);
             expect(task.scheduled_date).toBe(date);
@@ -35,7 +35,7 @@ describe('taskEngine', () => {
 
     it('falls back safely when hobby list is empty', () => {
         const tasks = taskEngine.generateDailyPlan(userId, date, null, []);
-        expect(tasks).toHaveLength(2);
+        expect(tasks).toHaveLength(0);
         tasks.forEach((task) => {
             expect(task.hobby_id).toBeUndefined();
         });

@@ -204,7 +204,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         tintColor: '#FFFFFF',
     },
     loadingOverlay: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: 'rgba(0,0,0,0.3)',
         justifyContent: 'center',
         alignItems: 'center',

@@ -3,6 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Task, TaskType, UserStateSnapshot } from '../services/supabase/types';
 import { taskService } from '../services/taskService';
+import { taskEngine } from '../services/taskEngine';
+import { isE2EBypassEnabled, isLocalOnlyTaskId } from '../utils/e2eBypass';
 import { useUserProfileStore } from './userProfileStore';
 import { getTodayDateString } from '../utils/date';
 import { canAddTask, getMaxTasksPerDay, getAutoTasksPerDay } from '../domain/tasks/rules';
@@ -54,6 +56,22 @@ export const useTaskStore = create<TaskState>()(
                     console.log('[taskStore] fetchDailyPlan success - tasks count:', tasks.length);
                     set({ dailyTasks: tasks, lastFetchDate: today, loading: false });
                 } catch (e: unknown) {
+                    // E2E/manual QA without login or network: seed a demo plan
+                    // from the real task engine so Home + Quick Session work.
+                    // Demo ids are local-only and never touch the server.
+                    if (isE2EBypassEnabled()) {
+                        console.log('[taskStore] E2E bypass — seeding demo plan from taskEngine');
+                        const hobbyId = useUserProfileStore.getState().selectedHobby ?? 'python';
+                        const demo = taskEngine.generateDailyPlan(userId, today, null, [
+                            { user_id: userId, hobby_id: hobbyId, is_primary: true },
+                        ]);
+                        set({
+                            dailyTasks: demo.map((t, i) => ({ ...t, id: `demo-${today}-${i}` })),
+                            lastFetchDate: today,
+                            loading: false,
+                        });
+                        return;
+                    }
                     console.log('[taskStore] fetchDailyPlan error:', e);
                     set({ error: e instanceof Error ? e.message : 'Unknown error', loading: false });
                 }
@@ -141,9 +159,9 @@ export const useTaskStore = create<TaskState>()(
                     )
                 }));
 
-                // Skip Supabase call for temp IDs (task not yet persisted)
-                if (taskId.startsWith('temp-')) {
-                    console.log('[taskStore] completeTask skipped for temp id');
+                // Skip Supabase call for local-only IDs (task not yet persisted)
+                if (isLocalOnlyTaskId(taskId)) {
+                    console.log('[taskStore] completeTask skipped for local-only id');
                     return;
                 }
 
@@ -178,9 +196,9 @@ export const useTaskStore = create<TaskState>()(
                     )
                 }));
 
-                // Skip Supabase call for temp IDs (task not yet persisted)
-                if (taskId.startsWith('temp-')) {
-                    console.log('[taskStore] uncompleteTask skipped for temp id');
+                // Skip Supabase call for local-only IDs (task not yet persisted)
+                if (isLocalOnlyTaskId(taskId)) {
+                    console.log('[taskStore] uncompleteTask skipped for local-only id');
                     return;
                 }
 
@@ -209,12 +227,18 @@ export const useTaskStore = create<TaskState>()(
             skipTask: async (userId: string, taskId: string) => {
                 console.log('[taskStore] skipTask - taskId:', taskId);
                 set((state) => ({
-                    dailyTasks: state.dailyTasks.map(t =>
-                        t.id === taskId ? { ...t, status: 'skipped' } : t
-                    )
-                }));
+                dailyTasks: state.dailyTasks.map(t =>
+                    t.id === taskId ? { ...t, status: 'skipped' } : t
+                )
+            }));
 
-                try {
+            // Skip Supabase call for local-only IDs (task not yet persisted)
+            if (isLocalOnlyTaskId(taskId)) {
+                console.log('[taskStore] skipTask skipped for local-only id');
+                return;
+            }
+
+            try {
                     const updated = await taskService.skipTask(userId, taskId);
                     if (updated) {
                         console.log('[taskStore] skipTask server success');

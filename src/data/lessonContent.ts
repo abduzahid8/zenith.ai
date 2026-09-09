@@ -7,7 +7,7 @@
 
 import { ChessPuzzleMove } from './chessPuzzlesBank';
 
-export type HobbyId = 'english' | 'chess' | 'chinese' | 'coding';
+export type HobbyId = 'english' | 'chess' | 'chinese' | 'coding' | 'python' | 'reading';
 
 export type TaskType =
   | 'fill_blank'      // Заполни пропуск (вставка слов-чипов)
@@ -1604,6 +1604,11 @@ export const LESSON_BANK: Record<HobbyId, LessonContent[]> = {
   chinese: chineseLessons,
   chess: chessLessons,
   coding: codingLessons,
+  // No static bank yet — day 1+ is served by the AI generator with an
+  // offline fallback (see lessonGeneratorService). Empty arrays keep
+  // getLessonByDay total instead of throwing on unknown keys.
+  python: [],
+  reading: [],
 };
 
 /**
@@ -1622,4 +1627,6 @@ export const HOBBY_META: Record<HobbyId, { label: string; emoji: string; color: 
   chinese: { label: 'Китайский', emoji: '🇨🇳', color: '#F7544F' },
   chess: { label: 'Шахматы', emoji: '♟', color: '#8B5CF6' },
   coding: { label: 'Python', emoji: '💻', color: '#10B981' },
+  python: { label: 'Python', emoji: '💻', color: '#10B981' },
+  reading: { label: 'Чтение', emoji: '📚', color: '#F59E0B' },
 };

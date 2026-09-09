@@ -114,7 +114,7 @@ const createStyles = () => StyleSheet.create({
         elevation: 4,
     },
     glassBackground: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
         borderRadius: 47,
         borderWidth: StyleSheet.hairlineWidth,

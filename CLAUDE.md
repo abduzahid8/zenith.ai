@@ -31,7 +31,7 @@
 
 ### State management
 - **Zustand 4.4.7** — 11+ стораджей в `src/store/`:
-  - `authStore`, `userProfileStore`, `taskStore`, `subscriptionStore`
+  - `authStore`, `userProfileStore`, `taskStore`, `subscriptionStore`, `credentialStore`
   - `deviceScreenTimeStore`, `screenTimeStore`, `hobbyTimeStore`
   - `contentStore`, `earningsStore`, `quizStore`, `languageStore`
 
@@ -159,6 +159,7 @@ RLS: каждая таблица фильтрует по `user_id = auth.uid()`.
 ## Полезные точки входа
 
 - **Task engine**: `src/services/taskEngine.ts` — ядро генерации дневных планов (28-дневная ротация банка задач)
+- **Credentials**: `src/domain/credentials/` (skill graph, scoring, readiness, verification) + `src/services/credentialService.ts` + `src/store/credentialStore.ts` + `src/data/assessmentBank.ts` — одна программа на хобби (скиллы = недели 28-дневного банка); читает tasks/sessions/артефакты/юниты как evidence; миграции `009_credential_system.sql`, `010_credential_hobby_programs.sql`, роуты `/credentials`, `/credential/[slug]`, `/assessment/[slug]`, `/verify/[id]`
 - **Routing**: `src/config/routes.ts` — типизированные роут-константы
 - **Theme**: `src/theme/index.ts` — все токены дизайн-системы
 - **Auth flow**: `app/_layout.tsx` + `src/store/authStore.ts` + `src/services/supabase/`

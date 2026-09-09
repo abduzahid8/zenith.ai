@@ -68,8 +68,10 @@ const THREE_DAYS_AGO = dateOffset(-3);
 describe('lessonContent — банк уроков', () => {
     const { getLessonByDay, LESSON_BANK, HOBBY_META } = require('../data/lessonContent');
 
-    test('все 4 хобби присутствуют', () => {
-        expect(Object.keys(LESSON_BANK)).toEqual(['english', 'chinese', 'chess', 'coding']);
+    test('все хобби присутствуют (4 со статикой + python/reading через генератор)', () => {
+        expect(Object.keys(LESSON_BANK)).toEqual(
+            ['english', 'chinese', 'chess', 'coding', 'python', 'reading'],
+        );
     });
 
     test('каждое хобби имеет ровно 7 уроков', () => {

@@ -72,7 +72,7 @@ const createStyles = (bottomInset: number) => StyleSheet.create({
         elevation: 10,
     },
     glassBackground: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: 'rgba(255, 255, 255, 0.45)',
         borderRadius: 47,
         borderWidth: 1.5,

@@ -7,12 +7,6 @@
     "icon": "./assets/icons/logo-icon-v2.png",
     "scheme": "zenyth",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "supportsTablet": true,
       "buildNumber": "63",
@@ -20,7 +14,10 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": ["itms-apps", "itms-appss"]
+        "LSApplicationQueriesSchemes": [
+          "itms-apps",
+          "itms-appss"
+        ]
       }
     },
     "android": {
@@ -44,14 +41,23 @@
       "expo-font",
       "expo-apple-authentication",
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "16.0"
+            "deploymentTarget": "16.4"
           }
         }
       ],
-      "expo-iap"
+      "expo-iap",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

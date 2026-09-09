@@ -9,6 +9,15 @@ export interface QuizAnswer {
     created_at?: string;
 }
 
+export interface UserGoals {
+    user_id: string;
+    goals: string[];
+    preferred_session_minutes?: number | null;
+    experience_preference?: string | null;
+    created_at?: string;
+    updated_at?: string;
+}
+
 export interface UserHobby {
     id?: string;
     user_id: string;

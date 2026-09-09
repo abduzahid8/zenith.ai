@@ -19,6 +19,8 @@ const HOBBY_CONTEXT: Record<HobbyId, string> = {
   chinese: 'китайский язык (иероглифы, пиньинь, базовые фразы, тоны)',
   chess:   'шахматы (стратегия, тактика, дебюты, эндшпили)',
   coding:  'программирование на Python (синтаксис, алгоритмы, практические задачи)',
+  python:  'программирование на Python (синтаксис, алгоритмы, практические задачи)',
+  reading: 'чтение книг (понимание текста, словарный запас, привычка читать)',
 };
 
 const TASK_TYPE_BY_HOBBY: Record<HobbyId, TaskType[]> = {
@@ -26,6 +28,8 @@ const TASK_TYPE_BY_HOBBY: Record<HobbyId, TaskType[]> = {
   chinese: ['fill_blank', 'translate', 'free_text'],
   chess:   ['chess_puzzle', 'free_text'],
   coding:  ['code', 'free_text'],
+  python:  ['code', 'free_text'],
+  reading: ['fill_blank', 'multiple_choice', 'free_text'],
 };
 
 // ─────────────────────────────────────────────
@@ -45,6 +49,14 @@ export const lessonGeneratorService = {
     completedTopics: string[],
     skillLevel: 'beginner' | 'intermediate' = 'beginner'
   ): Promise<LessonContent> => {
+    // Defensive: unknown/stale hobby ids must degrade to a fallback lesson,
+    // never throw on the map lookups below (that path bypassed the fallback
+    // and surfaced "Урок не найден" for python/reading sessions).
+    if (!HOBBY_CONTEXT[hobby] || !TASK_TYPE_BY_HOBBY[hobby]) {
+      console.warn(`[lessonGenerator] No generator coverage for hobby: ${hobby} — using fallback`);
+      return lessonGeneratorService.getFallbackLesson(hobby, dayNumber);
+    }
+
     const cacheKey = `lesson_gen_v2_${hobby}_day${dayNumber}`;
 
     // 1. Проверяем кэш
@@ -256,9 +268,53 @@ ${hobby === 'chess' ? 'Выбери тип задания: "chess_puzzle".' : `�
           starterCode: 'number = float(input("Введи число: "))\n# Напиши условия\n',
         },
       },
+      python: {
+        id: `python_fallback_d${dayNumber}`,
+        hobby: 'python',
+        day: dayNumber,
+        learn: {
+          title: 'Повторение: основы Python',
+          body: 'Ключевые конструкции Python: переменные (x = 5), условия (if x > 0:), циклы (for i in range(10):), функции (def my_func():), ввод (input()), вывод (print()).',
+          keywords: ['переменная', 'условие', 'цикл', 'функция', 'Python'],
+        },
+        do: {
+          type: 'code',
+          prompt: 'Напиши программу, которая спрашивает число от пользователя и определяет: положительное оно, отрицательное или ноль.',
+          starterCode: 'number = float(input("Введи число: "))\n# Напиши условия\n',
+        },
+      },
+      reading: {
+        id: `reading_fallback_d${dayNumber}`,
+        hobby: 'reading',
+        day: dayNumber,
+        learn: {
+          title: 'Повторение: активное чтение',
+          body: 'Три приёма активного чтения: 1) Задавай вопросы тексту — что автор хочет сказать? 2) Выделяй главную мысль каждого абзаца одним предложением. 3) Пересказывай прочитанное своими словами — это лучший способ запомнить.',
+          keywords: ['активное чтение', 'главная мысль', 'пересказ'],
+        },
+        do: {
+          type: 'free_text',
+          prompt: 'Возьми последнюю прочитанную главу и запиши её главную мысль в 2–3 предложениях своими словами.',
+          hints: ['О чём глава одним предложением?', 'Какой пример приводит автор?'],
+        },
+      },
     };
 
-    return fallbacks[hobby];
+    // Last resort for unknown/stale hobby ids — a valid lesson beats "not found".
+    return fallbacks[hobby] ?? {
+      id: `${hobby}_fallback_d${dayNumber}`,
+      hobby,
+      day: dayNumber,
+      learn: {
+        title: 'Практика дня',
+        body: 'Повтори ключевую идею из прошлых занятий и примени её на практике в короткой сессии.',
+        keywords: [],
+      },
+      do: {
+        type: 'free_text',
+        prompt: 'Запиши, что уже знаешь по теме, и один вопрос, который хочешь разобрать.',
+      },
+    };
   },
 
   /**

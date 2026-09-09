@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Animated, Easing, AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
@@ -10,9 +10,24 @@ import { useAuthStore } from '../store/authStore';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { useHobbyTimeStore } from '../store/hobbyTimeStore';
 import { sessionService } from '../services/supabase/sessions';
-import { useT } from '../store/languageStore';
+import { useT, useLanguageStore } from '../store/languageStore';
+import { getMaxTasksPerDay } from '../domain/tasks/rules';
 import { useGamificationStore } from '../store/gamificationStore';
 import { HobbyId, LessonContent } from '../data/lessonContent';
+import { buildDiscoveryLesson } from '../domain/sessions/discoveryBank';
+import {
+    buildSessionBlueprint,
+    normalizeKind,
+    normalizeOrigin,
+    SessionBlueprint,
+    SessionKind,
+    SessionOrigin,
+    SessionStepId,
+    StepOutcome,
+} from '../domain/sessions/sessionBlueprint';
+import { isLocalOnlyTaskId } from '../utils/e2eBypass';
+import { resolveCompletionPlan } from '../domain/sessions/sessionCompletion';
+import { captureSkillSnapshot, diffSkillSnapshot, SessionDelta, SkillSnapshot } from '../services/sessionEvidence';
 
 
 export type TimerStatus = 'idle' | 'running' | 'paused';
@@ -24,10 +39,34 @@ const ENGINE_TYPES_ORDER = ['theory', 'practice', 'analysis', 'puzzles'];
 
 export interface UseTimerOptions {
     onAllTasksDone?: (startAnyway: () => void) => void;
+    /** Timebox for this session (minutes). Drives the blueprint + timer. */
+    timeboxMinutes?: number;
+    /** Daily-plan task this session proves. Auto-completed only on rewarded outcome. */
+    targetTaskId?: string | null;
+    /** Discovery topic id — runs a lightweight review-only session, never progression. */
+    discoveryId?: string | null;
+    /**
+     * Curriculum day override for skill-targeted review (certificate bites):
+     * loads that week's lesson instead of the frontier day, always review-only.
+     */
+    skillDay?: number | null;
+    /** WHAT the session is — completion behavior depends only on this. */
+    kind?: SessionKind | string;
+    /** Entry point — drives completion return routing, never the engine. */
+    origin?: SessionOrigin | string;
 }
 
 export function useTimer(options: UseTimerOptions = {}) {
     const { onAllTasksDone } = options;
+    const timeboxMinutes = Math.max(1, Math.floor(options.timeboxMinutes ?? 30));
+    const targetTaskId = options.targetTaskId ?? null;
+    const discoveryId = options.discoveryId ?? null;
+    const skillDay =
+        typeof options.skillDay === 'number' && Number.isFinite(options.skillDay) && options.skillDay >= 1 && options.skillDay <= 28
+            ? Math.floor(options.skillDay)
+            : null;
+    const sessionKind: SessionKind = normalizeKind(options.kind, discoveryId ? 'discovery' : 'structured');
+    const origin: SessionOrigin = normalizeOrigin(options.origin);
     const { dailyTasks, completeTask } = useTaskStore();
     const user = useAuthStore(s => s.user);
     const { selectedHobby, isPremium } = useUserProfileStore();
@@ -44,9 +83,19 @@ export function useTimer(options: UseTimerOptions = {}) {
         const hobby = selectedHobby as HobbyId;
         if (!hobby) return;
 
+        // Discovery topics carry their own content — no bank/AI needed.
+        if (discoveryId) {
+            console.log('[useTimer] Loading discovery topic:', discoveryId);
+            const language = useLanguageStore.getState().language;
+            setCurrentLesson(buildDiscoveryLesson(discoveryId, hobby, language));
+            setIsLoadingLesson(false);
+            return;
+        }
+
         setIsLoadingLesson(true);
         try {
-            const day = gamificationStore.currentDay[hobby] || 1;
+            // Skill-targeted review loads that curriculum week, not the frontier.
+            const day = skillDay ?? gamificationStore.currentDay[hobby] ?? 1;
             console.log('[useTimer] Loading lesson for day:', day, 'hobby:', hobby);
             
             let lesson: LessonContent | undefined;
@@ -61,6 +110,10 @@ export function useTimer(options: UseTimerOptions = {}) {
                 const { lessonGeneratorService } = require('../services/lessonGeneratorService');
                 const completedTopics = lessonGeneratorService.getCompletedTopics(gamificationStore.artifacts, hobby);
                 lesson = await lessonGeneratorService.generateLesson(hobby, day, completedTopics);
+                // The generator must never resolve empty — guarantee a lesson.
+                if (!lesson) {
+                    lesson = lessonGeneratorService.getFallbackLesson(hobby, day);
+                }
             }
 
             if (lesson && hobby === 'chess') {
@@ -94,12 +147,90 @@ export function useTimer(options: UseTimerOptions = {}) {
         } finally {
             setIsLoadingLesson(false);
         }
-    }, [selectedHobby, gamificationStore.currentDay, gamificationStore.artifacts]);
+    }, [selectedHobby, discoveryId, skillDay, gamificationStore.currentDay, gamificationStore.artifacts]);
 
-    const handleStepComplete = useCallback((step: string, userInput?: string, aiFeedback?: string) => {
-        console.log('[useTimer] Completing step:', step);
-        
-        // Track legacy steps in gamification store
+    // --- Session blueprint: one objective, time-scaled phases ---
+    const [stepOutcomes, setStepOutcomes] = useState<Record<string, StepOutcome>>({});
+    const outcomesRef = useRef<Record<string, StepOutcome>>({});
+    const rewardsGrantedRef = useRef(false);
+    const progressBeforeRef = useRef<SkillSnapshot | null>(null);
+    const [progressDelta, setProgressDelta] = useState<SessionDelta | null>(null);
+    const ctxSentRef = useRef(false);
+
+    const blueprint: SessionBlueprint | null = useMemo(() => {
+        if (!currentLesson) return null;
+        const targetTask = targetTaskId
+            ? dailyTasks.find((dt) => dt.id === targetTaskId)
+            : undefined;
+        const built = buildSessionBlueprint({
+            minutes: timeboxMinutes,
+            taskTitle: targetTask?.title ?? null,
+            taskType: targetTask?.type ?? null,
+            lessonTitle: currentLesson.learn.title,
+            hasTests: !!currentLesson.tests?.length,
+            // Skill-targeted review revisits instead of advancing the frontier.
+            reviewOnly: skillDay != null,
+            t,
+        });
+        // Discovery is always review-only: time counts, nothing advances.
+        // The id prefix is a second signal so deep links stay safe.
+        if (sessionKind === 'discovery' || currentLesson.id.startsWith('discovery-')) {
+            return { ...built, countsAsFullCompletion: false, requiresValidation: false };
+        }
+        return built;
+    }, [currentLesson, dailyTasks, targetTaskId, timeboxMinutes, skillDay, t]);
+
+    // Ordered step ids for this session. Micro sessions run learn→recall only;
+    // standard adds apply; deep adds validate (tests UI when present).
+    // Premium static lessons keep their legacy deepen tail after apply.
+    const sessionSteps: SessionStepId[] = useMemo(() => {
+        if (!blueprint || !currentLesson) return ['learn'];
+        const steps: SessionStepId[] = ['learn'];
+        if (blueprint.phases.includes('recall')) steps.push('recall');
+        const isChess = currentLesson.hobby === 'chess';
+        const hasTests = !!currentLesson.tests?.length;
+        const applyIncluded = blueprint.phases.includes('apply');
+        if (isChess && applyIncluded) {
+            if (hasTests && blueprint.phases.includes('validate')) steps.push('tests');
+            steps.push('do');
+        } else if (applyIncluded) {
+            steps.push('do');
+            if (isPremium && currentLesson.deepen1) {
+                steps.push('deepen1');
+                if (currentLesson.deepen2) steps.push('deepen2');
+            }
+            if (!isChess && hasTests && blueprint.phases.includes('validate')) steps.push('tests');
+        }
+        return steps;
+    }, [blueprint, currentLesson, isPremium]);
+
+    // Evidence delta builder shared by BOTH completion surfaces (step flow
+    // reaching 'complete', and the stop-button summary flow).
+    const buildDelta = useCallback((): SessionDelta | null => {
+        if (!selectedHobby) return null;
+        const verifiedCount = Object.values(outcomesRef.current).filter(
+            (o) => o === 'pass' || o === 'partial',
+        ).length;
+        const targetTitle = rewardsGrantedRef.current && targetTaskId
+            ? (dailyTasks.find((dt) => dt.id === targetTaskId)?.title ?? null)
+            : null;
+        return diffSkillSnapshot(progressBeforeRef.current, selectedHobby, {
+            minutes: Math.round(timeLeftRef.current / 60),
+            rewarded: rewardsGrantedRef.current,
+            verifiedCount,
+            taskCompletedTitle: targetTitle,
+        });
+    }, [dailyTasks, targetTaskId, selectedHobby]);
+
+    const handleStepComplete = useCallback((
+        step: string,
+        userInput?: string,
+        aiFeedback?: string,
+        outcome: StepOutcome = 'unknown',
+    ) => {
+        console.log('[useTimer] Completing step:', step, 'outcome:', outcome);
+
+        // Track legacy steps in gamification store (checklist progress, not rewards)
         if (['learn', 'do', 'deepen1', 'deepen2'].includes(step)) {
             gamificationStore.markStepComplete(step as any);
         }
@@ -110,45 +241,53 @@ export function useTimer(options: UseTimerOptions = {}) {
                 lessonId: currentLesson.id,
                 taskType: (step.startsWith('test_') ? 'do' : step) as any,
                 userInput,
-                aiFeedback: aiFeedback || '',
+                aiFeedback: outcome !== 'unknown' ? `[verdict:${outcome}] ${aiFeedback || ''}` : (aiFeedback || ''),
             });
         }
 
-        // Advance to the next step
-        if (step === 'learn') {
-            if (currentLesson?.hobby === 'chess' && currentLesson.tests && currentLesson.tests.length > 0) {
-                setActiveStep('tests');
-            } else {
-                setActiveStep('do');
-            }
-        } else if (step === 'tests') {
-            setActiveStep('do'); // Переходим к финальной шахматной задаче
-        } else if (step === 'do') {
-            if (currentLesson?.hobby === 'chess') {
-                gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
-                gamificationStore.incrementSessionsCompleted();
-                setActiveStep('complete');
-            } else if (isPremium && currentLesson?.deepen1) {
-                setActiveStep('deepen1');
-            } else {
-                gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
-                gamificationStore.incrementSessionsCompleted();
-                setActiveStep('complete');
-            }
-        } else if (step === 'deepen1') {
-            if (isPremium && currentLesson?.deepen2) {
-                setActiveStep('deepen2');
-            } else {
-                gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
-                gamificationStore.incrementSessionsCompleted();
-                setActiveStep('complete');
-            }
-        } else if (step === 'deepen2') {
-            gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
-            gamificationStore.incrementSessionsCompleted();
-            setActiveStep('complete');
+        setStepOutcomes((prev) => ({ ...prev, [step]: outcome }));
+        outcomesRef.current = { ...outcomesRef.current, [step]: outcome };
+
+        // Blueprint-driven progression (replaces the hardcoded step chain so
+        // 5-minute and 45-minute sessions run structurally different flows).
+        const idx = sessionSteps.indexOf(step as SessionStepId);
+        const next = idx >= 0 ? sessionSteps[idx + 1] : undefined;
+        if (next) {
+            setActiveStep(next);
+            return;
         }
-    }, [currentLesson, isPremium]);
+
+        // Terminal step — one completion pipeline (§6): rewards, task credit,
+        // and next-task resolution all derive from blueprint + outcome.
+        const plan = resolveCompletionPlan({
+            blueprint,
+            outcome,
+            tasks: dailyTasks,
+            targetTaskId,
+        });
+        rewardsGrantedRef.current = plan.advance;
+        if (plan.advance) {
+            if (currentLesson) {
+                gamificationStore.advanceDay(currentLesson.hobby as HobbyId);
+                gamificationStore.incrementSessionsCompleted();
+            }
+            if (plan.completeTask && user?.id && targetTaskId && !isLocalOnlyTaskId(targetTaskId)) {
+                completeTask(user.id, targetTaskId).catch((err) =>
+                    console.log('[useTimer] Failed to auto-complete target task:', err),
+                );
+            }
+        } else {
+            console.log(
+                '[useTimer] Session completes without progression rewards. full:',
+                !!blueprint?.countsAsFullCompletion,
+                'outcome:',
+                outcome,
+            );
+        }
+        // Evidence delta for BOTH completion surfaces (step flow + stop flow).
+        setProgressDelta(buildDelta());
+        setActiveStep('complete');
+    }, [currentLesson, isPremium, sessionSteps, blueprint, user, targetTaskId, completeTask, dailyTasks, buildDelta]);
 
 
     const TYPE_LABEL: Record<string, string> = {
@@ -159,7 +298,7 @@ export function useTimer(options: UseTimerOptions = {}) {
     };
 
     // --- Timer state (Stopwatch count up) ---
-    const [totalTime, setTotalTime] = useState(30 * 60); // Retained for type compatibility
+    const [totalTime, setTotalTime] = useState(timeboxMinutes * 60); // Session timebox; adjustable via picker
     const [timerStatus, setTimerStatus] = useState<TimerStatus>('idle');
     const [timeLeft, setTimeLeft] = useState(0); // Starts at 0
     const progress = (timeLeft % 60) / 60; // Animates every minute like a second hand
@@ -178,7 +317,7 @@ export function useTimer(options: UseTimerOptions = {}) {
 
     // Sync tasks from store whenever dailyTasks changes
     useEffect(() => {
-        const maxTasks = isPremium ? 4 : 3;
+        const maxTasks = getMaxTasksPerDay(isPremium);
         const orderedFiltered = ENGINE_TYPES_ORDER
             .flatMap(type => dailyTasks.filter(task => task.type === type && task.status !== 'skipped'))
             .slice(0, maxTasks);
@@ -352,6 +491,14 @@ export function useTimer(options: UseTimerOptions = {}) {
         console.log('[useTimer] Starting session');
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         setLockedTaskIds(new Set(tasks.filter(t => t.completed).map(t => t.id)));
+
+        // Fresh evidence slate for this session.
+        setStepOutcomes({});
+        outcomesRef.current = {};
+        rewardsGrantedRef.current = false;
+        setProgressDelta(null);
+        ctxSentRef.current = false;
+        progressBeforeRef.current = captureSkillSnapshot(selectedHobby);
         
         // Set startedAt for the first incomplete task to session start time
         const now = Date.now();
@@ -519,7 +666,12 @@ export function useTimer(options: UseTimerOptions = {}) {
         }
 
         const newlyCompletedTasks = tasks.filter(t => t.completed && !lockedTaskIds.has(t.id));
-        if (newlyCompletedTasks.length > 0) {
+
+        // Evidence delta shared with the step-flow completion surface.
+        const delta = buildDelta();
+        setProgressDelta(delta);
+
+        if (newlyCompletedTasks.length > 0 || (delta && delta.minutes > 0 && Object.keys(outcomesRef.current).length > 0)) {
             console.log('[useTimer] Showing summary - newly completed tasks:', newlyCompletedTasks.length);
             setShowSummary(true);
         } else {
@@ -527,7 +679,7 @@ export function useTimer(options: UseTimerOptions = {}) {
             setTimeLeft(0);
             setTimerStatus('idle');
         }
-    }, [tasks, lockedTaskIds, saveSessionToSupabase]);
+    }, [tasks, lockedTaskIds, saveSessionToSupabase, buildDelta]);
 
     const handleStopPress = useCallback(() => {
         console.log('[useTimer] handleStopPress pressed');
@@ -565,9 +717,25 @@ export function useTimer(options: UseTimerOptions = {}) {
         setChatInput('');
         setIsAiLoading(true);
 
+        // Session context for the mentor: injected once per session as a hidden
+        // system message (never rendered — UI shows only user/assistant turns).
+        // The existing AI service is reused; only its input gains context.
+        let apiMessages = newMessages;
+        if (currentLesson && activeStep !== 'complete' && !ctxSentRef.current) {
+            const objective = blueprint?.learningObjective || currentLesson.learn.title;
+            apiMessages = [
+                {
+                    role: 'system',
+                    content: `Session context (for you only, never repeat it): skill "${selectedHobby}", topic "${currentLesson.learn.title}", learning objective "${objective}", stage "${activeStep}", steps finished so far: ${Object.keys(outcomesRef.current).length}. Reply in the user's language. For assessed work give a hint first and a full solution only when appropriate.`,
+                } as ChatMessage,
+                ...newMessages,
+            ];
+            ctxSentRef.current = true;
+        }
+
         try {
             console.log('[useTimer] Sending message to AI service');
-            const response = await aiService.sendMessage(newMessages, selectedHobby ?? undefined);
+            const response = await aiService.sendMessage(apiMessages, selectedHobby ?? undefined);
             console.log('[useTimer] AI response received');
             const assistantMsg: ChatMessage = { role: 'assistant', content: response };
             setMessages(prev => [...prev, assistantMsg]);
@@ -632,6 +800,16 @@ export function useTimer(options: UseTimerOptions = {}) {
         currentLesson,
         isLoadingLesson,
         handleStepComplete,
+
+        // Session blueprint (objective + time-scaled phases + evidence)
+        blueprint,
+        sessionSteps,
+        stepOutcomes,
+        timeboxMinutes,
+        targetTaskId,
+        origin,
+        sessionKind,
+        progressDelta,
 
 
         // Constants

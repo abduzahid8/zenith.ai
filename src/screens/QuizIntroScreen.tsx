@@ -7,11 +7,13 @@ import { Button } from '../components/Button';
 import { fonts } from '../theme';
 import { scale } from '../constants';
 import { useQuizStore } from '../store/quizStore';
+import { useUserGoalsStore } from '../store/userGoalsStore';
 import { useAppTheme } from '../theme/useAppTheme';
 
 export default function QuizIntroScreen() {
     const router = useRouter();
     const resetQuiz = useQuizStore((state) => state.resetQuiz);
+    const resetGoals = useUserGoalsStore((state) => state.resetGoals);
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -19,6 +21,7 @@ export default function QuizIntroScreen() {
     useEffect(() => {
         console.log('[QuizIntroScreen] Resetting quiz state');
         resetQuiz();
+        resetGoals();
     }, []);
 
     const handleStart = () => {

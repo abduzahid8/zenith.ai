@@ -26,10 +26,16 @@ import FillBlankTest from './FillBlankTest';
 import FreeTextTest from './FreeTextTest';
 import EncouragementBanner from './EncouragementBanner';
 
+export interface TestSummary {
+    correct: number;
+    total: number;
+    skipped: number;
+}
+
 interface TestStepperProps {
     tests: TaskStep[];
     hobbyId: string;
-    onAllTestsComplete: () => void;
+    onAllTestsComplete: (summary: TestSummary) => void;
     skipTrigger?: number;
 }
 
@@ -60,6 +66,12 @@ export const TestStepper: React.FC<TestStepperProps> = ({
     const [banner, setBanner] = useState<{ visible: boolean; isCorrect: boolean; feedback?: string; title?: string }>(
         { visible: false, isCorrect: false }
     );
+
+    const summarizeResults = (r: (boolean | 'skipped' | null)[]): TestSummary => ({
+        correct: r.filter((x) => x === true).length,
+        total: tests.length,
+        skipped: r.filter((x) => x === 'skipped').length,
+    });
 
     // Состояние для временного отключения скролла во время перетаскивания (drag-and-drop)
     const [scrollEnabled, setScrollEnabled] = useState(true);
@@ -221,7 +233,7 @@ export const TestStepper: React.FC<TestStepperProps> = ({
                     });
                 } else {
                     // Все тесты успешно пройдены или окончательно пропущены -> идем к шахматной доске
-                    onAllTestsComplete();
+                    onAllTestsComplete(summarizeResults(results));
                 }
             }
         }
@@ -350,7 +362,8 @@ export const TestStepper: React.FC<TestStepperProps> = ({
                         ]).start();
                     });
                 } else {
-                    onAllTestsComplete();
+                    // Note: results here is stale for the just-skipped index — summarize newResults.
+                    onAllTestsComplete(summarizeResults(newResults));
                 }
             }
         }

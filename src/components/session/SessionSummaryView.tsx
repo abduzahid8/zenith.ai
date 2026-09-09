@@ -13,9 +13,11 @@ export interface SessionSummaryViewProps {
     tasks: SessionTask[];
     startTime: number;
     onExit: () => void;
+    /** Evidence lines: what this session improved (minutes, skills, answers). */
+    deltaLines?: string[];
 }
 
-const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ tasks, startTime, onExit }) => {
+const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ tasks, startTime, onExit, deltaLines = [] }) => {
     const completedTasks = tasks.filter(t => t.completed).sort((a, b) => (a.completedAt || 0) - (b.completedAt || 0));
     const pagerPosition = useRef(new Animated.Value(0)).current;
     const pagerOffset = useRef(new Animated.Value(0)).current;
@@ -40,16 +42,18 @@ const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ tasks, startTim
 
     return (
         <View style={styles.summaryContainer}>
-            <PagerView
-                style={styles.pagerView}
-                initialPage={0}
-                ref={pagerRef}
-                onPageScroll={Animated.event(
-                    [{ nativeEvent: { position: pagerPosition, offset: pagerOffset } }],
-                    { useNativeDriver: false }
-                )}
-            >
-                {completedTasks.map((task, index) => {
+            {completedTasks.length > 0 ? (
+                <>
+                    <PagerView
+                        style={styles.pagerView}
+                        initialPage={0}
+                        ref={pagerRef}
+                        onPageScroll={Animated.event(
+                            [{ nativeEvent: { position: pagerPosition, offset: pagerOffset } }],
+                            { useNativeDriver: false }
+                        )}
+                    >
+                        {completedTasks.map((task, index) => {
                     const taskProgress = getTaskProgress(task.completedAt!);
                     const circumference = 2 * Math.PI * 109;
                     return (
@@ -116,6 +120,22 @@ const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ tasks, startTim
                     );
                 })}
             </View>
+                </>
+            ) : (
+                <View style={styles.linesWrap}>
+                    {deltaLines.map((line, i) => (
+                        <Text key={i} style={styles.lineText}>{line}</Text>
+                    ))}
+                </View>
+            )}
+
+            {completedTasks.length > 0 && deltaLines.length > 0 ? (
+                <View style={styles.linesCompact}>
+                    {deltaLines.map((line, i) => (
+                        <Text key={i} style={styles.lineText}>{line}</Text>
+                    ))}
+                </View>
+            ) : null}
 
             <View style={styles.summaryFooter}>
                 <TouchableOpacity style={styles.summaryButton} onPress={onExit}>
@@ -189,6 +209,26 @@ const createStyles = (colors: any) => StyleSheet.create({
         gap: 10,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    linesWrap: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: scale(32),
+        gap: scale(12),
+    },
+    linesCompact: {
+        alignItems: 'center',
+        paddingHorizontal: scale(32),
+        paddingBottom: scale(16),
+        gap: scale(6),
+    },
+    lineText: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(18),
+        lineHeight: scale(26),
+        color: colors.sessionTimer.textDark,
+        textAlign: 'center',
     },
     summaryFooter: {
         alignItems: 'center',

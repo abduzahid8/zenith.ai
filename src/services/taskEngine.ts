@@ -64,15 +64,10 @@ export const taskEngine = {
                 });
             });
         } else {
-            // Fallback: use random templates if no bank entry found
+            // Fallback: generate one task per type if no bank entry found
             const difficultyLevel = 'beginner';
-            const pairs: [TaskType, TaskType][] = [
-                ['theory', 'puzzles'],
-                ['practice', 'analysis'],
-                ['theory', 'practice'],
-            ];
-            const selectedPair = pairs[Math.floor(Math.random() * pairs.length)];
-            selectedPair.forEach(type => {
+            const fallbackTypes: TaskType[] = ['theory', 'practice', 'analysis', 'puzzles'];
+            fallbackTypes.forEach(type => {
                 let title = '';
                 let duration = 15;
                 switch (type) {

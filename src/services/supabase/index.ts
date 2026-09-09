@@ -6,6 +6,7 @@ export { getSupabase } from './client';
 // Types
 export type {
     QuizAnswer,
+    UserGoals,
     UserHobby,
     Session,
     UserProfile,
@@ -30,6 +31,7 @@ export type {
 // Services
 export { authService } from './auth';
 export { quizService } from './quiz';
+export { userGoalsService } from './userGoals';
 export { hobbyService } from './hobbies';
 export { sessionService } from './sessions';
 export { profileService } from './profile';
@@ -47,6 +49,7 @@ export { metricService } from '../metricService';
 // Backward-compatible composite dbService
 // Composed from all individual services so existing consumers don't break
 import { quizService } from './quiz';
+import { userGoalsService } from './userGoals';
 import { hobbyService } from './hobbies';
 import { sessionService } from './sessions';
 import { profileService } from './profile';
@@ -64,6 +67,9 @@ export const dbService = {
     // Quiz
     saveQuizAnswers: quizService.saveQuizAnswers,
     getQuizAnswers: quizService.getQuizAnswers,
+    // Onboarding 2.0 goals
+    getUserGoals: userGoalsService.getUserGoals,
+    upsertUserGoals: userGoalsService.upsertUserGoals,
     // Hobbies
     saveHobby: hobbyService.saveHobby,
     getUserHobbies: hobbyService.getUserHobbies,

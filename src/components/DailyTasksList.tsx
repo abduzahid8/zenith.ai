@@ -166,10 +166,11 @@ export const DailyTasksList = () => {
         const ENGINE_TYPES: TaskType[] = ['theory', 'practice', 'analysis', 'puzzles'];
         const engineTasks = dailyTasks.filter(t => ENGINE_TYPES.includes(t.type as TaskType));
         const canAddMore = engineTasks.length < getMaxTasksPerDay(isPremium);
+        const premiumAllowsMore = getMaxTasksPerDay(isPremium) < getMaxTasksPerDay(true);
 
-        if (!canAddMore && !isPremium) {
+        if (!canAddMore && premiumAllowsMore && !isPremium) {
             router.push('/subscription');
-        } else {
+        } else if (canAddMore) {
             router.push('/your-tasks');
         }
     };
@@ -180,6 +181,20 @@ export const DailyTasksList = () => {
             setModalVisible(false);
             setSelectedTask(null);
         }
+    };
+
+    // Recommended path: run the task inside the shared Session Engine.
+    // The task completes only on a rewarded session outcome (see useTimer).
+    const handleStartSession = () => {
+        if (!selectedTask) return;
+        console.log('[DailyTasksList] Start session for task:', selectedTask.id);
+        const minutes = selectedTask.duration_minutes && selectedTask.duration_minutes > 0
+            ? selectedTask.duration_minutes
+            : 15;
+        const taskParam = selectedTask.id ? `&taskId=${selectedTask.id}` : '';
+        setModalVisible(false);
+        router.push(`/session-timer?minutes=${minutes}${taskParam}&kind=structured&origin=your_day` as any);
+        setSelectedTask(null);
     };
 
     const handleModalClose = () => {
@@ -202,8 +217,9 @@ export const DailyTasksList = () => {
     const maxTasks = getMaxTasksPerDay(isPremium);
     const engineTasks = allEngineTasks.slice(0, maxTasks);
 
-    const showAddButton = true; // Always allow user to try to add or see categories
-    const isUpgradeButton = !isPremium && engineTasks.length >= getMaxTasksPerDay(false);
+    const showAddButton = engineTasks.length < maxTasks;
+    // Only upsell Premium when it actually unlocks more tasks than the free plan
+    const isUpgradeButton = !isPremium && getMaxTasksPerDay(false) < getMaxTasksPerDay(true) && engineTasks.length >= getMaxTasksPerDay(false);
 
     return (
         <View style={styles.container}>
@@ -228,6 +244,7 @@ export const DailyTasksList = () => {
                 onClose={handleModalClose}
                 onSubmit={handleFeedbackSubmit}
                 taskTitle={selectedTask?.title || ''}
+                onStartSession={selectedTask?.status === 'completed' ? undefined : handleStartSession}
             />
         </View>
     );

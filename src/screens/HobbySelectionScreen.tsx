@@ -7,6 +7,7 @@ import { fonts } from '../theme';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { useTaskStore } from '../store/taskStore';
 import { useQuizStore } from '../store/quizStore';
+import { useUserGoalsStore } from '../store/userGoalsStore';
 import { useAuthStore } from '../store/authStore';
 import { matchHobbies, HobbyMatch } from '../services/hobbyMatcher';
 import { dbService } from '../services/supabase';
@@ -38,6 +39,7 @@ export default function HobbySelectionScreen() {
     const user = useAuthStore((s) => s.user);
     const { setSelectedHobby } = useUserProfileStore();
     const { answers } = useQuizStore();
+    const { goals } = useUserGoalsStore();
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
     const t = useT();
@@ -46,12 +48,13 @@ export default function HobbySelectionScreen() {
     const [matchedHobbies, setMatchedHobbies] = useState<HobbyMatch[]>([]);
     const [saving, setSaving] = useState(false);
 
-    // Calculate matches when screen loads
+    // Calculate matches when screen loads.
+    // Goals bias (not decide) the recommendation — see hobbyMatcher.
     useEffect(() => {
-        console.log('[HobbySelectionScreen] Calculating hobby matches from quiz answers');
-        const topMatches = matchHobbies(answers, 3);
+        console.log('[HobbySelectionScreen] Calculating hobby matches from quiz answers + goals');
+        const topMatches = matchHobbies(answers, 3, goals);
         setMatchedHobbies(topMatches);
-    }, [answers]);
+    }, [answers, goals]);
 
     const handleSelect = (hobbyId: string) => {
         console.log('[HobbySelectionScreen] handleSelect - hobbyId:', hobbyId, 'previously selected:', selectedId);
@@ -95,7 +98,9 @@ export default function HobbySelectionScreen() {
                     {t('Хобби, которые подходят тебе')}
                 </Text>
                 <Text style={styles.subtitleText}>
-                    {t('На основе твоих ответов.')}{'\n'}{t('Выбери одно, чтобы начать.')}
+                    {goals.length > 0
+                        ? t('На основе твоих ответов и целей.')
+                        : t('На основе твоих ответов.')}{'\n'}{t('Выбери одно, чтобы начать.')}
                 </Text>
             </View>
 

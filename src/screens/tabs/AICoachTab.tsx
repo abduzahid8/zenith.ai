@@ -282,7 +282,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         gap: scale(10),
     },
     glassBackground: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         borderRadius: scale(30),
         overflow: 'hidden',
         backgroundColor: 'rgba(255, 255, 255, 0.25)',

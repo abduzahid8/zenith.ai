@@ -21,9 +21,13 @@ import { useT } from '../../store/languageStore';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 
-function splitTextIntoThreeCards(body: string, title: string) {
+function splitTextIntoThreeCards(body: string, title: string, hobbyId?: string) {
     const normalizedTitle = title.toLowerCase();
-    
+
+    // Static recap cards below are chess-specific. For any other hobby they
+    // would show wrong content under the right title (e.g. chess rules under
+    // a Python lesson), so non-chess lessons use the dynamic sentence split.
+    if (hobbyId === 'chess') {
     if (normalizedTitle.includes('фигур') && (normalizedTitle.includes('ход') || normalizedTitle.includes('как'))) {
         return [
             {
@@ -142,6 +146,7 @@ function splitTextIntoThreeCards(body: string, title: string) {
             },
         ];
     }
+    } // end chess-only static cards
 
     // Dynamic split fallback for other/AI-generated lessons
     const sentences = body.match(/[^.!?]+[.!?]+/g) || [body];
@@ -206,7 +211,7 @@ export const LearnStep: React.FC<LearnStepProps> = ({
     const [explanations, setExplanations] = useState<Record<string, string>>({});
 
     // Cards data
-    const cards = useMemo(() => splitTextIntoThreeCards(body, title), [body, title]);
+    const cards = useMemo(() => splitTextIntoThreeCards(body, title, hobbyId), [body, title, hobbyId]);
     const [activeIndex, setActiveIndex] = useState(0);
 
     // State to lock outer ScrollView when swiping cards

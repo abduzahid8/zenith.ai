@@ -4,6 +4,7 @@ import { BlurView } from 'expo-blur';
 import { scale } from '../../constants';
 import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { TIMER_PICKER_PRESETS } from '../../domain/sessions/sessionDurations';
 
 export interface TimePickerModalProps {
     visible: boolean;
@@ -12,7 +13,7 @@ export interface TimePickerModalProps {
     onClose: () => void;
 }
 
-const PRESETS = [10, 20, 30, 45, 60, 90];
+const PRESETS = [...TIMER_PICKER_PRESETS];
 
 const TimePickerModal: React.FC<TimePickerModalProps> = ({
     visible,

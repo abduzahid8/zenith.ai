@@ -14,14 +14,14 @@ export interface CanAddTaskResult {
     errorMessage?: string;
 }
 
-export const AUTO_TASKS_PER_DAY = 2;
+export const AUTO_TASKS_PER_DAY = 4;
 
 export function getAutoTasksPerDay(): number {
     return AUTO_TASKS_PER_DAY;
 }
 
-export function getMaxTasksPerDay(isPremium: boolean): number {
-    return isPremium ? 4 : 2;
+export function getMaxTasksPerDay(_isPremium: boolean): number {
+    return 4;
 }
 
 export function isDuplicateTemplate(params: {
@@ -44,10 +44,7 @@ export function canAddTask(params: CanAddTaskParams): CanAddTaskResult {
 
     const maxTasks = getMaxTasksPerDay(isPremium);
     if (engineTasks.length >= maxTasks) {
-        const msg = isPremium
-            ? 'Достигнут лимит задач на сегодня'
-            : 'Обновите до Premium, чтобы добавить больше задач';
-        return { allowed: false, errorMessage: msg };
+        return { allowed: false, errorMessage: 'Достигнут лимит задач на сегодня' };
     }
 
     if (!template) {
