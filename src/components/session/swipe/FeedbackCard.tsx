@@ -33,11 +33,14 @@ export const FeedbackCard: React.FC<FeedbackCardProps> = ({ title, body, verdict
 
 interface ResultCardProps {
     data: SessionResultData;
+    continueLabel: string;
     onContinue: () => void;
+    doneLabel?: string | null;
+    onDone?: () => void;
 }
 
 /** Final card: only real session values, never fabricated percentages. */
-export const SessionResultCard: React.FC<ResultCardProps> = ({ data, onContinue }) => {
+export const SessionResultCard: React.FC<ResultCardProps> = ({ data, continueLabel, onContinue, doneLabel, onDone }) => {
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
     const lines: string[] = [];
@@ -65,8 +68,13 @@ export const SessionResultCard: React.FC<ResultCardProps> = ({ data, onContinue 
                 {!!data.nextTitle && <Text style={styles.next}>Next: {data.nextTitle}</Text>}
             </ScrollView>
             <TouchableOpacity style={styles.continueButton} onPress={onContinue} activeOpacity={0.8}>
-                <Text style={styles.continueText}>Continue</Text>
+                <Text style={styles.continueText} numberOfLines={2}>{continueLabel}</Text>
             </TouchableOpacity>
+            {!!doneLabel && !!onDone && (
+                <TouchableOpacity style={styles.doneButton} onPress={onDone} activeOpacity={0.8}>
+                    <Text style={styles.doneText}>{doneLabel}</Text>
+                </TouchableOpacity>
+            )}
         </View>
     );
 };
@@ -150,10 +158,27 @@ const createStyles = (colors: any) =>
             alignItems: 'center',
             marginTop: scale(12),
         },
+        doneButton: {
+            backgroundColor: 'transparent',
+            borderRadius: 9999,
+            borderWidth: 1.5,
+            borderColor: '#0F2147',
+            height: scale(52),
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginTop: scale(12),
+        },
+        doneText: {
+            fontFamily: fonts.heading.bold,
+            fontSize: scale(16),
+            color: '#0F2147',
+        },
         continueText: {
             fontFamily: fonts.heading.bold,
             fontSize: scale(18),
             color: '#FFFFFF',
+            textAlign: 'center',
+            paddingHorizontal: scale(16),
         },
     });
 

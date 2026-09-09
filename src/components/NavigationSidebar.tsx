@@ -200,6 +200,8 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             key: 'growth',
             label: t('Развитие'),
             subItems: [
+                { label: t('Быстрая практика'), route: '/quick-session' },
+                { label: t('Мои навыки'), route: '/credentials' },
                 { label: t('Подборка контента') },
                 { label: t('Достижения и бейджи') },
             ],

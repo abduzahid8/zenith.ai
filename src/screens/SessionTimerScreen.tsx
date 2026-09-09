@@ -31,8 +31,11 @@ export const SessionTimerScreen: React.FC = () => {
         return <SessionTimerLegacyScreen />;
     }
 
+    const routeKey = `${session.context.kind}|${session.context.origin}|${session.taskId ?? ''}|${session.discoveryId ?? ''}|${session.minutes ?? ''}|${session.skillDay ?? ''}`;
+
     return (
         <SwipeLearningSession
+            key={routeKey}
             kind={session.context.kind}
             origin={session.context.origin}
             taskId={session.taskId}
@@ -40,6 +43,12 @@ export const SessionTimerScreen: React.FC = () => {
             minutes={session.minutes ?? 15}
             skillDay={session.skillDay}
             onExit={() => router.back()}
+            onContinueNext={(next) => {
+                console.log('[SessionTimer] Continue to next task:', next.taskId);
+                router.replace(
+                    `/session-timer?minutes=${next.minutes}&taskId=${next.taskId}&kind=${session.context.kind}&origin=${session.context.origin}` as any,
+                );
+            }}
         />
     );
 };

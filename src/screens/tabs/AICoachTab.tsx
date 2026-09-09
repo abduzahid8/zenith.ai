@@ -20,6 +20,9 @@ import { useGamificationStore } from '../../store/gamificationStore';
 import { useLanguageStore } from '../../store/languageStore';
 import { useGoalStore } from '../../store/goalStore';
 import { GoalSnapshot, DailyGoalContent } from '../../types/goals';
+import { findNextIncompleteTask } from '../../domain/sessions/sessionCompletion';
+import { sessionRouteForTask } from '../../domain/sessions/sessionRouting';
+import { useTaskStore } from '../../store/taskStore';
 import { computeDailyFocus, DailyFocusResult } from '../../services/dailyFocusEngine';
 import { orchestrateDailyPlan } from '../../services/agentOrchestrator';
 import { DailyPlan } from '../../types/goals';
@@ -208,13 +211,22 @@ const AICoachTab: React.FC = () => {
     };
 
     const hobby = (selectedHobby || useUserProfileStore.getState().selectedHobby) as HobbyId | null;
+    /** Next real DailyPlan task -> shared swipe session (same task object). */
+    const startNextTaskSession = () => {
+        const next = findNextIncompleteTask(useTaskStore.getState().dailyTasks);
+        if (next?.id) {
+            router.push(sessionRouteForTask(next, 'home_start') as any);
+        } else {
+            router.push('/session-timer' as any);
+        }
+    };
     const actionChips: ActionChip[] = useMemo(() => {
         const chips: ActionChip[] = [];
         if (goalSnapshot?.definition.id) {
             const goalId = goalSnapshot.definition.id;
             chips.push(
                 { label: 'Today\'s plan', icon: '📋', action: () => router.push(`/goal-detail?goalId=${goalId}`) },
-                { label: 'Start session', icon: '▶️', action: () => router.push(`/goal-detail?goalId=${goalId}&startSession=1`) },
+                { label: 'Start session', icon: '▶️', action: startNextTaskSession },
             );
             if (hobby === 'reading') {
                 chips.push({ label: 'Reading timer', icon: '⏱', action: () => router.push('/session-timer') });
@@ -280,6 +292,24 @@ const AICoachTab: React.FC = () => {
                     <View style={styles.greetingCard}>
                         <Text style={styles.greetingEmoji}>👋</Text>
                         <Text style={styles.greetingTitle}>{greeting}</Text>
+                    </View>
+                ) : messages.length === 0 ? (
+                    <View style={styles.suggestWrap}>
+                        <Text style={styles.suggestTitle}>Спроси Zenyth</Text>
+                        {[
+                            { label: '📖 Объясни сегодняшнюю тему', prompt: "Explain today's topic simply." },
+                            { label: '❓ Почему я это учу?', prompt: 'Why am I learning this? Explain briefly.' },
+                            { label: '🎯 Что практиковать дальше?', prompt: 'What should I practice next based on my progress?' },
+                        ].map((s, i) => (
+                            <TouchableOpacity
+                                key={i}
+                                style={styles.suggestChip}
+                                onPress={() => handleSend(s.prompt)}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={styles.chipLabel}>{s.label}</Text>
+                            </TouchableOpacity>
+                        ))}
                     </View>
                 ) : null}
                 renderItem={({ item }) => (
@@ -362,6 +392,24 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontFamily: fonts.heading.bold,
         fontSize: scale(28),
         color: colors.text,
+    },
+    suggestWrap: {
+        paddingVertical: scale(24),
+        gap: scale(10),
+    },
+    suggestTitle: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(22),
+        color: colors.text,
+        marginBottom: scale(6),
+    },
+    suggestChip: {
+        paddingVertical: scale(12),
+        paddingHorizontal: scale(18),
+        borderRadius: scale(20),
+        backgroundColor: '#F0F0F5',
+        borderWidth: 1,
+        borderColor: '#E0E0E8',
     },
     chatList: {
         flex: 1,

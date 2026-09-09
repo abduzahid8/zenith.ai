@@ -286,6 +286,28 @@ export default function RootLayout() {
                                     animation: 'slide_from_right',
                                 }}
                             />
+                            <Stack.Screen
+                                name="quick-session"
+                                options={{
+                                    presentation: 'card',
+                                    animation: 'slide_from_right',
+                                }}
+                            />
+                            <Stack.Screen
+                                name="credentials"
+                                options={{
+                                    presentation: 'card',
+                                    animation: 'slide_from_right',
+                                }}
+                            />
+                            <Stack.Screen
+                                name="credential/[slug]"
+                                options={{
+                                    presentation: 'card',
+                                    animation: 'slide_from_right',
+                                    title: ''
+                                }}
+                            />
                         </Stack>
                     )}
 

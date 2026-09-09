@@ -21,13 +21,21 @@ import { getMaxTasksPerDay } from '../../domain/tasks/rules';
 import { useT } from '../../store/languageStore';
 import { useGoalStore } from '../../store/goalStore';
 import { GoalSnapshot } from '../../types/goals';
-import GoalProgressBar from '../../components/goal/GoalProgressBar';
-import { DailyGoalCard } from '../../components/goal/DailyGoalCard';
+import { computeDailyFocus } from '../../services/dailyFocusEngine';
+import { buildTodaySequence, TodayRow } from '../../domain/sessions/todaySequence';
+import { sessionRouteForTask } from '../../domain/sessions/sessionRouting';
 
 interface WeeklyPlanTabProps {
     isPremium: boolean;
 }
 
+/**
+ * Your Day — one clear learning sequence over the REAL DailyPlan tasks.
+ * User language only (Learn/Practice/Challenge); the engine taxonomy
+ * (theory/practice/analysis/puzzles) stays internal. Tap → shared swipe
+ * session with the real task ID. Goal + focus appear as context, never
+ * as competing dashboards.
+ */
 const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
     const router = useRouter();
     const { user } = useAuthStore();
@@ -45,10 +53,12 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
         if (selectedHobby) {
             const snapshot = useGoalStore.getState().getSnapshot(selectedHobby as any);
             setGoalSnapshot(snapshot);
+        } else {
+            setGoalSnapshot(null);
         }
     }, [selectedHobby]);
-    const allEngineTasks = ENGINE_TYPES
-        .flatMap(type => dailyTasks.filter(task => task.type === type));
+
+    const allEngineTasks = ENGINE_TYPES.flatMap(type => dailyTasks.filter(task => task.type === type));
 
     // Enforce display limit based on subscription
     const maxTasks = getMaxTasksPerDay(isPremium || profilePremium);
@@ -60,7 +70,23 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
         }
     }, [userId, fetchDailyPlan]);
 
+    const sequence = useMemo(() => buildTodaySequence(engineTasks), [engineTasks]);
 
+    // Invisible intelligence: focus engine -> one short reason, no mode names.
+    const focusReason = useMemo(() => {
+        if (!goalSnapshot) return null;
+        try {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const focus = computeDailyFocus({
+                goal: goalSnapshot.definition,
+                progress: goalSnapshot.progress,
+                todayStr,
+            });
+            return focus?.reason ?? null;
+        } catch {
+            return null;
+        }
+    }, [goalSnapshot]);
 
     const handleAddPress = () => {
         const canAddMore = engineTasks.length < maxTasks;
@@ -76,39 +102,23 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
         }
     };
 
-    const getCardStyleForTask = (task: Task) => {
-        switch (task.type) {
-            case 'theory':
-                return styles.theoryCard;
-            case 'practice':
-                return styles.practiceCard;
-            case 'analysis':
-                return styles.analysisCard;
-            case 'puzzles':
-                return styles.tasksCard;
-            default:
-                return styles.theoryCard;
-        }
+    const handleRowPress = (row: TodayRow, task: Task) => {
+        if (row.completed) return;
+        console.log('[WeeklyPlanTab] Row pressed - starting swipe session for task:', task.id);
+        router.push(sessionRouteForTask(task, 'your_day') as any);
     };
 
-    const getTitleForType = (type: TaskType) => {
-        switch (type) {
-            case 'theory':
-                return t('Узнай');
-            case 'practice':
-                return t('Сделай');
-            case 'analysis':
-                return t('Углуби 1');
-            case 'puzzles':
-                return t('Углуби 2');
-            default:
-                return t('Задача');
-        }
+    const bgForAction = (row: TodayRow) => {
+        if (row.action === 'learn') return colors.weeklyPlan.theoryBg;
+        if (row.action === 'practice') return colors.weeklyPlan.practiceBg;
+        return colors.weeklyPlan.tasksBg;
     };
 
-    // Fixed visual order: 1) Теория, 2) Практика, 3) Анализ, 4) Задачи
-    const orderedTasks: Task[] = ENGINE_TYPES
-        .flatMap(type => engineTasks.filter(task => task.type === type));
+    const iconForAction = (row: TodayRow) => {
+        if (row.action === 'learn') return require('../../../icons/book.png');
+        if (row.action === 'practice') return require('../../../icons/dumbbell.png');
+        return require('../../../icons/puzzle.png');
+    };
 
     if (error && engineTasks.length === 0) {
         return (
@@ -142,21 +152,30 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
             contentContainerStyle={{ paddingBottom: scale(100) }}
             showsVerticalScrollIndicator={false}
         >
+            <Text style={styles.yourDayTitle}>{t('Твой день')}</Text>
+
             {goalSnapshot && (
-                <>
-                    <Text style={styles.yourDayTitle}>Твоя цель</Text>
-                    <GoalProgressBar snapshot={goalSnapshot} />
-                    {goalSnapshot.definition.status === 'active' && (
-                        <DailyGoalCard
-                            snapshot={goalSnapshot}
-                            colors={colors}
-                            onRefresh={(next) => setGoalSnapshot(next)}
-                        />
-                    )}
-                </>
+                <TouchableOpacity
+                    style={styles.goalLine}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                        console.log('[WeeklyPlanTab] Goal line pressed');
+                        router.push(`/goal-detail?goalId=${goalSnapshot.definition.id}` as any);
+                    }}
+                >
+                    <Text style={styles.goalKicker}>{t('Твоя цель')}</Text>
+                    <Text style={styles.goalText} numberOfLines={1}>
+                        {goalSnapshot.definition.description} · {Math.round(goalSnapshot.percentComplete)}%
+                    </Text>
+                </TouchableOpacity>
             )}
 
-            <Text style={styles.yourDayTitle}>{t('Твой день')}</Text>
+            {!!focusReason && sequence.rows.length > 0 && (
+                <View style={styles.whyCard}>
+                    <Text style={styles.whyTitle}>{t('Почему это?')}</Text>
+                    <Text style={styles.whyText}>{focusReason}</Text>
+                </View>
+            )}
 
             {engineTasks.length === 0 && (
                 <View style={styles.emptyState}>
@@ -173,87 +192,87 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                 </View>
             )}
 
-            {orderedTasks.map((task) => {
-                const isCompleted = task.status === 'completed';
-                const cardStyle = getCardStyleForTask(task);
-                const title = getTitleForType(task.type);
-
-                let iconSource = require('../../../icons/book.png');
-                if (task.type === 'practice') iconSource = require('../../../icons/dumbbell.png');
-                if (task.type === 'analysis') iconSource = require('../../../icons/magnifier.png');
-                if (task.type === 'puzzles') iconSource = require('../../../icons/puzzle.png');
-
-                const iconContainerStyle =
-                    task.type === 'theory'
-                        ? styles.theoryIconContainer
-                        : task.type === 'practice'
-                            ? styles.practiceIconContainer
-                            : task.type === 'analysis'
-                                ? styles.analysisIconContainer
-                                : styles.tasksIconContainer;
-
-                const iconStyle =
-                    task.type === 'theory'
-                        ? styles.iconTheory
-                        : task.type === 'practice'
-                            ? styles.iconPractice
-                            : task.type === 'analysis'
-                                ? styles.iconAnalysis
-                                : styles.iconTasks;
-
-                const descriptionStyle =
-                    task.type === 'analysis'
-                        ? styles.analysisDescription
-                        : task.type === 'puzzles'
-                            ? styles.tasksDescription
-                            : styles.taskCardDescription;
-
-                const titleStyle =
-                    task.type === 'analysis'
-                        ? styles.analysisTitle
-                        : task.type === 'puzzles'
-                            ? styles.tasksTitle
-                            : styles.taskCardTitle;
-
+            {sequence.rows.map((row, i) => {
+                // rows preserve engineTasks order 1:1 (same real task objects).
+                const task = engineTasks[i];
+                const isCompleted = row.completed;
                 return (
                     <TouchableOpacity
-                        key={task.id || task.title}
-                        style={[cardStyle, isCompleted && styles.completedCard]}
+                        key={row.taskId || row.title}
+                        style={[
+                            styles.rowCard,
+                            { backgroundColor: bgForAction(row) },
+                            isCompleted && styles.completedCard,
+                            row.state === 'next' && !isCompleted && styles.nextCard,
+                        ]}
                         activeOpacity={0.8}
+                        onPress={() => task && handleRowPress(row, task)}
                     >
-                        <View style={styles.taskCardContent}>
-                            <View style={styles.taskCardTextContainer}>
-                                <Text style={titleStyle}>{title}</Text>
-                                <Text style={descriptionStyle}>
-                                    {t(task.title)}
-                                </Text>
-                            </View>
-                            <View style={iconContainerStyle}>
-                                {isCompleted ? (
-                                    <Image source={require('../../../icons/Vector.png')} style={{ width: scale(24), height: scale(24), tintColor: '#FFFFFF' }} resizeMode="contain" />
-                                ) : (
-                                    <Image
-                                        source={iconSource}
-                                        style={iconStyle}
-                                        resizeMode="contain"
-                                    />
-                                )}
-                            </View>
+                        <View style={styles.rowNumber}>
+                            {isCompleted ? (
+                                <Image
+                                    source={require('../../../icons/Vector.png')}
+                                    style={{ width: scale(22), height: scale(22), tintColor: '#FFFFFF' }}
+                                    resizeMode="contain"
+                                />
+                            ) : (
+                                <Text style={styles.rowNumberText}>{i + 1}</Text>
+                            )}
                         </View>
+                        <View style={styles.rowTextWrap}>
+                            <Text style={styles.rowAction}>
+                                {t(row.actionLabel)} · ~{row.minutes} {t('min')}
+                            </Text>
+                            <Text style={styles.rowTitle} numberOfLines={2}>
+                                {t(row.title)}
+                            </Text>
+                        </View>
+                        {!isCompleted && (
+                            <Image
+                                source={iconForAction(row)}
+                                style={styles.rowIcon}
+                                resizeMode="contain"
+                            />
+                        )}
                     </TouchableOpacity>
                 );
             })}
 
-            {/* Add Task button:
-                - Free users: always visible; shows lock when at 2-task limit, plus when below
-                - Premium users: visible only when below 4 tasks */}
-            {(!(isPremium || profilePremium) || orderedTasks.length < maxTasks) && (
+            {sequence.rows.length > 0 && !sequence.allDone && (
+                <Text style={styles.minutesLeft}>
+                    {t('Осталось примерно')} {sequence.minutesLeft} {t('min')}
+                </Text>
+            )}
+
+            <TouchableOpacity
+                style={styles.linkRow}
+                activeOpacity={0.8}
+                onPress={() => {
+                    console.log('[WeeklyPlanTab] Quick practice pressed');
+                    router.push('/quick-session' as any);
+                }}
+            >
+                <Ionicons name="time-outline" size={scale(22)} color={colors.text} />
+                <Text style={styles.linkText}>{t('Быстрая практика')}</Text>
+                <Ionicons name="chevron-forward" size={scale(20)} color={colors.textSecondary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+                style={styles.linkRow}
+                activeOpacity={0.8}
+                onPress={() => {
+                    console.log('[WeeklyPlanTab] Verified skill pressed');
+                    router.push('/credentials' as any);
+                }}
+            >
+                <Ionicons name="shield-checkmark-outline" size={scale(22)} color={colors.text} />
+                <Text style={styles.linkText}>{t('Подтверждённый навык')}</Text>
+                <Ionicons name="chevron-forward" size={scale(20)} color={colors.textSecondary} />
+            </TouchableOpacity>
+
+            {(!(isPremium || profilePremium) || sequence.rows.length < maxTasks) && (
                 <TouchableOpacity
-                    style={[
-                        styles.addTaskCard,
-                        orderedTasks.length === 0 && { height: scale(179) },
-                        orderedTasks.length >= 1 && { height: scale(179) },
-                    ]}
+                    style={styles.addTaskCard}
                     activeOpacity={0.8}
                     onPress={() => {
                         console.log('[WeeklyPlanTab] Add task card pressed');
@@ -261,7 +280,7 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                     }}
                 >
                     <Image
-                        source={(!(isPremium || profilePremium) && orderedTasks.length >= maxTasks) ? require('../../../icons/lock.png') : require('../../../icons/plus.png')}
+                        source={(!(isPremium || profilePremium) && sequence.rows.length >= maxTasks) ? require('../../../icons/lock.png') : require('../../../icons/plus.png')}
                         style={{ width: scale(32), height: scale(32), tintColor: colors.iconMuted }}
                         resizeMode="contain"
                     />
@@ -283,148 +302,125 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontSize: scale(32),
         lineHeight: scale(34),
         color: colors.sessionTimer.text,
-        marginBottom: scale(44),
+        marginBottom: scale(16),
         paddingHorizontal: scale(0),
     },
-    theoryCard: {
-        minHeight: scale(119),
-        alignSelf: 'stretch',
-        borderRadius: scale(25),
-        backgroundColor: colors.weeklyPlan.theoryBg,
-        paddingLeft: scale(20),
-        paddingRight: scale(20),
-        paddingVertical: scale(18),
-        marginBottom: scale(10),
+    goalLine: {
+        backgroundColor: colors.surfaceLight,
+        borderRadius: scale(16),
+        paddingHorizontal: scale(16),
+        paddingVertical: scale(12),
+        marginBottom: scale(12),
     },
-    practiceCard: {
-        minHeight: scale(100),
-        alignSelf: 'stretch',
-        borderRadius: scale(25),
-        backgroundColor: colors.weeklyPlan.practiceBg,
-        paddingLeft: scale(20),
-        paddingRight: scale(20),
-        paddingVertical: scale(18),
-        marginBottom: scale(10),
-    },
-    analysisCard: {
-        minHeight: scale(101),
-        alignSelf: 'stretch',
-        borderRadius: scale(25),
-        backgroundColor: colors.weeklyPlan.analysisBg,
-        paddingLeft: scale(20),
-        paddingRight: scale(20),
-        paddingVertical: scale(18),
-        marginBottom: scale(10),
-    },
-    analysisTitle: {
+    goalKicker: {
         fontFamily: fonts.heading.bold,
-        fontSize: scale(25),
-        lineHeight: scale(30),
-        color: colors.black,
-        marginBottom: scale(6),
+        fontSize: scale(12),
+        letterSpacing: 1.5,
+        textTransform: 'uppercase',
+        color: colors.textSecondary,
+        marginBottom: scale(2),
     },
-    analysisDescription: {
-        fontFamily: fonts.body.light,
-        fontSize: scale(20),
-        lineHeight: scale(24),
-        color: colors.black,
-        flex: 1,
-    },
-    analysisIconContainer: {
-        width: scale(40),
-        height: scale(44),
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: scale(-25),
-    },
-    tasksCard: {
-        minHeight: scale(101),
-        alignSelf: 'stretch',
-        borderRadius: scale(25),
-        backgroundColor: colors.weeklyPlan.tasksBg,
-        paddingLeft: scale(20),
-        paddingRight: scale(20),
-        paddingVertical: scale(18),
-        marginBottom: scale(10),
-    },
-    tasksTitle: {
+    goalText: {
         fontFamily: fonts.heading.bold,
-        fontSize: scale(25),
-        lineHeight: scale(30),
-        color: colors.black,
-        marginBottom: scale(6),
+        fontSize: scale(16),
+        color: colors.text,
     },
-    tasksDescription: {
-        fontFamily: fonts.body.light,
-        fontSize: scale(20),
-        lineHeight: scale(24),
-        color: colors.sessionTimer.text,
-        flex: 1,
+    whyCard: {
+        backgroundColor: '#D6EBFD',
+        borderRadius: scale(16),
+        paddingHorizontal: scale(16),
+        paddingVertical: scale(12),
+        marginBottom: scale(16),
     },
-    tasksIconContainer: {
-        width: scale(40),
-        height: scale(40),
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: scale(-25),
+    whyTitle: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(14),
+        color: '#1E1E2E',
+        marginBottom: scale(2),
     },
-    taskCardContent: {
-        flex: 1,
+    whyText: {
+        fontFamily: fonts.body.regular,
+        fontSize: scale(14),
+        lineHeight: scale(20),
+        color: '#1E1E2E',
+        opacity: 0.8,
+    },
+    rowCard: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
+        borderRadius: scale(25),
+        paddingLeft: scale(16),
+        paddingRight: scale(20),
+        paddingVertical: scale(18),
+        marginBottom: scale(10),
+        minHeight: scale(100),
     },
-    taskCardTextContainer: {
-        flex: 1,
-        marginRight: scale(24),
+    nextCard: {
+        borderWidth: 2,
+        borderColor: '#0F2147',
     },
-    taskCardTitle: {
-        fontFamily: fonts.heading.bold,
-        fontSize: scale(25),
-        lineHeight: scale(30),
-        color: colors.text,
-        marginBottom: scale(6),
-        paddingHorizontal: scale(0),
+    completedCard: {
+        backgroundColor: '#3CEB59',
+        borderWidth: 0,
     },
-    taskCardDescription: {
-        fontFamily: fonts.body.light,
-        fontSize: scale(20),
-        lineHeight: scale(24),
-        color: colors.text,
-    },
-    theoryIconContainer: {
-        width: scale(42),
-        height: scale(42),
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: scale(-35),
-    },
-    practiceIconContainer: {
-        width: scale(40),
-        height: scale(40),
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: scale(-25),
-    },
-    iconTheory: {
-        width: scale(42),
-        height: scale(42),
-        tintColor: '#08132A',
-    },
-    iconPractice: {
-        width: scale(40),
-        height: scale(40),
-        tintColor: '#08132A',
-    },
-    iconAnalysis: {
-        width: scale(40),
+    rowNumber: {
+        width: scale(44),
         height: scale(44),
+        borderRadius: scale(22),
+        backgroundColor: 'rgba(255,255,255,0.45)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: scale(14),
+    },
+    rowNumberText: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(20),
+        color: '#1E1E2E',
+    },
+    rowTextWrap: {
+        flex: 1,
+        marginRight: scale(12),
+    },
+    rowAction: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(14),
+        color: '#1E1E2E',
+        opacity: 0.7,
+        marginBottom: scale(4),
+    },
+    rowTitle: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(20),
+        lineHeight: scale(26),
+        color: '#1E1E2E',
+    },
+    rowIcon: {
+        width: scale(36),
+        height: scale(36),
         tintColor: '#08132A',
     },
-    iconTasks: {
-        width: scale(40),
-        height: scale(40),
-        tintColor: '#08132A',
+    minutesLeft: {
+        fontFamily: fonts.body.regular,
+        fontSize: scale(14),
+        color: colors.textSecondary,
+        textAlign: 'center',
+        marginVertical: scale(8),
+    },
+    linkRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.surfaceLight,
+        borderRadius: scale(20),
+        paddingHorizontal: scale(18),
+        paddingVertical: scale(16),
+        marginTop: scale(8),
+        gap: scale(12),
+    },
+    linkText: {
+        flex: 1,
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(16),
+        color: colors.text,
     },
     addTaskCard: {
         alignSelf: 'stretch',
@@ -433,6 +429,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingVertical: scale(25),
+        marginTop: scale(8),
     },
     emptyContainer: {
         flex: 1,
@@ -494,10 +491,6 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontFamily: fonts.heading.bold,
         fontSize: scale(15),
         color: colors.white,
-    },
-    completedCard: {
-        backgroundColor: '#3CEB59',
-        borderWidth: 0,
     },
 });
 

@@ -11,7 +11,7 @@ import { getLessonByDay, HOBBY_META } from '../data/lessonContent';
 import { buildSessionBlueprint } from '../domain/sessions/sessionBlueprint';
 import type { SessionKind, SessionOrigin, StepOutcome } from '../domain/sessions/sessionBlueprint';
 import { parseVerdict } from '../domain/sessions/sessionBlueprint';
-import { resolveCompletionPlan } from '../domain/sessions/sessionCompletion';
+import { findNextIncompleteTask, resolveCompletionPlan } from '../domain/sessions/sessionCompletion';
 import {
     aggregateOutcome,
     buildLearningCards,
@@ -34,6 +34,12 @@ export interface SwipeSessionInput {
 }
 
 export type SwipeStatus = 'loading' | 'ready' | 'error' | 'no-hobby';
+
+export interface SwipeNextAction {
+    taskId: string;
+    minutes: number;
+    title: string;
+}
 
 /**
  * Swipe session controller — presentation state over the existing engine.
@@ -58,6 +64,7 @@ export function useSwipeSession(input: SwipeSessionInput) {
     const [paused, setPaused] = useState(false);
     const [finished, setFinished] = useState<SessionResultData | null>(null);
     const [finishing, setFinishing] = useState(false);
+    const [nextAction, setNextAction] = useState<SwipeNextAction | null>(null);
     const notifiedLearnRef = useRef(false);
 
     const task = useMemo(
@@ -232,6 +239,17 @@ export function useSwipeSession(input: SwipeSessionInput) {
                 kind === 'discovery'
                     ? null
                     : (getLessonByDay(hobby, lesson.day + 1)?.learn.title ?? null);
+            // One obvious next step: the next real open task (read AFTER
+            // completion so the just-finished task is excluded). Never invented.
+            const afterTasks = useTaskStore.getState().dailyTasks;
+            const nextTask = kind === 'discovery' ? null : findNextIncompleteTask(afterTasks);
+            if (nextTask?.id) {
+                const mins =
+                    nextTask.duration_minutes && nextTask.duration_minutes > 0 ? nextTask.duration_minutes : 15;
+                setNextAction({ taskId: nextTask.id, minutes: mins, title: nextTask.title });
+            } else {
+                setNextAction(null);
+            }
             const data = buildResultData({
                 kind,
                 objectiveTitle: lesson.learn.title,
@@ -271,6 +289,7 @@ export function useSwipeSession(input: SwipeSessionInput) {
         setPaused,
         finishing,
         finished,
+        nextAction,
         dispatch,
         answer,
         answerFromFeedback,

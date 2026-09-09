@@ -19,6 +19,8 @@ interface SwipeLearningSessionProps {
     minutes: number;
     skillDay?: number | null;
     onExit: () => void;
+    /** Continue into the next real task (same session route, fresh mount). */
+    onContinueNext?: (next: { taskId: string; minutes: number }) => void;
 }
 
 /**
@@ -27,7 +29,7 @@ interface SwipeLearningSessionProps {
  * validated outcomes out. Finite and goal-directed (ends in result).
  */
 export const SwipeLearningSession: React.FC<SwipeLearningSessionProps> = (props) => {
-    const { kind, origin, taskId, discoveryId, minutes, skillDay, onExit } = props;
+    const { kind, origin, taskId, discoveryId, minutes, skillDay, onExit, onContinueNext } = props;
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
     const { height } = useWindowDimensions();
@@ -166,12 +168,26 @@ export const SwipeLearningSession: React.FC<SwipeLearningSessionProps> = (props)
                             hobbyEyebrow={hobbyLabel}
                             isPremium={isPremium}
                             result={finished}
+                            resultContinueLabel={
+                                session.nextAction ? `Далее: ${session.nextAction.title}` : 'Готово'
+                            }
+                            onResultContinue={() => {
+                                if (session.nextAction && onContinueNext) {
+                                    onContinueNext({
+                                        taskId: session.nextAction.taskId,
+                                        minutes: session.nextAction.minutes,
+                                    });
+                                } else {
+                                    onExit();
+                                }
+                            }}
+                            resultDoneLabel={session.nextAction ? 'Готово' : null}
+                            onResultDone={() => onExit()}
                             onAnswer={handleAnswer}
                             onAnswerFeedback={session.answerFromFeedback}
                             onTestsDone={handleTestsDone}
                             onSolved={(cardId) => session.answer(cardId, 'pass', 'puzzle solved')}
                             onAdvance={() => scrollTo(Math.min(index + 1, cards.length - 1))}
-                            onExit={onExit}
                         />
                     </View>
                 )}

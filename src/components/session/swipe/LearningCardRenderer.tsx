@@ -16,12 +16,15 @@ interface RendererProps {
     hobbyEyebrow: string;
     isPremium: boolean;
     result: SessionResultData | null;
+    resultContinueLabel: string;
+    onResultContinue: () => void;
+    resultDoneLabel?: string | null;
+    onResultDone?: () => void;
     onAnswer: (cardId: string, outcome: StepOutcome, userInput?: string, aiFeedback?: string, explanation?: string) => void;
     onAnswerFeedback: (cardId: string, userInput: string, aiFeedback: string) => void;
     onTestsDone: (cardId: string, passed: number, total: number, skipped: number) => void;
     onSolved: (cardId: string) => void;
     onAdvance: () => void;
-    onExit: () => void;
 }
 
 /** Routes each card to its renderer. Interactive hosts reuse legacy components. */
@@ -95,7 +98,15 @@ export const LearningCardRenderer: React.FC<RendererProps> = (props) => {
             );
         case 'result':
             if (!props.result) return null;
-            return <SessionResultCard data={props.result} onContinue={props.onExit} />;
+            return (
+                <SessionResultCard
+                    data={props.result}
+                    continueLabel={props.resultContinueLabel}
+                    onContinue={props.onResultContinue}
+                    doneLabel={props.resultDoneLabel}
+                    onDone={props.onResultDone}
+                />
+            );
         default:
             return null;
     }
