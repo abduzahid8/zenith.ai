@@ -25,6 +25,7 @@ import { useUserProfileStore } from '../../store/userProfileStore';
 import { useGoalStore } from '../../store/goalStore';
 import { GoalSnapshot } from '../../types/goals';
 import GoalProgressBar from '../../components/goal/GoalProgressBar';
+import { findNextIncompleteTask } from '../../domain/sessions/sessionCompletion';
 
 const booksImage = require('../../../assets/images/home-books.png');
 const targetImage = require('../../../assets/images/home-target.png');
@@ -96,8 +97,13 @@ const HomeTab: React.FC<HomeTabProps> = ({
             console.log('[HomeTab] All tasks completed - showing all-done modal');
             setShowAllDoneModal(true);
         } else {
-            console.log('[HomeTab] Not all done - navigating to session-timer');
-            handleNavigate('/session-timer');
+            // One DailyPlan: resolve the SAME next task object Your Day shows
+            // and start the shared swipe session with it (no timer screen).
+            const next = findNextIncompleteTask(dailyTasks);
+            const minutes = next?.duration_minutes && next.duration_minutes > 0 ? next.duration_minutes : 15;
+            const taskParam = next?.id ? `&taskId=${next.id}` : '';
+            console.log('[HomeTab] Starting swipe session - task:', next?.id ?? '(none)');
+            handleNavigate(`/session-timer?minutes=${minutes}${taskParam}&kind=structured&origin=home_start`);
         }
     };
 
@@ -153,6 +159,16 @@ const HomeTab: React.FC<HomeTabProps> = ({
                     style={styles.startSessionCard}
                 >
                     <Text style={styles.cardTitle}>{t('Начать занятие')}</Text>
+                    {(() => {
+                        const next = findNextIncompleteTask(dailyTasks);
+                        if (!next) return null;
+                        const mins = next.duration_minutes && next.duration_minutes > 0 ? next.duration_minutes : 15;
+                        return (
+                            <Text style={styles.cardSubtitle} numberOfLines={1}>
+                                {next.title} · ~{mins} {t('min')}
+                            </Text>
+                        );
+                    })()}
                     <Animated.Image
                         source={booksImage}
                         style={[
@@ -298,6 +314,16 @@ const createStyles = (colors: any) => StyleSheet.create({
         lineHeight: scale(26),
         color: '#1E1E2E',
         zIndex: 1,
+    },
+    cardSubtitle: {
+        fontFamily: fonts.heading.medium,
+        fontSize: scale(16),
+        lineHeight: scale(22),
+        color: '#1E1E2E',
+        opacity: 0.75,
+        zIndex: 1,
+        marginTop: scale(4),
+        maxWidth: '70%',
     },
     dailyGoalButton: {
         height: scale(74),

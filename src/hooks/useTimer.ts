@@ -50,54 +50,14 @@ export function useTimer(options: UseTimerOptions = {}) {
         try {
             const day = gamificationStore.currentDay[hobby] || 1;
             console.log('[useTimer] Loading lesson for day:', day, 'hobby:', hobby);
-            
-            let lesson: LessonContent | undefined;
-            if (day <= 7) {
-                // Static lessons
-                const { getLessonByDay } = require('../data/lessonContent');
-                lesson = getLessonByDay(hobby, day);
-            }
-            
-            if (!lesson) {
-                // Generator lessons for Day 8+ or fallback
-                const { lessonGeneratorService } = require('../services/lessonGeneratorService');
-                const completedTopics = lessonGeneratorService.getCompletedTopics(gamificationStore.artifacts, hobby);
-                lesson = await lessonGeneratorService.generateLesson(hobby, day, completedTopics);
-            }
-
-            if (lesson && hobby === 'chess') {
-                // Загружаем тематические шахматные задачи для доски (do step)
-                const { getThematicPuzzles } = require('../data/chessPuzzlesBank');
-                const puzzles = getThematicPuzzles(day);
-                if (lesson.do && Array.isArray(puzzles) && puzzles.length > 0) {
-                    lesson.do.type = 'chess_puzzle';
-                    lesson.do.puzzleFen = puzzles[0].fen;
-                    lesson.do.puzzleMoves = puzzles[0].puzzleMoves;
-                    lesson.do.puzzles = puzzles.map((p: any) => ({
-                        id: p.id,
-                        fen: p.fen,
-                        moves: p.puzzleMoves,
-                        solution: p.solution,
-                        sideToMove: p.sideToMove,
-                        successExplanation: p.successExplanation,
-                        failureExplanation: p.failureExplanation,
-                        prompt: p.prompt,
-                        hints: p.hints || ['Think about your best move!'],
-                        metadata: p.metadata,
-                        day: p.day,
-                        topic: p.topic,
-                        dayKey: p.dayKey,
-                    }));
-                }
-            }
-
-            // Fix lesson hobby to match actual selected hobby
-            // (LESSON_BANK aliases like python→codingLessons return wrong hobby)
-            if (lesson && selectedHobby && lesson.hobby !== selectedHobby) {
-                lesson = { ...lesson, hobby: selectedHobby as HobbyId };
-            }
-
-            setCurrentLesson(lesson || null);
+            // Shared loader (also used by the swipe session) — same resolution.
+            const { loadSessionLesson } = require('../services/sessionLesson');
+            const lesson = await loadSessionLesson({
+                hobby,
+                day,
+                artifacts: gamificationStore.artifacts,
+            });
+            setCurrentLesson(lesson);
         } catch (err) {
             console.error('[useTimer] Error loading lesson:', err);
             // Fallback lesson

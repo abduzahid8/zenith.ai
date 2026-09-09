@@ -31,6 +31,8 @@ interface TestStepperProps {
     hobbyId: string;
     onAllTestsComplete: () => void;
     skipTrigger?: number;
+    /** Optional results report (passed, total, skipped) — swipe session aggregation. */
+    onResult?: (passed: number, total: number, skipped: number) => void;
 }
 
 export const TestStepper: React.FC<TestStepperProps> = ({
@@ -38,6 +40,7 @@ export const TestStepper: React.FC<TestStepperProps> = ({
     hobbyId,
     onAllTestsComplete,
     skipTrigger = 0,
+    onResult,
 }) => {
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
@@ -67,6 +70,15 @@ export const TestStepper: React.FC<TestStepperProps> = ({
     // Анимация перехода между экранами
     const slideAnim = React.useRef(new Animated.Value(0)).current;
     const fadeAnim = React.useRef(new Animated.Value(1)).current;
+
+    // Aggregate tally for embedders (swipe session) — additive, no behavior change.
+    const reportResults = (arr: (boolean | 'skipped' | null)[]) => {
+        if (!onResult) return;
+        const total = arr.length;
+        const passed = arr.filter(r => r === true).length;
+        const skipped = arr.filter(r => r === 'skipped').length;
+        onResult(passed, total, skipped);
+    };
 
     const handleAnswer = (isCorrect: boolean, feedback?: string, title?: string) => {
         // Записываем результат
@@ -221,6 +233,7 @@ export const TestStepper: React.FC<TestStepperProps> = ({
                     });
                 } else {
                     // Все тесты успешно пройдены или окончательно пропущены -> идем к шахматной доске
+                    reportResults(results);
                     onAllTestsComplete();
                 }
             }
@@ -229,7 +242,6 @@ export const TestStepper: React.FC<TestStepperProps> = ({
 
     const handleSkip = () => {
         setBanner({ visible: false, isCorrect: banner.isCorrect });
-        
         const newResults = [...results];
         newResults[currentIndex] = 'skipped';
         setResults(newResults);
@@ -350,6 +362,7 @@ export const TestStepper: React.FC<TestStepperProps> = ({
                         ]).start();
                     });
                 } else {
+                    reportResults(newResults);
                     onAllTestsComplete();
                 }
             }
