@@ -23,15 +23,18 @@ export const SessionTimerScreen: React.FC = () => {
                 origin: (raw.origin as string | string[] | null) ?? null,
                 kind: (raw.kind as string | string[] | null) ?? null,
                 skillDay: (raw.skillDay as string | string[] | null) ?? null,
+                scope: (raw.scope as string | string[] | null) ?? null,
+                strategy: (raw.strategy as string | string[] | null) ?? null,
+                reason: (raw.reason as string | string[] | null) ?? null,
             }),
-        [raw.minutes, raw.taskId, raw.discoveryId, raw.origin, raw.kind, raw.skillDay],
+        [raw.minutes, raw.taskId, raw.discoveryId, raw.origin, raw.kind, raw.skillDay, raw.scope, raw.strategy, raw.reason],
     );
 
     if (legacy) {
         return <SessionTimerLegacyScreen />;
     }
 
-    const routeKey = `${session.context.kind}|${session.context.origin}|${session.taskId ?? ''}|${session.discoveryId ?? ''}|${session.minutes ?? ''}|${session.skillDay ?? ''}`;
+    const routeKey = `${session.context.kind}|${session.context.origin}|${session.taskId ?? ''}|${session.discoveryId ?? ''}|${session.minutes ?? ''}|${session.skillDay ?? ''}|${session.scope}|${session.strategy}`;
 
     return (
         <SwipeLearningSession
@@ -42,6 +45,9 @@ export const SessionTimerScreen: React.FC = () => {
             discoveryId={session.discoveryId}
             minutes={session.minutes ?? 15}
             skillDay={session.skillDay}
+            scope={session.scope}
+            strategy={session.strategy}
+            reasonCode={session.reasonCode}
             onExit={() => router.back()}
             onContinueNext={(next) => {
                 console.log('[SessionTimer] Continue to next task:', next.taskId);

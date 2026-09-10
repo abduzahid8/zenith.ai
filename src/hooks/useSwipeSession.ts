@@ -17,6 +17,8 @@ import type { FlowEvent, FlowState, SessionResultData } from '../domain/sessions
 import { buildAttemptEvent, buildExposureEvent } from '../domain/sessions/learningEvents';
 import type { LearningEvent } from '../domain/sessions/learningEvents';
 import type { MasteryOutcome } from '../domain/sessions/outcomePolicy';
+import { defaultScopeForKind } from '../domain/sessions/sessionIntent';
+import type { LearningStrategy, ProgressionScope } from '../domain/sessions/sessionIntent';
 import { appendLearningEvent } from '../services/learningEventRepository';
 import { loadSessionLesson } from '../services/sessionLesson';
 import { recordAttemptArtifact, saveRecallArtifact } from '../services/sessionStepEffects';
@@ -30,6 +32,10 @@ export interface SwipeSessionInput {
     minutes: number;
     skillDay?: number | null;
     hobbyId?: string | null;
+    /** Execution contract from the recommendation (defaults by kind). */
+    scope?: ProgressionScope;
+    strategy?: LearningStrategy;
+    reasonCode?: string | null;
 }
 
 export type SwipeStatus = 'loading' | 'ready' | 'error' | 'no-hobby';
@@ -100,8 +106,16 @@ export function useSwipeSession(input: SwipeSessionInput) {
 
     const cards = useMemo(() => {
         if (!lesson) return [];
-        return buildLearningCards({ blueprint, lesson, kind, minutes, isPremium, language });
-    }, [blueprint, lesson, kind, minutes, isPremium, language]);
+        return buildLearningCards({
+            blueprint,
+            lesson,
+            kind,
+            minutes,
+            isPremium,
+            language,
+            strategy: input.strategy ?? 'continue_curriculum',
+        });
+    }, [blueprint, lesson, kind, minutes, isPremium, language, input.strategy]);
 
     // Load lesson + start gamification session immediately (no idle screen).
     useEffect(() => {
@@ -278,6 +292,9 @@ export function useSwipeSession(input: SwipeSessionInput) {
             lesson,
             kind,
             origin,
+            scope: input.scope ?? defaultScopeForKind(kind),
+            strategy: input.strategy ?? 'continue_curriculum',
+            reasonCode: input.reasonCode ?? null,
             blueprint,
             cards: flow.cards,
             status: flow.status,

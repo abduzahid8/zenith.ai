@@ -2,6 +2,7 @@ import type { CredentialProgram } from '../credentials/types';
 import { findNextIncompleteTask } from './sessionCompletion';
 import type { MasteryOutcome } from './outcomePolicy';
 import type { SkillState } from './skillState';
+import { lessonCapabilities, sessionCapabilities } from './sessionCapabilities';
 
 export type RecommendationType =
     | 'continue_curriculum'
@@ -47,6 +48,11 @@ export interface RecommendInput {
     currentCurriculumDay: number;
     availableMinutes: number;
     dailyTasks: Array<{ id?: string | null; title: string; type: string; status: string; duration_minutes?: number | null }>;
+    /**
+     * Override for static lesson capability lookup (tests / future loaders).
+     * Default reads the static bank; generated days assume full lessons.
+     */
+    lessonCaps?: (hobbyId: string, day: number) => { known: boolean; hasTests: boolean; hasDoTask: boolean } | null;
 }
 
 interface DaySignal {
@@ -75,6 +81,10 @@ interface DaySignal {
  */
 export function getNextBestLearningAction(input: RecommendInput): LearningRecommendation {
     const { hobbyId, program, skillStates, currentCurriculumDay, availableMinutes, dailyTasks } = input;
+    const capsForDay = (day: number) => {
+        if (input.lessonCaps) return input.lessonCaps(hobbyId, day);
+        return lessonCapabilities(hobbyId, day);
+    };
     const minutes = Math.max(1, Math.floor(availableMinutes || 15));
     const nextTask = findNextIncompleteTask(
         dailyTasks.map(t => ({ id: t.id ?? null, type: t.type, status: t.status })),
@@ -114,19 +124,38 @@ export function getNextBestLearningAction(input: RecommendInput): LearningRecomm
         return i < 0 ? Number.MAX_SAFE_INTEGER : i;
     };
 
-    // Collect weak encountered days (finals only; discovery already excluded
+    // Collect UNRESOLVED weak encountered days (finals only; discovery already excluded
     // upstream because strength-none events never enter SkillState mastery).
+    // A historical FAIL followed by later independent PASS is resolved: only
+    // the latest channel state plus genuine recency can keep a blocker alive.
+    // lastWeakSessionsAgo <= RECENT means the weakness is still live; older
+    // weakness degrades to struggle memory (light review at most).
+    const RECENT_SESSIONS = 2;
+    const recentEnough = (d: { lastWeakSessionsAgo: number | null }): boolean =>
+        d.lastWeakSessionsAgo !== null && d.lastWeakSessionsAgo <= RECENT_SESSIONS;
+    const weakInLast = (outcomes: MasteryOutcome[], n: number): number =>
+        outcomes.slice(-n).filter(o => o === 'fail' || o === 'partial').length;
+
     const weakDays: DaySignal[] = [];
     for (const s of encountered) {
         for (const d of s.days) {
-            const fails = (arr: MasteryOutcome[]) => arr.filter(o => o === 'fail').length;
-            const weaks = (arr: MasteryOutcome[]) => arr.filter(o => o === 'fail' || o === 'partial').length;
-            if (fails(d.validation) > 0) {
-                weakDays.push({ skill: s, day: d.day, kind: 'validation_fail', recencyRank: rankOf(s.skillKey), repeats: fails(d.validation) });
-            } else if (weaks(d.application) >= 2 || (weaks(d.application) >= 1 && rankOf(s.skillKey) <= 1)) {
-                weakDays.push({ skill: s, day: d.day, kind: 'application_weak', recencyRank: rankOf(s.skillKey), repeats: weaks(d.application) });
-            } else if (fails(d.recall) >= 2) {
-                weakDays.push({ skill: s, day: d.day, kind: 'recall_weak', recencyRank: rankOf(s.skillKey), repeats: fails(d.recall) });
+            if (d.latestValidation === 'fail' && recentEnough(d)) {
+                weakDays.push({ skill: s, day: d.day, kind: 'validation_fail', recencyRank: rankOf(s.skillKey), repeats: d.validation.filter(o => o === 'fail').length });
+            } else if (
+                weakInLast(d.application, 3) >= 2 &&
+                (d.latestApplication === 'fail' || d.latestApplication === 'partial') &&
+                recentEnough(d)
+            ) {
+                weakDays.push({ skill: s, day: d.day, kind: 'application_weak', recencyRank: rankOf(s.skillKey), repeats: weakInLast(d.application, 3) });
+            } else if (
+                d.validation.every(o => o !== 'fail') &&
+                weakInLast(d.recall, 3) >= 2 &&
+                d.latestRecall === 'fail' &&
+                recentEnough(d)
+            ) {
+                // Recall repair only when validation does not already explain
+                // the struggle away (a failed proof outranks recall gaps).
+                weakDays.push({ skill: s, day: d.day, kind: 'recall_weak', recencyRank: rankOf(s.skillKey), repeats: weakInLast(d.recall, 3) });
             }
         }
     }
@@ -136,7 +165,15 @@ export function getNextBestLearningAction(input: RecommendInput): LearningRecomm
     );
 
     const programSlug = program.slug;
-    const shortTime = minutes < 10;
+    // Capability truth shared with the runtime: a review bite can Apply only
+    // when its blueprint actually has an apply phase (minutes > 10).
+    const biteCanApply = sessionCapabilities({
+        minutes,
+        kind: 'certificate_review',
+        scope: 'none',
+        hasTests: false,
+        hasDoTask: true,
+    }).canApply;
 
     // A. Recent strong validation failure -> targeted application practice.
     const validationFail = weakDays.find(w => w.kind === 'validation_fail');
@@ -158,7 +195,8 @@ export function getNextBestLearningAction(input: RecommendInput): LearningRecomm
     // B. Repeated application weakness.
     const appWeak = weakDays.find(w => w.kind === 'application_weak');
     if (appWeak) {
-        if (shortTime) {
+        if (!biteCanApply) {
+            // The bite runtime cannot render Apply: repair recall instead.
             return {
                 type: 'repair_recall',
                 hobbyId,
@@ -246,7 +284,9 @@ export function getNextBestLearningAction(input: RecommendInput): LearningRecomm
         };
     }
 
-    // D. Ready to prove: strong recall+application, validation missing, time allows.
+    // D. Ready to prove: strong recall+application, validation missing, time
+    // allows, AND the target lesson can genuinely render validation.
+    // Otherwise the engine must not promise proof it cannot deliver.
     if (minutes >= 20) {
         const ready = encountered.find(
             s =>
@@ -260,19 +300,44 @@ export function getNextBestLearningAction(input: RecommendInput): LearningRecomm
                 ready.days.length > 0
                     ? ready.days[ready.days.length - 1].day
                     : ready.dayRange[0];
-            return {
-                type: 'prove_skill',
-                hobbyId,
-                programSlug,
-                skillKey: ready.skillKey,
-                skillName: ready.name,
-                curriculumDay: day,
-                taskId: nextTaskFull?.id ?? undefined,
+            const caps = capsForDay(day);
+            const validateKnown = caps && caps.known ? caps.hasTests : true;
+            const canValidate = sessionCapabilities({
                 minutes,
-                reasonCode: 'missing_validation',
-                reasonData: { skillName: ready.name, day },
-                confidence: 'medium',
-            };
+                kind: 'structured',
+                scope: 'targeted',
+                hasTests: validateKnown,
+                hasDoTask: true,
+            }).canValidate;
+            if (canValidate) {
+                return {
+                    type: 'prove_skill',
+                    hobbyId,
+                    programSlug,
+                    skillKey: ready.skillKey,
+                    skillName: ready.name,
+                    curriculumDay: day,
+                    taskId: nextTaskFull?.id ?? undefined,
+                    minutes,
+                    reasonCode: 'missing_validation',
+                    reasonData: { skillName: ready.name, day },
+                    confidence: 'medium',
+                };
+            }
+            if (biteCanApply) {
+                return {
+                    type: 'practice_application',
+                    hobbyId,
+                    programSlug,
+                    skillKey: ready.skillKey,
+                    skillName: ready.name,
+                    curriculumDay: day,
+                    minutes,
+                    reasonCode: 'missing_validation',
+                    reasonData: { skillName: ready.name, day },
+                    confidence: 'medium',
+                };
+            }
         }
     }
 

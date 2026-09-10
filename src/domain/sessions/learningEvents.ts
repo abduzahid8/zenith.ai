@@ -53,6 +53,13 @@ export interface LearningEvent {
     phase?: SessionPhase;
     sessionKind: SessionKind;
     origin?: SessionOrigin;
+    /**
+     * Recommendation execution context (reason codes only, never UI text):
+     * which strategy built this session and why. Enables later analysis of
+     * recommendation -> session -> outcome without an analytics subsystem.
+     */
+    strategy?: string;
+    reasonCode?: string;
     source: EvidenceSource;
     eventType: LearningEventType;
     outcome?: MasteryOutcome;
@@ -241,6 +248,8 @@ export interface CompletionEventInput {
     taskId?: string | null;
     sessionKind: SessionKind;
     origin?: SessionOrigin;
+    strategy?: string;
+    reasonCode?: string | null;
     occurredAt?: string;
 }
 
@@ -264,6 +273,8 @@ export function buildSessionCompletedEvent(
         taskId: input.taskId ?? undefined,
         sessionKind: input.sessionKind,
         origin: input.origin,
+        strategy: input.strategy,
+        reasonCode: input.reasonCode ?? undefined,
         source: sourceFor(input.sessionKind),
         eventType: 'session_completed',
         outcome: input.outcome,
@@ -293,6 +304,8 @@ export function buildTaskCompletedEvent(
         taskId: input.taskId ?? undefined,
         sessionKind: input.sessionKind,
         origin: input.origin,
+        strategy: input.strategy,
+        reasonCode: input.reasonCode ?? undefined,
         source: 'daily_task',
         eventType: 'task_completed',
         outcome: input.outcome,

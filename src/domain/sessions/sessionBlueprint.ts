@@ -1,4 +1,6 @@
 import { TaskType } from '../../services/supabase/types';
+import type { LearningStrategy, ProgressionScope } from './sessionIntent';
+import { defaultScopeForKind } from './sessionIntent';
 
 /**
  * Session blueprint — one Learning Objective per session, time-scaled phases.
@@ -184,7 +186,8 @@ const TASK_ID_RE = /^[A-Za-z0-9_-]+$/;
 
 /**
  * Single validated parse of session route params. Unknown values fall back
- * to safe defaults instead of breaking the session.
+ * to safe defaults instead of breaking the session. Scope/strategy/reason
+ * preserve the recommendation execution contract across navigation.
  */
 export function parseSessionParams(raw: {
     minutes?: string | string[] | null;
@@ -193,7 +196,19 @@ export function parseSessionParams(raw: {
     origin?: string | string[] | null;
     kind?: string | string[] | null;
     skillDay?: string | string[] | null;
-}): { minutes?: number; taskId: string | null; discoveryId: string | null; skillDay: number | null; context: SessionContext } {
+    scope?: string | string[] | null;
+    strategy?: string | string[] | null;
+    reason?: string | string[] | null;
+}): {
+    minutes?: number;
+    taskId: string | null;
+    discoveryId: string | null;
+    skillDay: number | null;
+    scope: ProgressionScope;
+    strategy: LearningStrategy;
+    reasonCode: string | null;
+    context: SessionContext;
+} {
     const first = (v: string | string[] | null | undefined): string | null => {
         if (Array.isArray(v)) return v[0] ?? null;
         return v ?? null;
@@ -205,6 +220,21 @@ export function parseSessionParams(raw: {
     const skillDayRaw = first(raw.skillDay);
     const skillDayParsed = skillDayRaw !== null ? parseInt(skillDayRaw, 10) : NaN;
     const kind = normalizeKind(first(raw.kind), discoveryId ? 'discovery' : 'structured');
+    const scopeRaw = first(raw.scope);
+    const scope: ProgressionScope =
+        scopeRaw === 'curriculum' || scopeRaw === 'targeted' || scopeRaw === 'none'
+            ? scopeRaw
+            : defaultScopeForKind(kind);
+    const strategyRaw = first(raw.strategy);
+    const strategy: LearningStrategy =
+        strategyRaw === 'continue_curriculum' ||
+        strategyRaw === 'repair_recall' ||
+        strategyRaw === 'practice_application' ||
+        strategyRaw === 'prove_skill' ||
+        strategyRaw === 'review_skill'
+            ? strategyRaw
+            : 'continue_curriculum';
+    const reasonRaw = (first(raw.reason) ?? '').trim().slice(0, 64);
     return {
         minutes: Number.isFinite(parsed) && parsed > 0 ? parsed : undefined,
         taskId: taskId && TASK_ID_RE.test(taskId) ? taskId : null,
@@ -213,6 +243,9 @@ export function parseSessionParams(raw: {
             Number.isFinite(skillDayParsed) && skillDayParsed >= 1 && skillDayParsed <= 28
                 ? Math.floor(skillDayParsed)
                 : null,
+        scope,
+        strategy,
+        reasonCode: reasonRaw.length > 0 ? reasonRaw : null,
         context: {
             kind,
             origin: normalizeOrigin(first(raw.origin)),

@@ -2,6 +2,7 @@ import type { SessionBlueprint } from './sessionBlueprint';
 import type { SessionKind } from './sessionBlueprint';
 import { canCompleteStructuredTask } from './outcomePolicy';
 import type { SessionEvaluation } from './outcomePolicy';
+import type { ProgressionScope } from './sessionIntent';
 
 /**
  * Canonical progression policy — ONE place deciding what a finished
@@ -42,6 +43,13 @@ export interface ProgressionInput {
     evaluation: SessionEvaluation;
     blueprint: Pick<SessionBlueprint, 'countsAsFullCompletion' | 'requiresValidation'>;
     hasTargetTask: boolean;
+    /**
+     * curriculum: normal Home/Your-Day learning (may complete + advance).
+     * targeted: revisit/prove encountered skill — structured evidence allowed,
+     *   but never completes an unrelated task nor advances the frontier.
+     * none: discovery/weak review — no task, no advance.
+     */
+    scope?: ProgressionScope;
 }
 
 const NOTHING: ProgressionDecision = {
@@ -53,9 +61,20 @@ const NOTHING: ProgressionDecision = {
 
 export function buildProgressionDecision(input: ProgressionInput): ProgressionDecision {
     const { kind, evaluation, blueprint, hasTargetTask } = input;
-    // Discovery is weightless by construction (and can never evaluate to
-    // pass/partial — it has no required cards), but force nothing anyway.
+    const scope: ProgressionScope = input.scope ?? (kind === 'structured' ? 'curriculum' : 'none');
+    // Discovery is fully weightless: no task, no advance, no count, no goal
+    // signal — the persisted session record is the only trace.
     if (kind === 'discovery') return { ...NOTHING };
+    if (scope === 'none') {
+        if (evaluation === 'fail') return { ...NOTHING, goalSignal: 'failure' };
+        if (evaluation === 'non_rewarding') return { ...NOTHING };
+        // Weak formative participation only: count + truth-aware signal.
+        return {
+            ...NOTHING,
+            countSession: true,
+            goalSignal: evaluation === 'pass' ? 'success' : 'struggled',
+        };
+    }
     if (evaluation === 'non_rewarding') return { ...NOTHING };
     if (evaluation === 'fail') {
         // Failure signal only: difficulty adapts, nothing else moves.
@@ -68,17 +87,16 @@ export function buildProgressionDecision(input: ProgressionInput): ProgressionDe
     // a strict PARTIAL moves nothing on the frontier or the DailyPlan.
     const strictOk =
         evaluation === 'pass' || (evaluation === 'partial' && blueprint.requiresValidation === false);
+    const structural = kind === 'structured' && fullCompletion && strictOk;
     const canComplete =
-        kind === 'structured' &&
-        fullCompletion &&
-        strictOk &&
+        structural &&
+        scope === 'curriculum' &&
         canCompleteStructuredTask(evaluation, blueprint) &&
         hasTargetTask;
-    // The frontier advances only for real structured learning that the
-    // blueprint itself marks as full completion (never micro/review).
-    const advance = kind === 'structured' && fullCompletion && strictOk;
-    // Participation counts for rewarding structured/review sessions
-    // (discovery never has required cards, so it cannot be rewarding).
+    // Targeted scope revisits encountered skill with structured evidence
+    // but never moves the frontier or an unrelated task.
+    const advance = structural && scope === 'curriculum';
+    // Participation counts for rewarding structured/review sessions.
     const count = kind === 'structured' || kind === 'certificate_review';
 
     if (evaluation === 'pass') {

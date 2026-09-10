@@ -8,6 +8,7 @@ import type { SessionKind, SessionOrigin } from '../domain/sessions/sessionBluep
 import { evaluateSession } from '../domain/sessions/outcomePolicy';
 import { findNextIncompleteTask } from '../domain/sessions/sessionCompletion';
 import { buildProgressionDecision } from '../domain/sessions/progressionPolicy';
+import type { LearningStrategy, ProgressionScope } from '../domain/sessions/sessionIntent';
 import type { ProgressionDecision } from '../domain/sessions/progressionPolicy';
 import { buildResultData } from '../domain/sessions/learningCards';
 import type { CardStatus, LearningCard, SessionResultData } from '../domain/sessions/learningCards';
@@ -25,10 +26,14 @@ export interface FinalizeSessionInput {
     lesson: LessonContent;
     kind: SessionKind;
     origin: SessionOrigin;
+    /** Curriculum scope: targeted sessions never move frontier/tasks. */
+    scope: ProgressionScope;
+    strategy?: LearningStrategy;
+    reasonCode?: string | null;
     blueprint: SessionBlueprint;
     cards: LearningCard[];
     status: Record<string, CardStatus>;
-    /** DailyPlan task this session works toward (structured only). */
+    /** DailyPlan task this session works toward (curriculum scope only). */
     targetTaskId?: string | null;
     targetTaskTitle?: string | null;
     elapsedSeconds: number;
@@ -83,19 +88,23 @@ export function __resetFinalizerForTests(): void {
 }
 
 async function runFinalization(input: FinalizeSessionInput): Promise<FinalizeSessionResult> {
-    const { sessionId, userId, hobby, lesson, kind, origin, blueprint, cards, status } = input;
+    const { sessionId, userId, hobby, lesson, kind, origin, scope, blueprint, cards, status } = input;
     const evaluation = evaluateSession(cards, status);
+    // Scope is enforced here, not trusted from any single caller: only
+    // curriculum scope may touch the frontier or an unrelated task.
+    const targetTaskId = scope === 'curriculum' && kind === 'structured' ? (input.targetTaskId ?? null) : null;
     const decision = buildProgressionDecision({
         kind,
         evaluation,
         blueprint,
-        hasTargetTask: !!input.targetTaskId,
+        hasTargetTask: !!targetTaskId,
+        scope,
     });
 
     let taskCompleted = false;
-    if (decision.completeDailyTask && input.targetTaskId && userId) {
+    if (decision.completeDailyTask && targetTaskId && userId) {
         try {
-            await useTaskStore.getState().completeTask(userId, input.targetTaskId);
+            await useTaskStore.getState().completeTask(userId, targetTaskId);
             taskCompleted = true;
             appendLearningEvent(
                 buildTaskCompletedEvent({
@@ -104,9 +113,11 @@ async function runFinalization(input: FinalizeSessionInput): Promise<FinalizeSes
                     hobbyId: hobby,
                     lessonId: lesson.id,
                     lessonDay: lesson.day,
-                    taskId: input.targetTaskId,
+                    taskId: targetTaskId,
                     sessionKind: kind,
                     origin,
+                    strategy: input.strategy,
+                    reasonCode: input.reasonCode ?? null,
                     outcome: evaluation === 'pass' ? 'pass' : 'partial',
                 }),
             );
@@ -148,9 +159,11 @@ async function runFinalization(input: FinalizeSessionInput): Promise<FinalizeSes
             hobbyId: hobby,
             lessonId: lesson.id,
             lessonDay: lesson.day,
-            taskId: kind === 'structured' ? (input.targetTaskId ?? undefined) : undefined,
+            taskId: targetTaskId ?? undefined,
             sessionKind: kind,
             origin,
+            strategy: input.strategy,
+            reasonCode: input.reasonCode ?? null,
             outcome: evaluation === 'non_rewarding' ? 'unknown' : evaluation,
             outcomeValue: evaluation === 'pass' ? 1 : evaluation === 'partial' ? 0.5 : 0,
         }),

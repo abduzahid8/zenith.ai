@@ -6,6 +6,7 @@ import type {
     SessionStepId,
     StepOutcome,
 } from './sessionBlueprint';
+import type { LearningStrategy } from './sessionIntent';
 
 /**
  * Swipe learning cards — pure presentation model over SessionBlueprint.
@@ -149,6 +150,11 @@ export interface BuildCardsInput {
     isPremium?: boolean;
     /** Recall prompt language (UI copy only, content stays as authored). */
     language?: 'ru' | 'en';
+    /**
+     * Learning strategy: changes emphasis (fewer passive cards for
+     * practice/proof), never invents phases or content. Default continue_curriculum.
+     */
+    strategy?: LearningStrategy;
 }
 
 function phaseAllowed(phases: readonly SessionPhase[], phase: SessionPhase): boolean {
@@ -158,9 +164,22 @@ function phaseAllowed(phases: readonly SessionPhase[], phase: SessionPhase): boo
 /** Build the deterministic swipe sequence. Empty when no lesson loaded. */
 export function buildLearningCards(input: BuildCardsInput): LearningCard[] {
     const { blueprint, lesson, kind, minutes, isPremium, language } = input;
+    const strategy = input.strategy ?? 'continue_curriculum';
     if (!lesson) return [];
     const phases = blueprint.phases;
-    const budget = budgetForMinutes(minutes, kind);
+    const base = budgetForMinutes(minutes, kind);
+    // Strategy trims the minute budget toward the session's purpose.
+    // Phases below still gate everything: no phase, no cards.
+    const budget: CardBudget =
+        strategy === 'repair_recall'
+            ? { ...base, concepts: Math.min(base.concepts, 1), examples: Math.min(base.examples, 1), keyIdeas: 0, applies: minutes > 5 ? Math.min(base.applies, 1) : 0, challenges: 0 }
+            : strategy === 'practice_application'
+              ? { ...base, concepts: Math.min(base.concepts, 1), examples: Math.min(base.examples, 1), keyIdeas: Math.min(base.keyIdeas, 1), recalls: Math.min(base.recalls, 1) }
+              : strategy === 'prove_skill'
+                ? { ...base, concepts: Math.min(base.concepts, 1), examples: 0, keyIdeas: 0, recalls: Math.min(base.recalls, 1), applies: Math.min(Math.max(base.applies, 1), 2) }
+                : strategy === 'review_skill'
+                  ? { ...base, concepts: Math.min(base.concepts, 1), examples: 0, keyIdeas: 0, recalls: Math.min(base.recalls, 1), applies: minutes > 5 ? Math.min(base.applies, 1) : 0, challenges: 0 }
+                  : base;
     const lang = language ?? 'ru';
     const cards: LearningCard[] = [];
     const push = (card: Omit<LearningCard, 'order'>) => {

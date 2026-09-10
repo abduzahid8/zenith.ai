@@ -48,7 +48,7 @@ export const QuickSessionScreen: React.FC = () => {
         if (!title) return null;
         return {
             title,
-            why: reasonCopy(recommendation.reasonCode, recommendation.reasonData),
+            why: reasonCopy(recommendation.reasonCode, recommendation.reasonData, language),
             route: routeForRecommendation(recommendation, 'quick_session'),
         };
     }, [recommendation, dailyTasks]);

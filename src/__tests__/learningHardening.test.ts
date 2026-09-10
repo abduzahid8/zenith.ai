@@ -153,6 +153,7 @@ describe('10 — finalization idempotency', () => {
         lesson,
         kind: 'structured' as const,
         origin: 'your_day' as const,
+        scope: 'curriculum' as const,
         blueprint: buildSessionBlueprint({ minutes: 30, lessonTitle: 'Functions' }),
         cards: [
             { id: 'recall-0', type: 'recall', phase: 'recall', order: 0, required: true },
@@ -318,5 +319,44 @@ describe('11 — owner-scoped repository, versions, full history', () => {
             });
         expect(appendLearningEvents([mk(1), mk(2), mk(1)])).toBe(2);
         expect(eventsBySession('s', 'u1').map(e => e.outcome)).toEqual(['fail', 'pass']);
+    });
+});
+
+describe('3C — targeted scope end-to-end', () => {
+    beforeEach(resetAll);
+
+    const targetedInput = (sessionId: string) => ({
+        sessionId,
+        userId: 'u1',
+        hobby: 'python' as const,
+        lesson,
+        kind: 'structured' as const,
+        origin: 'your_day' as const,
+        scope: 'targeted' as const,
+        strategy: 'prove_skill' as const,
+        blueprint: buildSessionBlueprint({ minutes: 30, lessonTitle: 'Functions' }),
+        cards: [
+            { id: 'recall-0', type: 'recall', phase: 'recall', order: 0, required: true },
+            { id: 'apply-0', type: 'apply', phase: 'apply', order: 1, required: true },
+        ] as any[],
+        status: {
+            'recall-0': { completed: true, attempts: 1, outcome: 'pass' as const },
+            'apply-0': { completed: true, attempts: 1, outcome: 'pass' as const },
+        },
+        targetTaskId: 'task-1',
+        targetTaskTitle: 'Loops',
+        elapsedSeconds: 900,
+        chessSolved: false,
+    });
+
+    it('targeted proof emits strong session evidence but moves no frontier or task', async () => {
+        const res = await finalizeSwipeSession(targetedInput('s-targeted'));
+        expect(res.taskCompleted).toBe(false);
+        expect(res.advancedDay).toBe(false);
+        expect(gameCalls.completeTask).toBe(0);
+        expect(gameCalls.advanceDay).toBe(0);
+        expect(gameCalls.incrementSessionsCompleted).toBe(1);
+        const events = eventsBySession('s-targeted', 'u1');
+        expect(events.some(e => e.eventType === 'session_completed')).toBe(true);
     });
 });

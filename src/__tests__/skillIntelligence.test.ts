@@ -9,6 +9,12 @@ import { buildAttemptEvent } from '../domain/sessions/learningEvents';
 import { projectSkillState } from '../domain/sessions/skillState';
 import { getNextBestLearningAction } from '../domain/sessions/nextBestAction';
 import { routeForRecommendation } from '../domain/sessions/sessionRouting';
+import { buildProgressionDecision } from '../domain/sessions/progressionPolicy';
+import { sessionCapabilities } from '../domain/sessions/sessionCapabilities';
+import { buildSessionBlueprint } from '../domain/sessions/sessionBlueprint';
+import { flowTransition, initialFlowState } from '../domain/sessions/learningCards';
+import { buildLearningCards } from '../domain/sessions/learningCards';
+import { reasonCopy } from '../utils/learningCopy';
 
 jest.mock('../services/ai', () => ({
     aiService: { sendMessage: jest.fn(), gradeAnswer: jest.fn() },
@@ -227,8 +233,8 @@ describe('12 — one recall PASS is not high-confidence mastery', () => {
     });
 });
 
-describe('13 — version mismatch excluded, legacy versionless included', () => {
-    it('explicit mismatch never feeds state; versionless compat included', () => {
+describe('13 — version mismatch excluded, versionless excluded by default', () => {
+    it('explicit mismatch never feeds state; versionless needs opt-in', () => {
         const mismatch = buildAttemptEvent({
             sessionId: 's', userId: 'u1', hobbyId: 'python', lessonId: 'python_d10', lessonDay: 10,
             cardId: 'c', attemptNo: 1, phase: 'apply', sessionKind: 'structured', outcome: 'pass', cardType: 'apply',
@@ -236,7 +242,11 @@ describe('13 — version mismatch excluded, legacy versionless included', () => 
         const oldVersion = { ...mismatch, id: 'x', programVersion: '0.9' };
         expect(logicOf([oldVersion]).stage).toBe('unseen');
         const versionless = { ...mismatch, id: 'y', programVersion: undefined };
-        expect(logicOf([versionless]).application.samples).toBe(1);
+        // Strict default: unversioned legacy evidence stays out of state.
+        expect(logicOf([versionless]).stage).toBe('unseen');
+        // Explicit compat analysis may still read it — never product intelligence.
+        const compat = projectSkillState({ program, events: [versionless], includeLegacyUnversioned: true }).skills;
+        expect(compat.find(s => s.skillKey === 'logic')!.application.samples).toBe(1);
     });
 });
 
@@ -391,5 +401,162 @@ describe('23/24 — consumers use the one source, no blind selection', () => {
         const src = fs.readFileSync(path.join(__dirname, '..', 'screens', 'CredentialDetailScreen.tsx'), 'utf8');
         expect(src).not.toMatch(/dayRange\[0\]/);
         expect(src).toMatch(/routeForRecommendation/);
+    });
+});
+
+describe('36 — execution capability matches the runtime', () => {
+    const appWeakness = [
+        ev({ session: 's1', card: 'a', outcome: 'partial', phase: 'apply', day: 16 }),
+        ev({ session: 's2', card: 'a', outcome: 'fail', phase: 'apply', day: 16 }),
+    ];
+
+    it('10-minute runtime cannot promise Apply: repair instead', () => {
+        const rec = recommend(appWeakness, { availableMinutes: 10 });
+        expect(rec.type).toBe('repair_recall');
+        expect(rec.curriculumDay).toBe(16);
+        // The emitted session truly has no apply phase.
+        const bp = buildSessionBlueprint({ minutes: 10, lessonTitle: 'T' });
+        expect(bp.phases).not.toContain('apply');
+        expect(
+            sessionCapabilities({ minutes: 10, kind: 'certificate_review', scope: 'none', hasTests: false, hasDoTask: true }).canApply,
+        ).toBe(false);
+    });
+
+    it('same weakness at 15 minutes keeps targeted practice', () => {
+        const rec = recommend(appWeakness, { availableMinutes: 15 });
+        expect(rec.type).toBe('practice_application');
+    });
+
+    it('prove_skill requires a lesson that can genuinely validate', () => {
+        const strong = [
+            ev({ session: 's1', card: 'r', outcome: 'pass', phase: 'recall', day: 16 }),
+            ev({ session: 's1', card: 'a', outcome: 'pass', phase: 'apply', day: 16 }),
+            ev({ session: 's2', card: 'r', outcome: 'pass', phase: 'recall', day: 17 }),
+            ev({ session: 's2', card: 'a', outcome: 'pass', phase: 'apply', day: 17 }),
+        ];
+        const noTests = () => ({ known: true, hasTests: false, hasDoTask: true });
+        const downgraded = recommend(strong, { availableMinutes: 30, lessonCaps: noTests });
+        expect(downgraded.type).not.toBe('prove_skill');
+        expect(downgraded.type).toBe('practice_application');
+        const proven = recommend(strong, {
+            availableMinutes: 30,
+            lessonCaps: () => ({ known: true, hasTests: true, hasDoTask: true }),
+        });
+        expect(proven.type).toBe('prove_skill');
+        expect(proven.curriculumDay).toBe(17);
+        expect(routeForRecommendation(proven, 'quick_session')).toMatch(/skillDay=17/);
+        expect(routeForRecommendation(proven, 'quick_session')).toMatch(/scope=targeted/);
+    });
+
+    it('targeted proof advances nothing and completes nothing', async () => {
+        const d = buildProgressionDecision({
+            kind: 'structured',
+            evaluation: 'pass',
+            blueprint: { countsAsFullCompletion: true, requiresValidation: false },
+            hasTargetTask: true,
+            scope: 'targeted',
+        });
+        expect(d.advanceCurriculum).toBe(false);
+        expect(d.completeDailyTask).toBe(false);
+        expect(d.countSession).toBe(true);
+    });
+});
+
+describe('37 — adaptive flow stays finite and honest', () => {
+    const lesson: any = {
+        id: 'python_d15',
+        hobby: 'python',
+        day: 15,
+        learn: { title: 'Functions', body: 'Functions package logic. Example: def f(): return 1.', keywords: ['function'] },
+        do: { type: 'free_text', prompt: 'Explain functions.' },
+    };
+
+    const cardsFor = (minutes: number, kind: 'structured' = 'structured') => {
+        const bp = buildSessionBlueprint({ minutes, lessonTitle: 'Functions' });
+        return buildLearningCards({ blueprint: bp, lesson, kind, minutes });
+    };
+
+    it('recall FAIL inserts finite support + retry; PASS inserts none', () => {
+        const cards = cardsFor(15);
+        let flow = initialFlowState(cards);
+        const recall = cards.find(c => c.type === 'recall')!;
+        flow = flowTransition(flow, { type: 'ANSWER', id: recall.id, outcome: 'fail', explanation: 'Real explanation.' }, 1);
+        expect(flow.cards.some(c => c.type === 'feedback')).toBe(true);
+        const retry = flowTransition(flow, { type: 'ANSWER', id: recall.id, outcome: 'pass' }, 1);
+        expect(retry.cards.filter(c => c.type === 'feedback')).toHaveLength(1);
+    });
+
+    it('retry exhaustion terminates truthfully', () => {
+        const cards = cardsFor(15);
+        let flow = initialFlowState(cards);
+        const recall = cards.find(c => c.type === 'recall')!;
+        flow = flowTransition(flow, { type: 'ANSWER', id: recall.id, outcome: 'fail', explanation: 'Why.' }, 1);
+        flow = flowTransition(flow, { type: 'ANSWER', id: recall.id, outcome: 'fail', explanation: 'Why.' }, 1);
+        const st = flow.status[recall.id];
+        expect(st.completed).toBe(true);
+        expect(st.outcome).toBe('fail');
+        expect(flow.cards.filter(c => c.type === 'feedback')).toHaveLength(1);
+    });
+
+    it('support cards add no mastery evidence', () => {
+        const skills = projectSkillState({
+            program,
+            events: [
+                ev({ session: 's1', card: 'r', outcome: 'fail', phase: 'recall', day: 16 }),
+                ev({ session: 's1', card: 'r', attempt: 2, outcome: 'pass', phase: 'recall', day: 16 }),
+            ],
+        }).skills;
+        const fns = skills.find(s => s.skillKey === 'functions')!;
+        expect(fns.recall.samples).toBe(1);
+        expect(fns.recall.score).toBe(100);
+        expect(fns.recoveredStruggles).toBe(1);
+    });
+});
+
+describe('closed loop — validation failure resolves and the engine moves on', () => {
+    it('FAIL day 17 -> target 17 -> targeted PASS -> blocker gone', () => {
+        const before = [
+            ev({ session: 's1', card: 'c', outcome: 'fail', phase: 'validate', day: 17 }),
+        ];
+        const recBefore = recommend(before);
+        expect(recBefore.type).toBe('practice_application');
+        expect(recBefore.curriculumDay).toBe(17);
+        expect(recBefore.reasonCode).toBe('recent_validation_failure');
+
+        const after = [
+            ...before,
+            ev({ session: 's2', card: 'c', outcome: 'pass', phase: 'validate', day: 17 }),
+        ];
+        const fns = functionsOf(after);
+        expect(fns.validation.score).toBeGreaterThan(0);
+        const recAfter = recommend(after);
+        expect(recAfter.reasonCode).not.toBe('recent_validation_failure');
+        // History preserved: both finals visible in events, one mastery sample.
+        expect(fns.validation.samples).toBe(2);
+    });
+
+    it('application struggle -> practice -> independent PASS resolves', () => {
+        const struggle = [
+            ev({ session: 's1', card: 'a', outcome: 'partial', phase: 'apply', day: 16 }),
+            ev({ session: 's2', card: 'a', outcome: 'fail', phase: 'apply', day: 16 }),
+        ];
+        expect(recommend(struggle).type).toBe('practice_application');
+        const resolved = [
+            ...struggle,
+            ev({ session: 's3', card: 'a', outcome: 'pass', phase: 'apply', day: 16 }),
+            ev({ session: 's4', card: 'a', outcome: 'pass', phase: 'apply', day: 16 }),
+        ];
+        const rec = recommend(resolved);
+        expect(rec.reasonCode).not.toBe('repeated_application_struggle');
+        const fns = functionsOf(resolved);
+        expect(fns.application.score).toBeGreaterThan(50);
+    });
+});
+
+describe('reason copy respects language at the UI boundary', () => {
+    it('ru by default, en on request, codes stay in domain', () => {
+        expect(reasonCopy('recall_gap', { skillName: 'Logic', day: 12 })).toMatch(/Пробел/);
+        expect(reasonCopy('recall_gap', { skillName: 'Logic', day: 12 }, 'en')).toMatch(/Gap/);
+        expect(reasonCopy('continue_path', undefined, 'en')).toBe('Continuing the path');
     });
 });

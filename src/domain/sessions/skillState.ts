@@ -33,9 +33,23 @@ export type SkillStage = 'unseen' | 'learning' | 'recalling' | 'applying' | 'pro
 
 export interface DayDatum {
     day: number;
+    /** Final outcomes per channel, chronological (one per session+card). */
     recall: MasteryOutcome[];
     application: MasteryOutcome[];
     validation: MasteryOutcome[];
+    /** Latest final outcome per channel (null when unmeasured). */
+    latestRecall: MasteryOutcome | null;
+    latestApplication: MasteryOutcome | null;
+    latestValidation: MasteryOutcome | null;
+    /** Distinct contributing sessions, chronological. */
+    sessions: string[];
+    /**
+     * Sessions elapsed since the latest WEAK (fail/partial) final on this
+     * day, measured against the global session order (0 = latest session).
+     * Null when the day has no weak finals. Recommendation recency uses
+     * this — never the parent skill's practice date.
+     */
+    lastWeakSessionsAgo: number | null;
     /** A non-final attempt failed here before recovery (struggle memory). */
     struggled: boolean;
     lastAt: string | null;
@@ -69,6 +83,8 @@ export interface SkillState {
 export interface SkillProjection {
     programSlug: string;
     programVersion: string;
+    /** Distinct sessions across projected events, chronological. */
+    sessionOrder: string[];
     skills: SkillState[];
 }
 
@@ -112,17 +128,23 @@ function dimensionOf(samples: FinalSample[]): SkillDimension {
 export function projectSkillState(input: {
     program: CredentialProgram;
     events: LearningEvent[];
+    /**
+     * Versionless legacy events (stored before programVersion pinning) are
+     * EXCLUDED by default — they must not silently feed current state.
+     * Pass true only for explicit compat analysis, never product intelligence.
+     */
+    includeLegacyUnversioned?: boolean;
 }): SkillProjection {
     const { program, events } = input;
-    // Mastery inputs: attempt finals with real (non-none) strength, matching
-    // current program slug + version. Versionless legacy events are included
-    // under an explicit compat rule (documented, removable at serverization);
-    // explicitly mismatched versions are excluded, never reinterpreted.
+    const includeLegacy = input.includeLegacyUnversioned === true;
+    const versionOk = (e: LearningEvent): boolean =>
+        e.programSlug === program.slug &&
+        (e.programVersion === program.version || (includeLegacy && e.programVersion === undefined));
+    // Mastery inputs: attempt finals with real (non-none) strength.
     const attempts = events.filter(
         e =>
             e.eventType === 'attempt' &&
-            e.programSlug === program.slug &&
-            (e.programVersion === undefined || e.programVersion === program.version) &&
+            versionOk(e) &&
             e.evidenceStrength !== 'none' &&
             e.skillKey != null,
     );
@@ -144,14 +166,32 @@ export function projectSkillState(input: {
     }
     finals.sort((a, b) => (a.event.occurredAt < b.event.occurredAt ? -1 : 1));
     // Exposure: canonical dayRange denominator; non-discovery exposure only.
+    // Same strict version rule: versionless exposure never feeds state.
     const exposureEvents = events.filter(
         e =>
             (e.eventType === 'concept_exposed' || e.eventType === 'attempt') &&
-            e.programSlug === program.slug &&
-            (e.programVersion === undefined || e.programVersion === program.version) &&
+            versionOk(e) &&
             e.sessionKind !== 'discovery' &&
             typeof e.curriculumDay === 'number',
     );
+
+    // Global session order (chronological) for deterministic recency.
+    const sessionOrder: string[] = [];
+    {
+        const byFirst = new Map<string, string>();
+        for (const e of events) {
+            if (!versionOk(e) || typeof e.occurredAt !== 'string') continue;
+            const prev = byFirst.get(e.sessionId);
+            if (!prev || e.occurredAt < prev) byFirst.set(e.sessionId, e.occurredAt);
+        }
+        sessionOrder.push(
+            ...[...byFirst.entries()].sort((a, b) => (a[1] < b[1] ? -1 : 1)).map(([id]) => id),
+        );
+    }
+    const sessionsAgo = (sessionId: string): number | null => {
+        const i = sessionOrder.indexOf(sessionId);
+        return i < 0 ? null : sessionOrder.length - 1 - i;
+    };
 
     const skills: SkillState[] = program.skills.map(skill => {
         const daysTotal = Math.max(1, skill.dayRange[1] - skill.dayRange[0] + 1);
@@ -198,11 +238,33 @@ export function projectSkillState(input: {
                 daySet.add(event.curriculumDay);
                 let datum = dayMap.get(event.curriculumDay);
                 if (!datum) {
-                    datum = { day: event.curriculumDay, recall: [], application: [], validation: [], struggled: false, lastAt: null };
+                    datum = {
+                        day: event.curriculumDay,
+                        recall: [],
+                        application: [],
+                        validation: [],
+                        latestRecall: null,
+                        latestApplication: null,
+                        latestValidation: null,
+                        sessions: [],
+                        lastWeakSessionsAgo: null,
+                        struggled: false,
+                        lastAt: null,
+                    };
                     dayMap.set(event.curriculumDay, datum);
                 }
                 datum[channel].push(sample.outcome);
+                if (channel === 'recall') datum.latestRecall = sample.outcome;
+                else if (channel === 'application') datum.latestApplication = sample.outcome;
+                else datum.latestValidation = sample.outcome;
+                if (!datum.sessions.includes(event.sessionId)) datum.sessions.push(event.sessionId);
                 if (failedBefore > 0) datum.struggled = true;
+                if (sample.value < 1) {
+                    const ago = sessionsAgo(event.sessionId);
+                    if (ago !== null && (datum.lastWeakSessionsAgo === null || ago < datum.lastWeakSessionsAgo)) {
+                        datum.lastWeakSessionsAgo = ago;
+                    }
+                }
                 if (!datum.lastAt || event.occurredAt > datum.lastAt) datum.lastAt = event.occurredAt;
             }
             if (!lastPracticedAt || event.occurredAt > lastPracticedAt) lastPracticedAt = event.occurredAt;
@@ -289,5 +351,5 @@ export function projectSkillState(input: {
         };
     });
 
-    return { programSlug: program.slug, programVersion: program.version, skills };
+    return { programSlug: program.slug, programVersion: program.version, sessionOrder, skills };
 }

@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { scale } from '../constants';
 import { fonts } from '../theme';
 import { useAppTheme } from '../theme/useAppTheme';
-import { useT } from '../store/languageStore';
+import { useT, useLanguageStore } from '../store/languageStore';
 import { getProgram, programShortTitle } from '../domain/credentials/catalog';
 import { useCredentialStore } from '../store/credentialStore';
 import { useCertificateProgress } from '../hooks/useCertificateProgress';
@@ -120,7 +120,7 @@ export const CredentialDetailScreen: React.FC = () => {
                                 <Text style={styles.actionKicker}>{t('Следующий шаг')}</Text>
                                 <Text style={styles.actionTitle}>{actionTitle}</Text>
                                 <Text style={styles.actionWhy}>
-                                    {t('Почему это?')} {reasonCopy(recommendation.reasonCode, recommendation.reasonData)} · 10 {t('min')}
+                                    {t('Почему это?')} {reasonCopy(recommendation.reasonCode, recommendation.reasonData, useLanguageStore.getState().language)} · 10 {t('min')}
                                 </Text>
                                 <TouchableOpacity
                                     style={styles.primaryButton}

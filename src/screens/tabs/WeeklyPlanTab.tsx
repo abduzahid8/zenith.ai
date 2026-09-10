@@ -18,7 +18,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useUserProfileStore } from '../../store/userProfileStore';
 import { Task, TaskType } from '../../services/supabase/types';
 import { getMaxTasksPerDay } from '../../domain/tasks/rules';
-import { useT } from '../../store/languageStore';
+import { useT, useLanguageStore } from '../../store/languageStore';
 import { useGoalStore } from '../../store/goalStore';
 import { GoalSnapshot } from '../../types/goals';
 import { computeDailyFocus } from '../../services/dailyFocusEngine';
@@ -100,7 +100,7 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                 recommendation.reasonCode === 'repeated_application_struggle' ||
                 recommendation.reasonCode === 'recall_gap')
         ) {
-            return reasonCopy(recommendation.reasonCode, recommendation.reasonData);
+            return reasonCopy(recommendation.reasonCode, recommendation.reasonData, useLanguageStore.getState().language);
         }
         return focusReason;
     }, [recommendation, focusReason]);

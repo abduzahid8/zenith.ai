@@ -6,6 +6,7 @@ import { fonts } from '../../../theme';
 import { useAppTheme } from '../../../theme/useAppTheme';
 import { useUserProfileStore } from '../../../store/userProfileStore';
 import type { SessionKind, SessionOrigin, StepOutcome } from '../../../domain/sessions/sessionBlueprint';
+import type { LearningStrategy, ProgressionScope } from '../../../domain/sessions/sessionIntent';
 import { HOBBY_META } from '../../../data/lessonContent';
 import { useSwipeSession } from '../../../hooks/useSwipeSession';
 import { LearningCardRenderer } from './LearningCardRenderer';
@@ -18,6 +19,9 @@ interface SwipeLearningSessionProps {
     discoveryId?: string | null;
     minutes: number;
     skillDay?: number | null;
+    scope?: ProgressionScope;
+    strategy?: LearningStrategy;
+    reasonCode?: string | null;
     onExit: () => void;
     /** Continue into the next real task (same session route, fresh mount). */
     onContinueNext?: (next: { taskId: string; minutes: number }) => void;
@@ -29,13 +33,13 @@ interface SwipeLearningSessionProps {
  * validated outcomes out. Finite and goal-directed (ends in result).
  */
 export const SwipeLearningSession: React.FC<SwipeLearningSessionProps> = (props) => {
-    const { kind, origin, taskId, discoveryId, minutes, skillDay, onExit, onContinueNext } = props;
+    const { kind, origin, taskId, discoveryId, minutes, skillDay, scope, strategy, reasonCode, onExit, onContinueNext } = props;
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
     const { height } = useWindowDimensions();
     const isPremium = useUserProfileStore(s => s.isPremium);
 
-    const session = useSwipeSession({ kind, origin, taskId, discoveryId, minutes, skillDay });
+    const session = useSwipeSession({ kind, origin, taskId, discoveryId, minutes, skillDay, scope, strategy, reasonCode });
     const listRef = useRef<FlatList>(null);
     const finishOnce = useRef(false);
     const [stopVisible, setStopVisible] = useState(false);
