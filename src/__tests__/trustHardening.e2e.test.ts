@@ -37,9 +37,9 @@ beforeAll(async () => {
     // Question set + hidden key for the harness program (service role = server).
     await db.query(
         `INSERT INTO assessment_question_sets
-            (id, program_slug, version, question_count, time_limit_minutes, pass_score, questions)
+            (id, program_slug, version, question_count, time_limit_minutes, pass_score, questions, content_version, status)
          VALUES ('11111111-1111-1111-1111-111111111111', '${TEST_PROGRAM}', '1.0', 2, 30, 80,
-                 '[{"id":"q1","prompt":"1+1?"},{"id":"q2","prompt":"2+2?"}]')
+                 '[{"id":"q1","prompt":"1+1?"},{"id":"q2","prompt":"2+2?"}]', 'test-v1', 'active')
          ON CONFLICT DO NOTHING`,
     );
     await db.query(
@@ -48,14 +48,23 @@ beforeAll(async () => {
          ON CONFLICT DO NOTHING`,
     );
     await db.query(
+        `INSERT INTO credential_content_releases
+            (program_slug, program_version, content_version, artifact_sha256,
+             machine_qa_status, human_review_status, reviewer, reviewed_at, status)
+         VALUES ('${TEST_PROGRAM}', '1.0', 'test-v1', 'synthetic-fixture', 'passed', 'approved',
+                 'synthetic-fixture', NOW(), 'active')
+         ON CONFLICT (program_slug, program_version, content_version) DO NOTHING`,
+    );
+    await db.query(
         `INSERT INTO skill_evidence_policy (program_slug, program_version, skill_key, min_items, min_pass_rate, rationale)
          VALUES ('${TEST_PROGRAM}', '1.0', 'alpha', 1, 0.65, 'harness: single-item depth for infra speed')
          ON CONFLICT (program_slug, program_version, skill_key) DO NOTHING`,
     );
     await db.query(
         `INSERT INTO trusted_validation_items
-            (program_slug, program_version, hobby_id, curriculum_day, skill_key, lesson_id, payload, answer_key)
-         VALUES ('${TEST_PROGRAM}', '1.0', 'chess', 90, 'alpha', 'e2e-lesson', '{}', '{"answer":"ok"}')
+            (program_slug, program_version, hobby_id, curriculum_day, skill_key, lesson_id,
+             content_version, status, payload, answer_key)
+         VALUES ('${TEST_PROGRAM}', '1.0', 'chess', 90, 'alpha', 'e2e-lesson', 'test-v1', 'active', '{}', '{"answer":"ok"}')
          ON CONFLICT DO NOTHING`,
     );
 });
@@ -75,6 +84,7 @@ afterAll(async () => {
     await db.query(`DELETE FROM credential_component_results WHERE program_slug = '${TEST_PROGRAM}'`);
     await db.query(`DELETE FROM user_credential_progress WHERE program_slug = '${TEST_PROGRAM}'`);
     await db.query(`DELETE FROM skill_evidence_policy WHERE program_slug = '${TEST_PROGRAM}'`);
+    await db.query(`DELETE FROM credential_content_releases WHERE program_slug = '${TEST_PROGRAM}'`);
     await db.query(`DELETE FROM credential_programs WHERE slug = '${TEST_PROGRAM}'`);
     await db.end();
     await db2.end();
@@ -496,8 +506,9 @@ describe('real DB: issuance gates + verification', () => {
         );
         await db.query(
             `INSERT INTO trusted_validation_items
-                (program_slug, program_version, hobby_id, curriculum_day, skill_key, lesson_id, payload, answer_key)
-             VALUES ('${TEST_PROGRAM}', '1.0', 'chess', 90, 'alpha', 'e2e-lesson', '{}', '{"answer":"ok"}')
+                (program_slug, program_version, hobby_id, curriculum_day, skill_key, lesson_id,
+                 content_version, status, payload, answer_key)
+             VALUES ('${TEST_PROGRAM}', '1.0', 'chess', 90, 'alpha', 'e2e-lesson', 'test-v1', 'active', '{}', '{"answer":"ok"}')
              ON CONFLICT DO NOTHING`,
         );
         const v = await asRole(db, 'authenticated', uid, () =>

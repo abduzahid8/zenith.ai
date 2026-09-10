@@ -971,3 +971,54 @@ describe('integrity extras', () => {
         expect(id.startsWith('ZNY-')).toBe(false);
     });
 });
+
+describe('release-gate extras', () => {
+    test('42. first-sample authority: retries add zero depth', () => {
+        const { evaluateAuthoritativeIssuance } = require('../server/trust') as typeof import('../server/trust');
+        const base = {
+            programSlug: 'chess-foundations', programVersion: '1.0', issuanceEnabled: true,
+            enrolledVersion: '1.0', requiredScore: 80,
+            components: { knowledge: 90, practical: 90, final_assessment: 90, project: 90 },
+            componentPass: { knowledge: true, practical: true, final_assessment: true, project: true },
+            skillProof: [],
+        };
+        // One item retried to PASS after 3 fails: single distinct item.
+        const retried = evaluateAuthoritativeIssuance({
+            ...base,
+            finalizedEvidence: [
+                { skillKey: 'rules', minimumScore: 65, distinctItems: 1, passes: 1, minItems: 4, minPassRate: 0.75 },
+            ],
+        });
+        expect(retried.eligible).toBe(false);
+        expect(retried.reasons).toContain('skill_gate_failed:rules');
+        // Four distinct first-samples, 3/4: eligible.
+        const depth = evaluateAuthoritativeIssuance({
+            ...base,
+            finalizedEvidence: [
+                { skillKey: 'rules', minimumScore: 65, distinctItems: 4, passes: 3, minItems: 4, minPassRate: 0.75 },
+            ],
+        });
+        expect(depth.eligible).toBe(true);
+    });
+
+    test('43. project submission uses the authoritative RPC, never direct insert', async () => {
+        const rpc = jest.fn().mockResolvedValue({ data: [{ submission_id: 'sub-1' }], error: null });
+        const from = jest.fn();
+        const clientMod = require('../services/supabase/client') as typeof import('../services/supabase/client');
+        const spy = jest.spyOn(clientMod, 'getSupabase').mockReturnValue({ rpc, from } as never);
+        try {
+            const { submitProject } = require('../services/trustApi') as typeof import('../services/trustApi');
+            const id = await submitProject('chess-foundations', 'artifact://x', 'notes');
+            expect(id).toBe('sub-1');
+            expect(rpc).toHaveBeenCalledWith('submit_project', {
+                p_program_slug: 'chess-foundations',
+                p_artifact_ref: 'artifact://x',
+                p_notes: 'notes',
+            });
+            // The revoked direct-insert path is never touched.
+            expect(from).not.toHaveBeenCalled();
+        } finally {
+            spy.mockRestore();
+        }
+    });
+});

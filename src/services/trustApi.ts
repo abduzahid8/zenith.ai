@@ -165,14 +165,18 @@ export const getCredentialProgress = async (programSlug: string): Promise<Creden
 };
 
 export const submitProject = async (programSlug: string, artifactRef?: string, notes?: string) => {
+    // Authoritative path: the submit_project RPC derives owner, enrollment,
+    // program, and pinned version server-side. Direct client INSERT into
+    // project_submissions is revoked; this adapter must never write there.
     const supabase = getSupabase();
-    const { data, error } = await supabase
-        .from('project_submissions')
-        .insert({ program_slug: programSlug, artifact_ref: artifactRef ?? null, notes: notes ?? null })
-        .select('id')
-        .single();
+    const { data, error } = await supabase.rpc('submit_project', {
+        p_program_slug: programSlug,
+        p_artifact_ref: artifactRef ?? null,
+        p_notes: notes ?? null,
+    });
     if (error) throw new Error(error.message);
-    return (data as unknown as { id: string }).id;
+    const row = (Array.isArray(data) ? data[0] : data) as unknown as { submission_id: string };
+    return row.submission_id as string;
 };
 
 export interface ProjectReviewState {

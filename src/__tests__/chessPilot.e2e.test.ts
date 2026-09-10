@@ -86,13 +86,21 @@ beforeAll(async () => {
     }
     await db.query(
         `INSERT INTO assessment_question_sets (id, program_slug, version, question_count, time_limit_minutes, pass_score, questions, content_version, status)
-         VALUES ('33333333-3333-3333-3333-333333333333', '${QUAD}', '1.0', 20, 30, 80, '${JSON.stringify(finals).replace(/'/g, "''")}', 'quad-bank-v1', 'active')
+         VALUES ('33333333-3333-3333-3333-333333333333', '${QUAD}', '1.0', 20, 30, 80, '${JSON.stringify(finals).replace(/'/g, "''")}', 'quad-v1', 'active')
          ON CONFLICT (id) DO NOTHING`,
     );
     await db.query(
         `INSERT INTO assessment_answer_keys (question_set_id, answers, question_ids)
          VALUES ('33333333-3333-3333-3333-333333333333', '${JSON.stringify(fkeys).replace(/'/g, "''")}', '${JSON.stringify(fids)}')
          ON CONFLICT DO NOTHING`,
+    );
+    await db.query(
+        `INSERT INTO credential_content_releases
+            (program_slug, program_version, content_version, artifact_sha256,
+             machine_qa_status, human_review_status, reviewer, reviewed_at, status)
+         VALUES ('${QUAD}', '1.0', 'quad-v1', 'synthetic-fixture', 'passed', 'approved',
+                 'synthetic-fixture', NOW(), 'active')
+         ON CONFLICT (program_slug, program_version, content_version) DO NOTHING`,
     );
 });
 
@@ -107,12 +115,17 @@ afterAll(async () => {
     await db.query(`DELETE FROM knowledge_items WHERE program_slug = '${QUAD}'`);
     await db.query(`DELETE FROM practical_attempts WHERE program_slug = '${QUAD}'`);
     await db.query(`DELETE FROM practical_items WHERE program_slug = '${QUAD}'`);
+    // Reviews are immutable by trigger (incl. via submission cascades);
+    // teardown holds the ops hatch across the delete block.
+    await db.query("SET app.review_override = 'on'");
     await db.query(`DELETE FROM project_reviews WHERE id IN (SELECT r.id FROM project_reviews r JOIN project_submissions s ON s.id = r.submission_id WHERE s.program_slug = '${QUAD}')`);
     await db.query(`DELETE FROM project_certification_results WHERE program_slug = '${QUAD}'`);
     await db.query(`DELETE FROM project_submissions WHERE program_slug = '${QUAD}'`);
+    await db.query("RESET app.review_override");
     await db.query(`DELETE FROM credential_component_results WHERE program_slug = '${QUAD}'`);
     await db.query(`DELETE FROM user_credential_progress WHERE program_slug = '${QUAD}'`);
     await db.query(`DELETE FROM skill_evidence_policy WHERE program_slug = '${QUAD}'`);
+    await db.query(`DELETE FROM credential_content_releases WHERE program_slug = '${QUAD}'`);
     await db.query(`DELETE FROM credential_programs WHERE slug = '${QUAD}'`);
     await db.end();
     await db2.end();
@@ -186,7 +199,7 @@ describe('integrity: balanced final + bank pinning', () => {
         const row = await db.query(
             `SELECT bank_version, question_set_id FROM assessment_attempts WHERE id = $1`, [exam.attempt_id],
         );
-        expect(row.rows[0].bank_version).toBe('quad-bank-v1');
+        expect(row.rows[0].bank_version).toBe('quad-v1');
     });
 
     test('active attempt survives bank rotation with its own pinned set', async () => {
@@ -200,7 +213,7 @@ describe('integrity: balanced final + bank pinning', () => {
         // attempt is active: the attempt must NOT be re-sampled.
         await db.query(
             `UPDATE assessment_question_sets SET questions = questions || '{"id":"qf-new","skill":"qk-a","prompt":"new?","options":["yes","no"]}',
-             content_version = 'quad-bank-v2'
+             content_version = 'quad-v2'
              WHERE id = '33333333-3333-3333-3333-333333333333'`,
         );
         try {
@@ -212,7 +225,7 @@ describe('integrity: balanced final + bank pinning', () => {
             expect((again.questions as { id: string }[]).some(q => q.id === 'qf-new')).toBe(false);
         } finally {
             await db.query(
-                `UPDATE assessment_question_sets SET content_version = 'quad-bank-v1'
+                `UPDATE assessment_question_sets SET content_version = 'quad-v1'
                  WHERE id = '33333333-3333-3333-3333-333333333333'`,
             );
             await db.query(
@@ -284,6 +297,9 @@ describe('integrity: project authority', () => {
     test('submit_project binds identity server-side; direct INSERT denied', async () => {
         const uid = newUid();
         await createUser(db, uid);
+        await asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM enroll_in_program($1)', [QUAD]),
+        );
         const sub = await asRole(db, 'authenticated', uid, () =>
             db.query('SELECT * FROM submit_project($1, $2, $3)', [QUAD, 'artifact://x', 'my notes']).then(r => r.rows[0].submission_id as string),
         );
@@ -306,6 +322,9 @@ describe('integrity: project authority', () => {
         const other = newUid();
         await createUser(db, uid);
         await createUser(db, other);
+        await asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM enroll_in_program($1)', [QUAD]),
+        );
         const sub = await asRole(db, 'authenticated', uid, () =>
             db.query('SELECT * FROM submit_project($1, $2, $3)', [QUAD, null, null]).then(r => r.rows[0].submission_id as string),
         );
@@ -466,5 +485,220 @@ describe('production metadata audit (no keys leave the server)', () => {
         // The TypeScript projection preserves expired (never folds to active).
         const { projectPublicVerification } = require('../server/trust') as typeof import('../server/trust');
         expect(projectPublicVerification(expired).status).toBe('expired');
+    });
+});
+
+describe('integrity: rotation resurrection regression (synthetic ROT program)', () => {
+    const ROT = 'e2e-rot-immutable';
+
+    beforeAll(async () => {
+        await db.query(
+            `INSERT INTO credential_programs
+                (slug, code, title, level, version, required_score, requires_assessment,
+                 requires_project, identity_verification_required, issuance_enabled, skills, skill_gates, status)
+             VALUES ('${ROT}', 'RTI', 'E2E Rotation', 'verified-skill', '1.0',
+                     80, TRUE, FALSE, FALSE, FALSE,
+                     '[{"key":"rk","name":"Rot K","weight":1.0,"minimumScore":65,"dayRange":[1,7]}]',
+                     '[]', 'active')
+             ON CONFLICT (slug) DO NOTHING`,
+        );
+        await db.query(
+            `INSERT INTO skill_evidence_policy (program_slug, program_version, skill_key, min_items, min_pass_rate, rationale)
+             VALUES ('${ROT}', '1.0', 'rk', 1, 0.65, 'rotation regression: single-item gate')
+             ON CONFLICT (program_slug, program_version, skill_key) DO NOTHING`,
+        );
+        await db.query(
+            `INSERT INTO credential_content_releases
+                (program_slug, program_version, content_version, artifact_sha256,
+                 machine_qa_status, human_review_status, reviewer, reviewed_at, status)
+             VALUES ('${ROT}', '1.0', 'rot-v1', 'synthetic', 'passed', 'approved', 'synthetic', NOW(), 'active')
+             ON CONFLICT (program_slug, program_version, content_version) DO NOTHING`,
+        );
+        // v1 item on logical day 50.
+        await db.query(
+            `INSERT INTO trusted_validation_items
+                (program_slug, program_version, hobby_id, curriculum_day, skill_key, lesson_id,
+                 content_version, status, payload, answer_key)
+             VALUES ('${ROT}', '1.0', 'chess', 50, 'rk', 'rot_d50', 'rot-v1', 'active',
+                     '{"kind":"mc","prompt":"rot v1?","options":["one","two"]}', '{"answer":"one"}')
+             ON CONFLICT DO NOTHING`,
+        );
+    });
+
+    afterAll(async () => {
+        await db.query(`DELETE FROM trusted_validation_attempts WHERE program_slug = '${ROT}'`);
+        await db.query(`DELETE FROM trusted_item_results WHERE program_slug = '${ROT}'`);
+        await db.query(`DELETE FROM learning_events WHERE program_slug = '${ROT}'`);
+        await db.query(`DELETE FROM trusted_validation_items WHERE program_slug = '${ROT}'`);
+        await db.query(`DELETE FROM skill_evidence_policy WHERE program_slug = '${ROT}'`);
+        await db.query(`DELETE FROM credential_content_releases WHERE program_slug = '${ROT}'`);
+        await db.query(`DELETE FROM credential_programs WHERE slug = '${ROT}'`);
+    });
+
+    // The exact issuance skill predicate (mirrors issue_credential v5).
+    async function qualifyingCount(uid: string): Promise<{ items: number; passes: number }> {
+        const r = await db.query(
+            `SELECT COUNT(*)::int AS items, COUNT(*) FILTER (WHERE r.finalized_passed)::int AS passes
+             FROM trusted_item_results r
+             JOIN trusted_validation_items i ON i.id = r.item_id
+             JOIN credential_content_releases rel
+               ON rel.program_slug = r.program_slug
+              AND rel.program_version = r.program_version
+              AND rel.content_version = r.content_version
+             WHERE r.user_id = $1 AND r.program_slug = '${ROT}'
+               AND r.content_version = i.content_version
+               AND i.status = 'active'
+               AND rel.status IN ('active', 'approved')
+               AND rel.machine_qa_status = 'passed'
+               AND rel.human_review_status = 'approved'`,
+            [uid],
+        );
+        return { items: r.rows[0].items as number, passes: r.rows[0].passes as number };
+    }
+
+    test('v1 PASS cannot resurrect as v2 authority; v2 proof counts', async () => {
+        const uid = newUid();
+        await createUser(db, uid);
+        // v1 PASS on the logical slot.
+        const s1 = await asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM start_trusted_validation($1, $2)', [ROT, 'rk']).then(r => r.rows[0]),
+        );
+        await asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM submit_trusted_validation($1, $2)', [s1.attempt_id, { answer: 'one' }]),
+        );
+        expect(await qualifyingCount(uid)).toEqual({ items: 1, passes: 1 });
+        // Compromise v1, install v2 on the SAME logical day with a NEW UUID.
+        await db.query(
+            `UPDATE trusted_validation_items SET status = 'compromised'
+             WHERE program_slug = '${ROT}' AND content_version = 'rot-v1'`,
+        );
+        const v2id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+        await db.query(
+            `INSERT INTO trusted_validation_items
+                (id, program_slug, program_version, hobby_id, curriculum_day, skill_key, lesson_id,
+                 content_version, status, payload, answer_key)
+             VALUES ('${v2id}', '${ROT}', '1.0', 'chess', 50, 'rk', 'rot_d50', 'rot-v2', 'active',
+                     '{"kind":"mc","prompt":"rot v2?","options":["two","three"]}', '{"answer":"two"}')
+             ON CONFLICT (program_slug, program_version, content_version, curriculum_day) DO NOTHING`,
+        );
+        await db.query(
+            `INSERT INTO credential_content_releases
+                (program_slug, program_version, content_version, artifact_sha256,
+                 machine_qa_status, human_review_status, reviewer, reviewed_at, status)
+             VALUES ('${ROT}', '1.0', 'rot-v2', 'synthetic2', 'passed', 'approved', 'synthetic', NOW(), 'active')
+             ON CONFLICT (program_slug, program_version, content_version) DO NOTHING`,
+        );
+        // The v1 PASS now counts ZERO (version mismatch + compromised).
+        expect(await qualifyingCount(uid)).toEqual({ items: 0, passes: 0 });
+        // History remains queryable (auditability preserved).
+        const hist = await db.query(
+            `SELECT COUNT(*)::int c FROM trusted_validation_attempts WHERE user_id = $1`, [uid],
+        );
+        expect(hist.rows[0].c).toBe(1);
+        const ev = await db.query(
+            `SELECT trusted, outcome FROM learning_events WHERE user_id = $1`, [uid],
+        );
+        expect(ev.rows[0].trusted).toBe(true);
+        // Retry of the OLD item adds zero depth (first-sample authority).
+        const sRetry = await asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM start_trusted_validation($1, $2)', [ROT, 'rk']).then(r => r.rows[0]),
+        );
+        // LRU serves the unseen v2 item (v1 is not active/selectable).
+        expect(sRetry.payload).toEqual({ kind: 'mc', prompt: 'rot v2?', options: ['two', 'three'] });
+        // Correct v2 answer on the FRESH item: proof counts exactly once...
+        await asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM submit_trusted_validation($1, $2)', [sRetry.attempt_id, { answer: 'two' }]),
+        );
+        expect(await qualifyingCount(uid)).toEqual({ items: 1, passes: 1 });
+        // ...and answering that same v2 item again adds no depth.
+        const s3 = await asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM start_trusted_validation($1, $2)', [ROT, 'rk']).then(r => r.rows[0]),
+        );
+        await asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM submit_trusted_validation($1, $2)', [s3.attempt_id, { answer: 'two' }]),
+        );
+        const depth = await db.query(
+            `SELECT COUNT(*)::int c FROM trusted_item_results WHERE user_id = $1`, [uid],
+        );
+        expect(depth.rows[0].c).toBe(2); // v1 row + v2 row (one row per item, first wins)
+        expect(await qualifyingCount(uid)).toEqual({ items: 1, passes: 1 });
+    });
+});
+
+describe('integrity: project enrollment + immutable revisions', () => {
+    test('submit_project requires enrollment; direct INSERT denied', async () => {
+        const uid = newUid();
+        await createUser(db, uid);
+        await asRole(db, 'authenticated', uid, () =>
+            expectDbDenied(
+                db.query('SELECT * FROM submit_project($1, $2, $3)', ['e2e-quad-integrity', null, null]),
+                /enrollment_required/,
+            ),
+        );
+        await asRole(db, 'authenticated', uid, () =>
+            expectDbDenied(
+                db.query(`INSERT INTO project_submissions (program_slug, version) VALUES ('e2e-quad-integrity','1.0')`),
+                /permission denied|policy/,
+            ),
+        );
+        await asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM enroll_in_program($1)', ['e2e-quad-integrity']),
+        );
+        const sub = await asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM submit_project($1, $2, $3)', ['e2e-quad-integrity', 'artifact://e', 'n']).then(r => r.rows[0].submission_id as string),
+        );
+        const row = await db.query('SELECT user_id, program_slug, version FROM project_submissions WHERE id = $1', [sub]);
+        expect(row.rows[0].user_id).toBe(uid);
+        expect(row.rows[0].version).toBe('1.0');
+    });
+
+    test('revisions immutable; latest revision controls the gate', async () => {
+        const uid = newUid();
+        await createUser(db, uid);
+        await asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM enroll_in_program($1)', ['e2e-quad-integrity']),
+        );
+        const sub = await asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM submit_project($1, $2, $3)', ['e2e-quad-integrity', null, null]).then(r => r.rows[0].submission_id as string),
+        );
+        await db.query(
+            `INSERT INTO project_reviews (submission_id, revision, rubric, authoritative_score, passed, reviewer)
+             VALUES ($1, 1, '{}', 90, TRUE, 'service_role')`, [sub],
+        );
+        // Revision rows cannot be UPDATEd or DELETEd, even by service_role.
+        await asRole(db, 'service_role', null, () =>
+            expectDbDenied(
+                db.query(`UPDATE project_reviews SET authoritative_score = 10 WHERE submission_id = $1`, [sub]),
+                /immutable/,
+            ),
+        );
+        await asRole(db, 'service_role', null, () =>
+            expectDbDenied(
+                db.query(`DELETE FROM project_reviews WHERE submission_id = $1`, [sub]),
+                /immutable/,
+            ),
+        );
+        // Adverse correction as revision 2 takes effect immediately.
+        await db.query(
+            `INSERT INTO project_reviews (submission_id, revision, rubric, authoritative_score, passed, reviewer)
+             VALUES ($1, 2, '{}', 40, FALSE, 'service_role')`, [sub],
+        );
+        const comp = await db.query(
+            `SELECT score, passed FROM credential_component_results
+             WHERE user_id = $1 AND component = 'project'`, [uid],
+        );
+        expect(Number(comp.rows[0].score)).toBe(40);
+        expect(comp.rows[0].passed).toBe(false);
+        // Recovery as revision 3 restores authority.
+        await db.query(
+            `INSERT INTO project_reviews (submission_id, revision, rubric, authoritative_score, passed, reviewer)
+             VALUES ($1, 3, '{}', 95, TRUE, 'service_role')`, [sub],
+        );
+        const comp3 = await db.query(
+            `SELECT score, passed FROM credential_component_results
+             WHERE user_id = $1 AND component = 'project'`, [uid],
+        );
+        expect(Number(comp3.rows[0].score)).toBe(95);
+        expect(comp3.rows[0].passed).toBe(true);
     });
 });
