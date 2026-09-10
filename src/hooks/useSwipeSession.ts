@@ -20,7 +20,8 @@ import type { MasteryOutcome } from '../domain/sessions/outcomePolicy';
 import { defaultScopeForKind } from '../domain/sessions/sessionIntent';
 import type { LearningStrategy, ProgressionScope } from '../domain/sessions/sessionIntent';
 import { appendLearningEvent } from '../services/learningEventRepository';
-import { loadSessionLesson } from '../services/sessionLesson';
+import { loadSessionLessonResult } from '../services/sessionLesson';
+import type { ValidationProvenance } from '../services/lessonCapabilityRegistry';
 import { recordAttemptArtifact, saveRecallArtifact } from '../services/sessionStepEffects';
 import { finalizeSwipeSession } from '../services/sessionFinalizer';
 
@@ -79,6 +80,7 @@ export function useSwipeSession(input: SwipeSessionInput) {
     const chessSolvedRef = useRef(false);
 
     const [lesson, setLesson] = useState<LessonContent | null>(null);
+    const [lessonProvenance, setLessonProvenance] = useState<ValidationProvenance>('none');
     const [status, setStatus] = useState<SwipeStatus>('loading');
     const [flow, setFlow] = useState<FlowState | null>(null);
     const [paused, setPaused] = useState(false);
@@ -139,7 +141,7 @@ export function useSwipeSession(input: SwipeSessionInput) {
                 try {
                     g.startSession(hobby);
                 } catch {}
-                const loaded = await loadSessionLesson({
+                const loaded = await loadSessionLessonResult({
                     hobby,
                     day,
                     artifacts: g.artifacts,
@@ -147,11 +149,12 @@ export function useSwipeSession(input: SwipeSessionInput) {
                     discoveryLanguage: language,
                 });
                 if (cancelled) return;
-                if (!loaded) {
+                if (!loaded.lesson) {
                     setStatus('error');
                     return;
                 }
-                setLesson(loaded);
+                setLesson(loaded.lesson);
+                setLessonProvenance(loaded.validationProvenance);
                 setStatus('ready');
             } catch (err) {
                 console.error('[useSwipeSession] load failed:', err);
@@ -263,12 +266,18 @@ export function useSwipeSession(input: SwipeSessionInput) {
                         outcome: outcome as MasteryOutcome,
                         artifactRef,
                         cardType: card.type,
+                        // Factual loader provenance — never a day heuristic.
+                        provenance:
+                            card.type === 'challenge' &&
+                            (lessonProvenance === 'static_bank' || lessonProvenance === 'generated_unverified')
+                                ? lessonProvenance
+                                : undefined,
                     }),
                 );
             }
             dispatch({ type: 'ANSWER', id: cardId, outcome, explanation });
         },
-        [flow?.cards, flow?.status, lesson, hobby, kind, origin, user?.id, targetOf, emit, dispatch],
+        [flow?.cards, flow?.status, lesson, lessonProvenance, hobby, kind, origin, user?.id, targetOf, emit, dispatch],
     );
 
     const answerFromFeedback = useCallback(

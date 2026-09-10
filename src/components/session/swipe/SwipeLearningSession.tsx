@@ -92,6 +92,15 @@ export const SwipeLearningSession: React.FC<SwipeLearningSessionProps> = (props)
         [session.cards, session.index, session.maxUnlocked, session.cardStatus, session.dispatch, height, scrollTo],
     );
 
+    // Retry path: support cards offer a direct way back to their proof.
+    const handleRetryProof = useCallback(
+        (cardId: string) => {
+            const idx = session.cards.findIndex(c => c.id === cardId);
+            if (idx >= 0) scrollTo(idx);
+        },
+        [session.cards, scrollTo],
+    );
+
     const handleAnswer = useCallback(
         (cardId: string, outcome: StepOutcome, userInput?: string, aiFeedback?: string, explanation?: string) => {
             session.answer(cardId, outcome, userInput, aiFeedback, explanation);
@@ -179,6 +188,7 @@ export const SwipeLearningSession: React.FC<SwipeLearningSessionProps> = (props)
                         <LearningCardRenderer
                             card={item}
                             status={session.cardStatus[item.id] ?? { completed: false, attempts: 0 }}
+                            statusByCard={session.cardStatus}
                             hobbyId={session.hobby ?? ''}
                             hobbyEyebrow={hobbyLabel}
                             isPremium={isPremium}
@@ -203,6 +213,7 @@ export const SwipeLearningSession: React.FC<SwipeLearningSessionProps> = (props)
                             onTestsDone={handleTestsDone}
                             onSolved={(cardId) => session.answer(cardId, 'pass', 'puzzle solved')}
                             onAdvance={() => scrollTo(Math.min(index + 1, cards.length - 1))}
+                            onRetryProof={handleRetryProof}
                         />
                     </View>
                 )}

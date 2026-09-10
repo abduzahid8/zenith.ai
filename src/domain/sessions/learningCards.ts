@@ -53,6 +53,9 @@ export interface FeedbackPayload {
     /** Real explanation: correct answer / AI feedback / success text. */
     body: string;
     verdict: StepOutcome;
+    /** Proof card that created this support: forward movement past this
+     * feedback requires that card to be resolved first. */
+    blockedByCardId: string;
 }
 
 export interface LearningCard {
@@ -402,18 +405,41 @@ export type FlowEvent =
     | { type: 'GOTO'; index: number };
 
 /**
+ * Unresolved-proof barrier: the highest feedback index whose proof card is
+ * still incomplete. -1 when every support card's proof is resolved.
+ */
+export function proofBarrierIndex(state: FlowState): number {
+    let barrier = -1;
+    state.cards.forEach((card, i) => {
+        if (card.type !== 'feedback' || !card.feedback?.blockedByCardId) return;
+        if (!statusOf(state, card.feedback.blockedByCardId).completed && i > barrier) {
+            barrier = i;
+        }
+    });
+    return barrier;
+}
+
+/**
  * Forward-navigation authorization — the single gate for swipe movement.
- * - at/below the high-water mark: always allowed (revisiting).
+ * - at/below the authorized watermark: always allowed (revisiting).
  * - exactly one past it: allowed only when the frontier card permits exit
  *   (passive cards and completed required cards do; unanswered required
  *   cards and the terminal result do not).
  * - anything further: denied, stay where you are.
+ * - an ACTIVE proof barrier caps everything: no index beyond an
+ *   unresolved support card is reachable, even if the watermark is higher.
  * Viewing never grants permission beyond this rule.
  */
 export function authorizeStepIndex(state: FlowState, target: number): number {
     const last = state.cards.length - 1;
     if (last < 0) return 0;
     const t = Math.max(0, Math.min(target, last));
+    const barrier = proofBarrierIndex(state);
+    if (barrier >= 0) {
+        // Active barrier: nothing beyond the unresolved support card is
+        // reachable — not even one step. The proof card must resolve first.
+        return t <= Math.min(state.maxUnlocked, barrier) ? t : state.index;
+    }
     if (t <= state.maxUnlocked) return t;
     if (t === state.maxUnlocked + 1) {
         const frontier = state.cards[state.maxUnlocked];
@@ -488,7 +514,7 @@ export function flowTransition(state: FlowState, event: FlowEvent, maxRetries: n
                 title: 'Смотри внимательнее',
                 required: false,
                 order: idx + 1,
-                feedback: { body: explanation, verdict: event.outcome },
+                feedback: { body: explanation, verdict: event.outcome, blockedByCardId: event.id },
             };
             const cards = [...state.cards];
             cards.splice(idx + 1, 0, feedback);

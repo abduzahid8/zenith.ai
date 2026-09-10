@@ -9,10 +9,12 @@ interface FeedbackCardProps {
     title: string;
     body: string;
     verdict: string;
+    /** Shown when the proof card behind this support is still unresolved. */
+    onRetry?: () => void;
 }
 
-/** In-feed feedback: the card transforms instead of opening a modal. */
-export const FeedbackCard: React.FC<FeedbackCardProps> = ({ title, body, verdict }) => {
+/** In-feed feedback: explains, then offers the natural retry path. */
+export const FeedbackCard: React.FC<FeedbackCardProps> = ({ title, body, verdict, onRetry }) => {
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
     const good = verdict === 'pass' || verdict === 'partial';
@@ -24,9 +26,15 @@ export const FeedbackCard: React.FC<FeedbackCardProps> = ({ title, body, verdict
                 <Text style={styles.title}>{title}</Text>
                 <Text style={styles.body}>{body}</Text>
             </ScrollView>
-            <View style={styles.footer}>
-                <Text style={styles.footerHint}>Свайп вверх</Text>
-            </View>
+            {onRetry ? (
+                <TouchableOpacity style={styles.continueButton} onPress={onRetry} activeOpacity={0.8}>
+                    <Text style={styles.continueText}>Попробовать снова</Text>
+                </TouchableOpacity>
+            ) : (
+                <View style={styles.footer}>
+                    <Text style={styles.footerHint}>Свайп вверх</Text>
+                </View>
+            )}
         </View>
     );
 };

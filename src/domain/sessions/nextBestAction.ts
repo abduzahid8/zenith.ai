@@ -2,7 +2,7 @@ import type { CredentialProgram } from '../credentials/types';
 import { findNextIncompleteTask } from './sessionCompletion';
 import type { MasteryOutcome } from './outcomePolicy';
 import type { DayDatum, SkillState } from './skillState';
-import { lessonCapabilities, sessionCapabilities } from './sessionCapabilities';
+import { resolveValidationCapability, sessionCapabilities } from './sessionCapabilities';
 
 export type RecommendationType =
     | 'continue_curriculum'
@@ -81,10 +81,6 @@ interface DaySignal {
  */
 export function getNextBestLearningAction(input: RecommendInput): LearningRecommendation {
     const { hobbyId, program, skillStates, currentCurriculumDay, availableMinutes, dailyTasks } = input;
-    const capsForDay = (day: number) => {
-        if (input.lessonCaps) return input.lessonCaps(hobbyId, day);
-        return lessonCapabilities(hobbyId, day);
-    };
     const minutes = Math.max(1, Math.floor(availableMinutes || 15));
     const nextTask = findNextIncompleteTask(
         dailyTasks.map(t => ({ id: t.id ?? null, type: t.type, status: t.status })),
@@ -173,9 +169,25 @@ export function getNextBestLearningAction(input: RecommendInput): LearningRecomm
         hasDoTask: true,
     }).canApply;
 
-    // A. Recent strong validation failure -> targeted application practice.
+    // A. Recent strong validation failure -> targeted application practice,
+    // but ONLY when the bite runtime can actually render Apply. A 5/10-min
+    // micro review has no apply phase: repair recall instead of promising it.
     const validationFail = weakDays.find(w => w.kind === 'validation_fail');
     if (validationFail) {
+        if (!biteCanApply) {
+            return {
+                type: 'repair_recall',
+                hobbyId,
+                programSlug,
+                skillKey: validationFail.skill.skillKey,
+                skillName: validationFail.skill.name,
+                curriculumDay: validationFail.day,
+                minutes,
+                reasonCode: 'recent_validation_failure',
+                reasonData: { skillName: validationFail.skill.name, day: validationFail.day, failures: validationFail.repeats },
+                confidence: 'medium',
+            };
+        }
         return {
             type: 'practice_application',
             hobbyId,
@@ -284,9 +296,9 @@ export function getNextBestLearningAction(input: RecommendInput): LearningRecomm
         };
     }
 
-    // D. Ready to prove: strong recall+application, validation missing, time
-    // allows, AND the target lesson can genuinely render validation.
-    // Otherwise the engine must not promise proof it cannot deliver.
+    // D. Ready to prove: strong recall+app, validation missing, time allows,
+    // AND the target lesson is positively known to validate. Unknown or
+    // known-invalid capability downgrades — never assume proof exists.
     if (minutes >= 20) {
         const ready = encountered.find(
             s =>
@@ -300,15 +312,16 @@ export function getNextBestLearningAction(input: RecommendInput): LearningRecomm
                 ready.days.length > 0
                     ? ready.days[ready.days.length - 1].day
                     : ready.dayRange[0];
-            const caps = capsForDay(day);
-            const validateKnown = caps && caps.known ? caps.hasTests : true;
-            const canValidate = sessionCapabilities({
-                minutes,
-                kind: 'structured',
-                scope: 'targeted',
-                hasTests: validateKnown,
-                hasDoTask: true,
-            }).canValidate;
+            const validation = resolveValidationCapability(hobbyId, day, null, input.lessonCaps ?? null);
+            const canValidate =
+                validation.state === 'known-valid' &&
+                sessionCapabilities({
+                    minutes,
+                    kind: 'structured',
+                    scope: 'targeted',
+                    hasTests: true,
+                    hasDoTask: true,
+                }).canValidate;
             if (canValidate) {
                 return {
                     type: 'prove_skill',

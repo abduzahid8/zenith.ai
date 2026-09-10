@@ -12,6 +12,8 @@ import { ApplyCard, ChallengeCard } from './ApplyCard';
 interface RendererProps {
     card: LearningCard;
     status: CardStatus;
+    /** Full status map (resolves proof barriers for support cards). */
+    statusByCard: Record<string, CardStatus>;
     hobbyId: string;
     hobbyEyebrow: string;
     isPremium: boolean;
@@ -25,6 +27,7 @@ interface RendererProps {
     onTestsDone: (cardId: string, passed: number, total: number, skipped: number) => void;
     onSolved: (cardId: string) => void;
     onAdvance: () => void;
+    onRetryProof: (cardId: string) => void;
 }
 
 /** Remount key so a retry genuinely re-runs the hosted interaction. */
@@ -44,10 +47,18 @@ export const LearningCardRenderer: React.FC<RendererProps> = (props) => {
             return <ExampleCard body={card.body ?? ''} />;
         case 'key_idea':
             return <KeyIdeaCard term={card.body ?? ''} />;
-        case 'feedback':
+        case 'feedback': {
+            const blockedBy = card.feedback?.blockedByCardId ?? null;
+            const proofOpen = blockedBy ? !(props.statusByCard[blockedBy]?.completed ?? false) : false;
             return (
-                <FeedbackCard title={card.title ?? ''} body={card.feedback?.body ?? ''} verdict={card.feedback?.verdict ?? ''} />
+                <FeedbackCard
+                    title={card.title ?? ''}
+                    body={card.feedback?.body ?? ''}
+                    verdict={card.feedback?.verdict ?? ''}
+                    onRetry={blockedBy && proofOpen ? () => props.onRetryProof(blockedBy) : undefined}
+                />
             );
+        }
         case 'recall':
             if (!card.recall) return null;
             return (

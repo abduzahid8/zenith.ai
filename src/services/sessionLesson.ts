@@ -1,5 +1,8 @@
-import type { HobbyId, LessonContent } from '../data/lessonContent';
+import type { HobbyId, LessonContent, TaskStep } from '../data/lessonContent';
 import { buildDiscoveryLesson } from '../domain/sessions/discoveryBank';
+import { isValidTestStep } from '../domain/sessions/sessionCapabilities';
+import type { LessonCapabilities, LessonSource, ValidationProvenance } from './lessonCapabilityRegistry';
+import { recordLessonCapabilities } from './lessonCapabilityRegistry';
 
 /**
  * Shared session lesson loader (extracted from useTimer, behavior-identical).
@@ -22,20 +25,129 @@ export interface SessionLessonRequest {
     discoveryLanguage?: 'ru' | 'en';
 }
 
+export interface LoadedSessionLesson {
+    lesson: LessonContent | null;
+    source: LessonSource | null;
+    capabilities: LessonCapabilities;
+    validationProvenance: ValidationProvenance;
+}
+
+const EMPTY_CAPABILITIES: LessonCapabilities = {
+    hasConcept: false,
+    hasRecallSource: false,
+    hasApplication: false,
+    hasValidation: false,
+};
+
+function nonEmptyString(value: unknown): value is string {
+    return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isValidDoTask(task: TaskStep | null | undefined): boolean {
+    if (!task || typeof task !== 'object') return false;
+    if (!nonEmptyString(task.prompt)) return false;
+    return (
+        task.type === 'multiple_choice' ||
+        task.type === 'fill_blank' ||
+        task.type === 'translate' ||
+        task.type === 'free_text' ||
+        task.type === 'code' ||
+        task.type === 'chess_puzzle'
+    );
+}
+
+/**
+ * Normalize a loaded lesson: drop malformed tests (never fabricate valid
+ * ones), derive factual capabilities + validation provenance from the real
+ * normalized shape — never from day number or hobby alone.
+ */
+export function normalizeLessonContent(
+    lesson: LessonContent | null | undefined,
+    source: LessonSource,
+): { lesson: LessonContent | null; capabilities: LessonCapabilities; validationProvenance: ValidationProvenance } {
+    if (!lesson) {
+        return { lesson: null, capabilities: { ...EMPTY_CAPABILITIES }, validationProvenance: 'none' };
+    }
+    const learnValid =
+        !!lesson.learn && nonEmptyString(lesson.learn.title) && nonEmptyString(lesson.learn.body);
+    const keywords = Array.isArray(lesson.learn?.keywords) ? lesson.learn.keywords.filter(nonEmptyString) : [];
+    const validTests = Array.isArray(lesson.tests) ? lesson.tests.filter(isValidTestStep) : [];
+    const doValid = isValidDoTask(lesson.do);
+    const normalized: LessonContent = {
+        ...lesson,
+        learn: { ...lesson.learn, keywords },
+        tests: validTests.length > 0 ? validTests : undefined,
+    };
+    const capabilities: LessonCapabilities = {
+        hasConcept: learnValid,
+        hasRecallSource: keywords.length > 0 || validTests.length > 0,
+        hasApplication: doValid,
+        hasValidation: validTests.length > 0,
+    };
+    const validationProvenance: ValidationProvenance =
+        !capabilities.hasValidation
+            ? 'none'
+            : source === 'static_bank'
+              ? 'static_bank'
+              : // Structurally valid generated tests are usable (known
+                // capability) but untrusted until server validation arrives.
+                'generated_unverified';
+    return { lesson: normalized, capabilities, validationProvenance };
+}
+
 export async function loadSessionLesson(req: SessionLessonRequest): Promise<LessonContent | null> {
+    const result = await loadSessionLessonResult(req);
+    return result.lesson;
+}
+
+/**
+ * Full loader result with factual source + capabilities. Records normalized
+ * capabilities so future recommendations can know real generated-lesson
+ * capabilities without reloading sessions.
+ */
+export async function loadSessionLessonResult(req: SessionLessonRequest): Promise<LoadedSessionLesson> {
     const { hobby, discoveryId } = req;
+    const day = req.day || 1;
+    const finish = (
+        lesson: LessonContent | null | undefined,
+        source: LessonSource,
+    ): LoadedSessionLesson => {
+        const normalized = normalizeLessonContent(lesson ?? null, source);
+        if (normalized.lesson) {
+            try {
+                recordLessonCapabilities({
+                    hobbyId: hobby,
+                    day,
+                    lessonId: normalized.lesson.id,
+                    hasApplication: normalized.capabilities.hasApplication,
+                    hasRecallSource: normalized.capabilities.hasRecallSource,
+                    hasConcept: normalized.capabilities.hasConcept,
+                    hasValidation: normalized.capabilities.hasValidation,
+                    source,
+                    validationProvenance: normalized.validationProvenance,
+                });
+            } catch {}
+        }
+        return {
+            lesson: normalized.lesson,
+            source: normalized.lesson ? source : null,
+            capabilities: normalized.capabilities,
+            validationProvenance: normalized.validationProvenance,
+        };
+    };
     try {
         if (discoveryId) {
             const micro = buildDiscoveryLesson(discoveryId, hobby, req.discoveryLanguage ?? 'ru');
-            if (micro) return micro;
+            if (micro) return finish(micro, 'discovery');
         }
 
-        const day = req.day || 1;
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { getLessonByDay } = require('../data/lessonContent');
         let lesson: LessonContent | undefined;
+        let source: LessonSource = 'generated';
         if (day <= 7) {
             lesson = getLessonByDay(hobby, day);
+            if (lesson) source = 'static_bank';
         }
 
         if (!lesson) {
@@ -43,6 +155,7 @@ export async function loadSessionLesson(req: SessionLessonRequest): Promise<Less
             const { lessonGeneratorService } = require('../services/lessonGeneratorService');
             const completedTopics = lessonGeneratorService.getCompletedTopics(req.artifacts, hobby);
             lesson = await lessonGeneratorService.generateLesson(hobby, day, completedTopics);
+            source = 'generated';
         }
 
         if (lesson && hobby === 'chess') {
@@ -77,15 +190,15 @@ export async function loadSessionLesson(req: SessionLessonRequest): Promise<Less
             lesson = { ...lesson, hobby };
         }
 
-        return lesson || null;
+        return finish(lesson || null, source);
     } catch (err) {
         console.error('[sessionLesson] Error loading lesson:', err);
         try {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { lessonGeneratorService } = require('../services/lessonGeneratorService');
-            return lessonGeneratorService.getFallbackLesson(hobby, req.day || 1);
+            return finish(lessonGeneratorService.getFallbackLesson(hobby, req.day || 1), 'fallback');
         } catch {
-            return null;
+            return finish(null, 'fallback');
         }
     }
 }

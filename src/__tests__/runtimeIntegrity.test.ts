@@ -14,6 +14,7 @@ import {
     canAdvanceFrom,
     flowTransition,
     initialFlowState,
+    proofBarrierIndex,
 } from '../domain/sessions/learningCards';
 import { buildSessionBlueprint, normalizeKind, parseSessionParams } from '../domain/sessions/sessionBlueprint';
 import { normalizeSessionIntent } from '../domain/sessions/sessionIntent';
@@ -304,5 +305,139 @@ describe('one builder means one builder (static)', () => {
         expect(parsed.skillDay).toBe(17);
         expect(parsed.skillKey).toBe('functions');
         expect(parsed.reasonCode).toBe('missing_validation');
+    });
+});
+
+describe('closure — adaptive barrier, provenance, normalization', () => {
+    const barrierLesson: any = {
+        id: 'python_d15',
+        hobby: 'python',
+        day: 15,
+        learn: { title: 'Functions', body: 'Functions package logic. Example: def f(): return 1.', keywords: ['function'] },
+        do: { type: 'free_text', prompt: 'Explain functions.' },
+    };
+
+    const barrierCards = () => {
+        const bp = buildSessionBlueprint({ minutes: 15, lessonTitle: 'Functions' });
+        return buildLearningCards({ blueprint: bp, lesson: barrierLesson, kind: 'structured', minutes: 15 });
+    };
+
+    it('PARTIAL support cannot be bypassed; retry PASS resolves', () => {
+        const cards = barrierCards();
+        let flow = initialFlowState(cards);
+        const recall = cards.find(c => c.type === 'recall')!;
+        const feedbackIdx = cards.findIndex(c => c.id === recall.id) + 1;
+        flow = flowTransition(flow, { type: 'ANSWER', id: recall.id, outcome: 'partial', explanation: 'Half right.' }, 2);
+        const feedback = flow.cards.find(c => c.type === 'feedback');
+        expect(feedback?.feedback?.blockedByCardId).toBe(recall.id);
+        // Past the support is denied while the proof is open...
+        expect(authorizeStepIndex(flow, feedbackIdx + 1)).toBe(flow.index);
+        expect(proofBarrierIndex(flow)).toBe(feedbackIdx);
+        // ...but the feedback itself and the proof retry stay reachable.
+        expect(authorizeStepIndex(flow, feedbackIdx)).toBe(feedbackIdx);
+        // Retry PASS lifts the barrier.
+        const retry = flowTransition(flow, { type: 'ANSWER', id: recall.id, outcome: 'pass' }, 2);
+        expect(proofBarrierIndex(retry)).toBe(-1);
+        expect(authorizeStepIndex(retry, feedbackIdx + 1)).toBe(feedbackIdx + 1);
+    });
+
+    it('FAIL behaves the same: no escape, retry resolves', () => {
+        const cards = barrierCards();
+        let flow = initialFlowState(cards);
+        const recall = cards.find(c => c.type === 'recall')!;
+        flow = flowTransition(flow, { type: 'ANSWER', id: recall.id, outcome: 'fail', explanation: 'Wrong.' }, 2);
+        const feedbackIdx = flow.cards.findIndex(c => c.type === 'feedback');
+        expect(feedbackIdx).toBeGreaterThan(0);
+        expect(authorizeStepIndex(flow, feedbackIdx + 1)).toBe(flow.index);
+        const retry = flowTransition(flow, { type: 'ANSWER', id: recall.id, outcome: 'pass' }, 2);
+        expect(proofBarrierIndex(retry)).toBe(-1);
+    });
+
+    it('partial with budget opens support, not final completion', () => {
+        const cards = barrierCards();
+        let flow = initialFlowState(cards);
+        const recall = cards.find(c => c.type === 'recall')!;
+        flow = flowTransition(flow, { type: 'ANSWER', id: recall.id, outcome: 'partial', explanation: 'Half.' }, 2);
+        expect(flow.status[recall.id].completed).toBe(false);
+        expect(flow.cards.some(c => c.type === 'feedback')).toBe(true);
+        const exhausted = flowTransition(flow, { type: 'ANSWER', id: recall.id, outcome: 'partial', explanation: 'Half.' }, 0);
+        expect(exhausted.status[recall.id]).toMatchObject({ completed: true, outcome: 'partial' });
+    });
+
+    it('provenance is factual: static strong, generated medium, omitted conservative', () => {
+        const mk = (prov: any, day: number) =>
+            buildAttemptEvent({
+                sessionId: 's', userId: 'u1', hobbyId: 'chess', lessonId: `chess_d${day}`, lessonDay: day,
+                cardId: 'c', attemptNo: 1, phase: 'validate', sessionKind: 'structured', outcome: 'pass',
+                cardType: 'challenge', ...(prov === undefined ? {} : { provenance: prov }),
+            });
+        expect(mk('static_bank', 4).evidenceStrength).toBe('strong');
+        expect(mk('static_bank', 4).provenance).toBe('static_bank');
+        expect(mk('generated_unverified', 20).evidenceStrength).toBe('medium');
+        expect(mk(undefined, 20).evidenceStrength).toBe('medium');
+        expect(mk(undefined, 20).provenance).toBe('generated_unverified');
+    });
+});
+
+describe('closure — generated lesson normalization is honest', () => {
+    const { normalizeLessonContent } = require('../services/sessionLesson') as typeof import('../services/sessionLesson');
+
+    it('malformed tests are excluded, lesson stays usable, no validation', () => {
+        const lesson: any = {
+            id: 'python_gen_d9',
+            hobby: 'python',
+            day: 9,
+            learn: { title: 'Loops', body: 'Loop concepts explained here.', keywords: ['loop'] },
+            do: { type: 'free_text', prompt: 'Explain loops.' },
+            tests: [
+                { type: 'multiple_choice', prompt: 'Pick one', options: ['a'], correctOptionIndex: 5 },
+                { type: 'multiple_choice', prompt: '', options: ['a', 'b'], correctOptionIndex: 0 },
+                { type: 'mystery_type', prompt: '???' },
+                { type: 'free_text', prompt: 'Real question.', correctAnswer: 'Real answer.' },
+            ],
+        };
+        const out = normalizeLessonContent(lesson, 'generated');
+        expect(out.lesson).not.toBeNull();
+        expect(out.lesson!.tests).toHaveLength(1);
+        expect(out.lesson!.tests![0].prompt).toBe('Real question.');
+        expect(out.capabilities.hasValidation).toBe(true);
+        expect(out.capabilities.hasConcept).toBe(true);
+        expect(out.capabilities.hasApplication).toBe(true);
+        expect(out.validationProvenance).toBe('generated_unverified');
+    });
+
+    it('lesson without any valid tests advertises no validation', () => {
+        const out = normalizeLessonContent(
+            {
+                id: 'x',
+                hobby: 'python',
+                day: 9,
+                learn: { title: 'T', body: 'Body here.', keywords: [] },
+                do: { type: 'free_text', prompt: 'Do it.' },
+                tests: [{ type: 'multiple_choice', prompt: 'Bad', options: ['only'], correctOptionIndex: 9 }],
+            } as any,
+            'generated',
+        );
+        expect(out.lesson).not.toBeNull();
+        expect(out.capabilities.hasValidation).toBe(false);
+        expect(out.validationProvenance).toBe('none');
+    });
+
+    it('static lessons keep trusted static provenance', () => {
+        const out = normalizeLessonContent(
+            {
+                id: 'chess_d4',
+                hobby: 'chess',
+                day: 4,
+                learn: { title: 'T', body: 'Body here.', keywords: [] },
+                do: { type: 'chess_puzzle', prompt: 'Solve.', puzzleFen: 'fen', puzzleMoves: ['e2e4'] },
+                tests: [
+                    { type: 'multiple_choice', prompt: 'Q?', options: ['a', 'b'], correctOptionIndex: 0 },
+                ],
+            } as any,
+            'static_bank',
+        );
+        expect(out.validationProvenance).toBe('static_bank');
+        expect(out.capabilities.hasValidation).toBe(true);
     });
 });

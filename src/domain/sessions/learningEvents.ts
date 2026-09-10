@@ -162,6 +162,12 @@ export interface AttemptEventInput {
     origin?: SessionOrigin;
     outcome: MasteryOutcome;
     artifactRef?: string;
+    /**
+     * Factual validation provenance from the loader. Challenge attempts
+     * WITHOUT it are treated as generated_unverified (conservative) —
+     * never silently strong. Non-challenge attempts omit it.
+     */
+    provenance?: 'static_bank' | 'generated_unverified';
     occurredAt?: string;
 }
 
@@ -175,15 +181,11 @@ const CARD_KIND_BY_TYPE: Record<string, InteractiveCardKind> = {
 export function buildAttemptEvent(input: AttemptEventInput & { cardType: string }): LearningEvent {
     const cardKind = CARD_KIND_BY_TYPE[input.cardType] ?? 'recall';
     const target = mapLearningTarget(input.hobbyId, input.lessonDay);
-    // Content provenance: static bank days (1-7) are curated; generated or
-    // unknown lessons are unverified. Unverified validation must NOT become
-    // strong evidence silently — it downgrades to medium.
+    // Content provenance comes from the actual loader path, never from day
+    // heuristics. Unverified validation must NOT become strong silently:
+    // only explicitly static_bank challenges stay strong.
     const provenance: 'static_bank' | 'generated_unverified' | undefined =
-        cardKind === 'challenge'
-            ? input.lessonDay != null && input.lessonDay <= 7
-                ? 'static_bank'
-                : 'generated_unverified'
-            : undefined;
+        cardKind === 'challenge' ? (input.provenance ?? 'generated_unverified') : undefined;
     const baseStrength = strengthFor(input.sessionKind, cardKind);
     const evidenceStrength =
         cardKind === 'challenge' && provenance === 'generated_unverified' ? 'medium' : baseStrength;

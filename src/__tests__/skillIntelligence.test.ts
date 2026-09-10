@@ -307,16 +307,34 @@ describe('32 — five minutes repairs, never proves', () => {
 });
 
 describe('33/22 — thirty minutes may prove when validation is missing', () => {
-    it('strong recall+app without validation yields prove_skill at 30 min', () => {
+    it('unknown capability never proves: downgrades to practice', () => {
         const strong = [
             ev({ session: 's1', card: 'r', outcome: 'pass', phase: 'recall', day: 16 }),
             ev({ session: 's1', card: 'a', outcome: 'pass', phase: 'apply', day: 16 }),
             ev({ session: 's2', card: 'r', outcome: 'pass', phase: 'recall', day: 17 }),
             ev({ session: 's2', card: 'a', outcome: 'pass', phase: 'apply', day: 17 }),
         ];
+        // Days 16/17 are beyond the static bank and nothing was recorded:
+        // unknown capability must not promise proof.
         const rec = recommend(strong, { availableMinutes: 30 });
+        expect(rec.type).not.toBe('prove_skill');
+        expect(rec.type).toBe('practice_application');
+    });
+
+    it('known-valid lesson with strong recall+app yields prove_skill at 30 min', () => {
+        const strong = [
+            ev({ session: 's1', card: 'r', outcome: 'pass', phase: 'recall', day: 16 }),
+            ev({ session: 's1', card: 'a', outcome: 'pass', phase: 'apply', day: 16 }),
+            ev({ session: 's2', card: 'r', outcome: 'pass', phase: 'recall', day: 17 }),
+            ev({ session: 's2', card: 'a', outcome: 'pass', phase: 'apply', day: 17 }),
+        ];
+        const rec = recommend(strong, {
+            availableMinutes: 30,
+            lessonCaps: () => ({ known: true, hasTests: true, hasDoTask: true }),
+        });
         expect(rec.type).toBe('prove_skill');
         expect(rec.skillKey).toBe('functions');
+        expect(rec.curriculumDay).toBe(17);
     });
 
     it('same state at 5 minutes never proves', () => {
@@ -558,5 +576,74 @@ describe('reason copy respects language at the UI boundary', () => {
         expect(reasonCopy('recall_gap', { skillName: 'Logic', day: 12 })).toMatch(/Пробел/);
         expect(reasonCopy('recall_gap', { skillName: 'Logic', day: 12 }, 'en')).toMatch(/Gap/);
         expect(reasonCopy('continue_path', undefined, 'en')).toBe('Continuing the path');
+    });
+});
+
+describe('closure — capability-gated validation failure matrix', () => {
+    const chess = getProgram('chess-foundations')!;
+    const chessFail = (session: string, attempt = 1): LearningEvent =>
+        buildAttemptEvent({
+            sessionId: session, userId: 'u1', hobbyId: 'chess', lessonId: 'chess_d4', lessonDay: 4,
+            cardId: 'c', attemptNo: attempt, phase: 'validate', sessionKind: 'structured',
+            outcome: 'fail', cardType: 'challenge', provenance: 'static_bank', occurredAt: at(),
+        });
+    const chessStates = (events: LearningEvent[]) =>
+        projectSkillState({ program: chess, events }).skills;
+    const chessRec = (events: LearningEvent[], minutes: number) =>
+        getNextBestLearningAction({
+            hobbyId: 'chess', program: chess, skillStates: chessStates(events),
+            currentCurriculumDay: 5, availableMinutes: minutes, dailyTasks: [],
+        });
+
+    it.each([5, 10])('%d min: validation failure repairs recall, never promises Apply', (minutes: number) => {
+        const rec = chessRec([chessFail('s1')], minutes);
+        expect(rec.type).toBe('repair_recall');
+        expect(rec.curriculumDay).toBe(4);
+        expect(rec.reasonCode).toBe('recent_validation_failure');
+    });
+
+    it.each([15, 30])('%d min: validation failure may practice application', (minutes: number) => {
+        const rec = chessRec([chessFail('s1')], minutes);
+        expect(rec.type).toBe('practice_application');
+        expect(rec.curriculumDay).toBe(4);
+    });
+});
+
+describe('closure — known-invalid generated lessons never prove', () => {
+    it('not prove_skill at 30 or 45 minutes', () => {
+        const strong = [
+            ev({ session: 's1', card: 'r', outcome: 'pass', phase: 'recall', day: 16 }),
+            ev({ session: 's1', card: 'a', outcome: 'pass', phase: 'apply', day: 16 }),
+            ev({ session: 's2', card: 'r', outcome: 'pass', phase: 'recall', day: 17 }),
+            ev({ session: 's2', card: 'a', outcome: 'pass', phase: 'apply', day: 17 }),
+        ];
+        const noTests = () => ({ known: true, hasTests: false, hasDoTask: true });
+        for (const minutes of [30, 45]) {
+            const rec = recommend(strong, { availableMinutes: minutes, lessonCaps: noTests });
+            expect(rec.type).not.toBe('prove_skill');
+        }
+    });
+});
+
+describe('closure — review need clears after revisit, history stays', () => {
+    it('one review then independent success moves on', () => {
+        const history = [
+            ev({ session: 's1', card: 'r', attempt: 1, outcome: 'fail', phase: 'recall', day: 10 }),
+            ev({ session: 's1', card: 'r', attempt: 2, outcome: 'pass', phase: 'recall', day: 10 }),
+        ];
+        const before = logicOf(history);
+        expect(before.needsLightReview).toBe(true);
+        expect(before.recoveredStruggles).toBe(1);
+        const after = logicOf([
+            ...history,
+            ev({ session: 's2', card: 'r', outcome: 'pass', phase: 'recall', day: 10 }),
+        ]);
+        expect(after.needsLightReview).toBe(false);
+        expect(after.recoveredStruggles).toBe(1);
+        const rec = recommend([
+            ...history,
+            ev({ session: 's2', card: 'r', outcome: 'pass', phase: 'recall', day: 10 }),
+        ]);
+        expect(rec.type).not.toBe('review_skill');
     });
 });

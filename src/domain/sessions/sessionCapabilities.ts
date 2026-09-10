@@ -1,4 +1,6 @@
 import { getLessonByDay } from '../../data/lessonContent';
+import type { TaskStep } from '../../data/lessonContent';
+import { getLessonCapabilities } from '../../services/lessonCapabilityRegistry';
 import { buildSessionBlueprint } from './sessionBlueprint';
 import type { SessionKind } from './sessionBlueprint';
 import type { ProgressionScope } from './sessionIntent';
@@ -46,6 +48,50 @@ export function sessionCapabilities(input: CapabilityInput): SessionCapabilities
     };
 }
 
+function nonEmptyString(value: unknown): value is string {
+    return typeof value === 'string' && value.trim().length > 0;
+}
+
+/**
+ * Structural validity for one test step. Shared by the loader
+ * (normalization) and recommendation capability — both sides agree
+ * byte-for-byte on what counts as usable validation. Never content-judges.
+ */
+export function isValidTestStep(task: TaskStep | null | undefined): boolean {
+    if (!task || typeof task !== 'object') return false;
+    if (!nonEmptyString(task.prompt)) return false;
+    switch (task.type) {
+        case 'multiple_choice':
+            return (
+                Array.isArray(task.options) &&
+                task.options.length >= 2 &&
+                Number.isInteger(task.correctOptionIndex) &&
+                (task.correctOptionIndex as number) >= 0 &&
+                (task.correctOptionIndex as number) < task.options.length
+            );
+        case 'fill_blank':
+            return (
+                typeof task.blanksText === 'string' &&
+                task.blanksText.includes('___') &&
+                Array.isArray(task.wordPool) &&
+                task.wordPool.length > 0 &&
+                Array.isArray(task.correctOrder) &&
+                task.correctOrder.length > 0
+            );
+        case 'translate':
+        case 'free_text':
+        case 'code':
+            return true;
+        case 'chess_puzzle':
+            return (
+                (nonEmptyString(task.puzzleFen) && Array.isArray(task.puzzleMoves) && task.puzzleMoves.length > 0) ||
+                (Array.isArray(task.puzzles) && task.puzzles.length > 0)
+            );
+        default:
+            return false;
+    }
+}
+
 export interface LessonCapability {
     known: boolean;
     hasTests: boolean;
@@ -53,19 +99,51 @@ export interface LessonCapability {
 }
 
 /**
- * Real content presence for a static bank lesson. Generated days (8+) are
- * unknown — callers must decide explicitly (assume full vs require known).
+ * Real content presence for a static bank lesson, validated with the SAME
+ * predicate the loader normalizes with. Generated days (8+) are unknown —
+ * callers must decide explicitly (assume full vs require known).
  */
 export function lessonCapabilities(hobbyId: string, day: number): LessonCapability {
     try {
         const lesson: any = getLessonByDay(hobbyId as any, day);
         if (!lesson) return { known: false, hasTests: false, hasDoTask: false };
+        const tests = Array.isArray(lesson.tests) ? lesson.tests.filter(isValidTestStep) : [];
         return {
             known: true,
-            hasTests: Array.isArray(lesson.tests) && lesson.tests.length > 0,
+            hasTests: tests.length > 0,
             hasDoTask: !!lesson.do,
         };
     } catch {
         return { known: false, hasTests: false, hasDoTask: false };
     }
+}
+
+export type ValidationCapabilityState = 'known-valid' | 'known-invalid' | 'unknown';
+
+/**
+ * Validation capability for a target day across every factual source:
+ * static bank first, then the recorded capabilities of already-loaded
+ * generated lessons. Anything else is UNKNOWN — and unknown never
+ * qualifies for proof. Callers must downgrade (practice/review/continue).
+ */
+export function resolveValidationCapability(
+    hobbyId: string,
+    day: number,
+    recorded?: { hasValidation: boolean } | null,
+    override?: ((hobbyId: string, day: number) => { known: boolean; hasTests: boolean } | null) | null,
+): { state: ValidationCapabilityState } {
+    if (override) {
+        const o = override(hobbyId, day);
+        if (!o || !o.known) return { state: 'unknown' };
+        return { state: o.hasTests ? 'known-valid' : 'known-invalid' };
+    }
+    const caps = lessonCapabilities(hobbyId, day);
+    if (caps.known) {
+        return { state: caps.hasTests ? 'known-valid' : 'known-invalid' };
+    }
+    const seen = recorded ?? getLessonCapabilities(hobbyId, day);
+    if (seen) {
+        return { state: seen.hasValidation ? 'known-valid' : 'known-invalid' };
+    }
+    return { state: 'unknown' };
 }
