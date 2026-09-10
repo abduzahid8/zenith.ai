@@ -10,9 +10,11 @@ import { useT } from '../store/languageStore';
 import { getProgram, programShortTitle } from '../domain/credentials/catalog';
 import { useCredentialStore } from '../store/credentialStore';
 import { useCertificateProgress } from '../hooks/useCertificateProgress';
+import { useLearningIntelligence } from '../hooks/useLearningIntelligence';
 import { useTaskStore } from '../store/taskStore';
 import { ProgressBar, SkillBar } from '../components/credentials/SkillBar';
-import { quickPracticeRoute } from '../domain/sessions/sessionRouting';
+import { routeForRecommendation } from '../domain/sessions/sessionRouting';
+import { reasonCopy } from '../utils/learningCopy';
 
 /**
  * Verified-skill detail — progressive disclosure.
@@ -34,6 +36,7 @@ export const CredentialDetailScreen: React.FC = () => {
     const enroll = useCredentialStore(s => s.enroll);
     const getReadiness = useCredentialStore(s => s.getReadiness);
     const snapshot = useTaskStore(s => s.snapshot);
+    const dailyTasks = useTaskStore(s => s.dailyTasks);
 
     const readiness = useMemo(() => {
         if (!program || !cert.eligible) return null;
@@ -43,6 +46,10 @@ export const CredentialDetailScreen: React.FC = () => {
             return null;
         }
     }, [program, cert.eligible, cert.tasks, cert.sessions, cert.streakDays, snapshot, getReadiness, slug]);
+
+    // Next action comes from the ONE intelligence source (Skill State +
+    // recommendation), targeting a real encountered day.
+    const { recommendation } = useLearningIntelligence({ hobbyId: program?.evidenceHobbyIds[0] ?? null, minutes: 10 });
 
     if (!program) {
         return (
@@ -54,11 +61,11 @@ export const CredentialDetailScreen: React.FC = () => {
 
     const enrolled = cert.enrolled;
     const pct = Math.round(cert.overall);
-    const weakest =
-        [...cert.skills].sort((a, b) => a.score - b.score).find(s => !s.passed) ??
-        [...cert.skills].sort((a, b) => a.score - b.score)[0];
-    const weakDef = weakest ? program.skills.find(s => s.key === weakest.skillKey) : undefined;
     const failingCount = cert.skills.filter(s => !s.passed).length;
+    const actionTitle =
+        recommendation?.skillName ??
+        (recommendation?.taskId ? (dailyTasks.find(dt => dt.id === recommendation.taskId)?.title ?? null) : null);
+    const actionRoute = recommendation ? routeForRecommendation(recommendation, 'quick_session') : null;
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -108,20 +115,19 @@ export const CredentialDetailScreen: React.FC = () => {
                             <SkillBar key={s.skillKey} name={s.name} score={s.score} minimumScore={s.minimumScore} />
                         ))}
 
-                        {weakest && weakDef && (
+                        {enrolled && actionTitle && actionRoute && recommendation && (
                             <View style={styles.actionCard}>
                                 <Text style={styles.actionKicker}>{t('Следующий шаг')}</Text>
-                                <Text style={styles.actionTitle}>{weakest.name}</Text>
+                                <Text style={styles.actionTitle}>{actionTitle}</Text>
                                 <Text style={styles.actionWhy}>
-                                    {t('Почему это?')} {t('Самое слабое место')} · 10 {t('min')}
+                                    {t('Почему это?')} {reasonCopy(recommendation.reasonCode, recommendation.reasonData)} · 10 {t('min')}
                                 </Text>
                                 <TouchableOpacity
                                     style={styles.primaryButton}
                                     activeOpacity={0.85}
                                     onPress={() => {
-                                        const route = quickPracticeRoute(10, weakDef.dayRange[0]);
-                                        console.log('[CredentialDetail] Practice pressed:', route);
-                                        router.push(route as any);
+                                        console.log('[CredentialDetail] Practice pressed:', actionRoute);
+                                        router.push(actionRoute as any);
                                     }}
                                 >
                                     <Text style={styles.primaryText}>{t('Практиковать')}</Text>

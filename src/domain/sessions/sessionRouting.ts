@@ -1,4 +1,5 @@
 import type { SessionKind, SessionOrigin } from './sessionBlueprint';
+import type { LearningRecommendation } from './nextBestAction';
 
 export interface SessionRouteParams {
     minutes?: number | null;
@@ -44,4 +45,28 @@ export function quickPracticeRoute(minutes: number, skillDay: number): string {
 /** Discovery: weightless micro-topic, never touches certification. */
 export function discoveryRoute(minutes: number, discoveryId: string): string {
     return buildSessionRoute({ minutes, discoveryId, kind: 'discovery', origin: 'quick_session' });
+}
+
+/**
+ * Route adapter for LearningRecommendation — every recommendation type maps
+ * to a REAL existing route. Repair/practice/review become review-only bites
+ * on the encountered day; prove/continue become structured sessions (with
+ * the real task when one exists). Nothing is fabricated.
+ */
+export function routeForRecommendation(
+    rec: LearningRecommendation,
+    origin: SessionOrigin,
+): string {
+    if (
+        rec.type === 'repair_recall' ||
+        rec.type === 'practice_application' ||
+        rec.type === 'review_skill'
+    ) {
+        // Encountered day is guaranteed by the engine for these types.
+        return quickPracticeRoute(rec.minutes, rec.curriculumDay ?? 1);
+    }
+    if (rec.taskId) {
+        return sessionRouteForTask({ id: rec.taskId, duration_minutes: rec.minutes }, origin);
+    }
+    return buildSessionRoute({ minutes: rec.minutes, kind: 'structured', origin });
 }

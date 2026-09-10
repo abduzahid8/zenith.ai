@@ -12,13 +12,12 @@ import type { SessionEvaluation } from './outcomePolicy';
  * - DailyPlan task completed                     -> completeDailyTask
  * - curriculum frontier may advance              -> advanceCurriculum
  * - Goal receives progress/difficulty signal     -> goalSignal
- * - verified skill evidence was produced         -> verified
  *
  * Truth table (kind x evaluation, blueprint gates applied):
  * - structured + full-completion + pass
- *     task (if target), advance, count, success signal, verified
+ *     task (if target), advance, count, success signal
  * - structured + full-completion + partial, non-strict
- *     task (if target), advance, count, struggled signal, NOT verified
+ *     task (if target), advance, count, struggled signal
  * - structured + full-completion + partial, strict (requiresValidation)
  *     NO task, NO advance; count + struggled signal + partial evidence
  * - structured micro (countsAsFullCompletion=false), any outcome
@@ -36,7 +35,6 @@ export interface ProgressionDecision {
     advanceCurriculum: boolean;
     countSession: boolean;
     goalSignal: GoalSignal;
-    verified: boolean;
 }
 
 export interface ProgressionInput {
@@ -51,7 +49,6 @@ const NOTHING: ProgressionDecision = {
     advanceCurriculum: false,
     countSession: false,
     goalSignal: null,
-    verified: false,
 };
 
 export function buildProgressionDecision(input: ProgressionInput): ProgressionDecision {
@@ -90,7 +87,6 @@ export function buildProgressionDecision(input: ProgressionInput): ProgressionDe
             advanceCurriculum: advance,
             countSession: count,
             goalSignal: 'success',
-            verified: true,
         };
     }
     return {
@@ -98,6 +94,5 @@ export function buildProgressionDecision(input: ProgressionInput): ProgressionDe
         advanceCurriculum: advance,
         countSession: count,
         goalSignal: 'struggled',
-        verified: false,
     };
 }

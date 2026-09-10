@@ -16,6 +16,11 @@ import { scale } from '../../constants';
 import { fonts } from '../../theme';
 import { aiService, ChatMessage } from '../../services/ai';
 import { useUserProfileStore, getGreeting } from '../../store/userProfileStore';
+import { useAuthStore } from '../../store/authStore';
+import { getProgramForHobby } from '../../domain/credentials/catalog';
+import { eventsByProgram } from '../../services/learningEventRepository';
+import { projectSkillState } from '../../domain/sessions/skillState';
+import { getNextBestLearningAction } from '../../domain/sessions/nextBestAction';
 import { useGamificationStore } from '../../store/gamificationStore';
 import { useLanguageStore } from '../../store/languageStore';
 import { useGoalStore } from '../../store/goalStore';
@@ -110,6 +115,36 @@ function buildUserContext(selectedHobby: HobbyId | null): string {
         const day = g.currentDay[hobby] || 1;
         const week = Math.ceil(day / 7);
         list.push(`Current hobby: ${meta?.label || hobby} (day ${day}, week ${week})`);
+        // Learning intelligence context (domain decides, AI explains).
+        try {
+            const program = getProgramForHobby(hobby);
+            if (program) {
+                const ownerId = useAuthStore.getState().user?.id ?? 'local';
+                const states = projectSkillState({
+                    program,
+                    events: eventsByProgram(program.slug, ownerId),
+                }).skills;
+                const rec = getNextBestLearningAction({
+                    hobbyId: hobby,
+                    program,
+                    skillStates: states,
+                    currentCurriculumDay: day,
+                    availableMinutes: 15,
+                    dailyTasks: useTaskStore.getState().dailyTasks,
+                });
+                list.push(
+                    `Learning recommendation: ${rec.type}` +
+                    `${rec.skillName ? ` ${rec.skillName}` : ''}` +
+                    `${rec.curriculumDay ? `, day ${rec.curriculumDay}` : ''}` +
+                    `. Reason: ${rec.reasonCode}.`,
+                );
+                const stages = states
+                    .filter(s => s.stage !== 'unseen')
+                    .map(s => `${s.name}:${s.stage}`)
+                    .join(', ');
+                if (stages) list.push(`Skill stages: ${stages}.`);
+            }
+        } catch {}
     } else {
         const lines = (Object.keys(g.currentDay) as HobbyId[])
             .filter(h => h !== 'coding')

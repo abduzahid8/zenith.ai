@@ -103,7 +103,9 @@ describe('6 — no duplicate progress calculation in simplified screens', () => 
     });
 
     it('credential screens consume the canonical selector', () => {
-        expect(readSrc('src/screens/QuickSessionScreen.tsx')).toMatch(/useCertificateProgress/);
+        // Quick reads the ONE intelligence source (events -> Skill State);
+        // hub/detail read the canonical certificate selector. Neither computes.
+        expect(readSrc('src/screens/QuickSessionScreen.tsx')).toMatch(/useLearningIntelligence/);
         expect(readSrc('src/screens/CredentialsScreen.tsx')).toMatch(/useAllCertificateProgress/);
         expect(readSrc('src/screens/CredentialDetailScreen.tsx')).toMatch(/useCertificateProgress/);
     });

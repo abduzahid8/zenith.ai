@@ -97,7 +97,7 @@ const strictBp = { countsAsFullCompletion: true, requiresValidation: true };
 describe('9 — review / micro / strict invariants', () => {
     it('certificate_review PASS: weak evidence, zero advance, zero task', () => {
         const d = buildProgressionDecision({ kind: 'certificate_review', evaluation: 'pass', blueprint: standardBp, hasTargetTask: true });
-        expect(d).toEqual({ completeDailyTask: false, advanceCurriculum: false, countSession: true, goalSignal: 'success', verified: true });
+        expect(d).toEqual({ completeDailyTask: false, advanceCurriculum: false, countSession: true, goalSignal: 'success' });
     });
 
     it('certificate_review PARTIAL: weak partial, zero advance', () => {
@@ -105,7 +105,7 @@ describe('9 — review / micro / strict invariants', () => {
         expect(d.advanceCurriculum).toBe(false);
         expect(d.completeDailyTask).toBe(false);
         expect(d.countSession).toBe(true);
-        expect(d.verified).toBe(false);
+        expect(d.goalSignal).toBe('struggled');
     });
 
     it('structured 5-minute PASS: no advance, no task completion', () => {
@@ -116,12 +116,12 @@ describe('9 — review / micro / strict invariants', () => {
 
     it('structured standard PASS: one advance + task when targeted', () => {
         const d = buildProgressionDecision({ kind: 'structured', evaluation: 'pass', blueprint: standardBp, hasTargetTask: true });
-        expect(d).toEqual({ completeDailyTask: true, advanceCurriculum: true, countSession: true, goalSignal: 'success', verified: true });
+        expect(d).toEqual({ completeDailyTask: true, advanceCurriculum: true, countSession: true, goalSignal: 'success' });
     });
 
     it('strict PARTIAL: no advance, no task, struggled signal kept', () => {
         const d = buildProgressionDecision({ kind: 'structured', evaluation: 'partial', blueprint: strictBp, hasTargetTask: true });
-        expect(d).toEqual({ completeDailyTask: false, advanceCurriculum: false, countSession: true, goalSignal: 'struggled', verified: false });
+        expect(d).toEqual({ completeDailyTask: false, advanceCurriculum: false, countSession: true, goalSignal: 'struggled' });
     });
 
     it('strict PASS: advance + task completion', () => {
@@ -132,7 +132,7 @@ describe('9 — review / micro / strict invariants', () => {
 
     it('discovery / fail / non-rewarding: nothing moves', () => {
         const disco = buildProgressionDecision({ kind: 'discovery', evaluation: 'pass', blueprint: microBp, hasTargetTask: false });
-        expect(disco).toEqual({ completeDailyTask: false, advanceCurriculum: false, countSession: false, goalSignal: null, verified: false });
+        expect(disco).toEqual({ completeDailyTask: false, advanceCurriculum: false, countSession: false, goalSignal: null });
         const fail = buildProgressionDecision({ kind: 'structured', evaluation: 'fail', blueprint: standardBp, hasTargetTask: true });
         expect(fail.advanceCurriculum).toBe(false);
         expect(fail.completeDailyTask).toBe(false);

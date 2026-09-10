@@ -8,17 +8,13 @@ import { fonts } from '../theme';
 import { useAppTheme } from '../theme/useAppTheme';
 import { useT, useLanguageStore } from '../store/languageStore';
 import { useTaskStore } from '../store/taskStore';
-import { useUserProfileStore } from '../store/userProfileStore';
-import { getProgramForHobby } from '../domain/credentials/catalog';
-import { useCertificateProgress } from '../hooks/useCertificateProgress';
-import { weakestOpenSkill } from '../services/sessionEvidence';
-import { findNextIncompleteTask } from '../domain/sessions/sessionCompletion';
+import { useLearningIntelligence } from '../hooks/useLearningIntelligence';
 import { DISCOVERY_TOPICS } from '../domain/sessions/discoveryBank';
 import {
     discoveryRoute,
-    quickPracticeRoute,
-    sessionRouteForTask,
+    routeForRecommendation,
 } from '../domain/sessions/sessionRouting';
+import { reasonCopy } from '../utils/learningCopy';
 
 const TIMES = [5, 10, 15];
 
@@ -33,37 +29,29 @@ export const QuickSessionScreen: React.FC = () => {
     const styles = useMemo(() => createStyles(colors), [colors]);
     const t = useT();
     const language = useLanguageStore(s => s.language);
-    const selectedHobby = useUserProfileStore(s => s.selectedHobby);
     const dailyTasks = useTaskStore(s => s.dailyTasks);
 
     const [minutes, setMinutes] = useState(5);
     const [topicId, setTopicId] = useState<string | null>(null);
 
-    const programSlug = selectedHobby ? (getProgramForHobby(selectedHobby)?.slug ?? null) : null;
-    const cert = useCertificateProgress(programSlug);
+    // ONE recommendation source: LearningEvents -> Skill State -> action.
+    const { recommendation } = useLearningIntelligence({ minutes });
 
     const recommended = useMemo(() => {
-        if (cert.eligible && cert.program) {
-            const weak = weakestOpenSkill(cert.program, cert.progress);
-            if (!weak) return null;
-            const def = cert.program.skills.find(s => s.key === weak.skillKey);
-            if (!def) return null;
-            return {
-                kind: 'practice' as const,
-                title: weak.name,
-                why: t('Самое слабое место'),
-                route: quickPracticeRoute(minutes, def.dayRange[0]),
-            };
-        }
-        const next = findNextIncompleteTask(dailyTasks);
-        if (!next) return null;
+        if (!recommendation) return null;
+        const title =
+            recommendation.skillName ??
+            (recommendation.taskId
+                ? (dailyTasks.find(dt => dt.id === recommendation.taskId)?.title ?? null)
+                : null) ??
+            '';
+        if (!title) return null;
         return {
-            kind: 'continue' as const,
-            title: next.title,
-            why: t('Продолжи с того места, где остановился'),
-            route: sessionRouteForTask(next, 'quick_session'),
+            title,
+            why: reasonCopy(recommendation.reasonCode, recommendation.reasonData),
+            route: routeForRecommendation(recommendation, 'quick_session'),
         };
-    }, [cert.eligible, cert.program, cert.progress, dailyTasks, minutes, t]);
+    }, [recommendation, dailyTasks]);
 
     const exploreRoute = topicId ? discoveryRoute(minutes, topicId) : null;
 

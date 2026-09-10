@@ -103,3 +103,11 @@ export function learningEventCount(ownerId?: string): number {
 export function __resetLearningEventsForTests(): void {
     useLearningEventStore.setState({ events: [] });
 }
+
+/**
+ * Reactive revision counter for UI adapters: re-renders when events append,
+ * without ever exposing the underlying array to screens.
+ */
+export function useLearningEventsRevision(): number {
+    return useLearningEventStore(s => s.events.length);
+}

@@ -22,6 +22,8 @@ import { useT } from '../../store/languageStore';
 import { useGoalStore } from '../../store/goalStore';
 import { GoalSnapshot } from '../../types/goals';
 import { computeDailyFocus } from '../../services/dailyFocusEngine';
+import { useLearningIntelligence } from '../../hooks/useLearningIntelligence';
+import { reasonCopy } from '../../utils/learningCopy';
 import { buildTodaySequence, TodayRow } from '../../domain/sessions/todaySequence';
 import { sessionRouteForTask } from '../../domain/sessions/sessionRouting';
 
@@ -73,6 +75,9 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
     const sequence = useMemo(() => buildTodaySequence(engineTasks), [engineTasks]);
 
     // Invisible intelligence: focus engine -> one short reason, no mode names.
+    // When Learning Intelligence sees real recent struggle on this lane,
+    // its evidence-based reason wins; otherwise the focus reason stands.
+    const { recommendation } = useLearningIntelligence({ minutes: 15 });
     const focusReason = useMemo(() => {
         if (!goalSnapshot) return null;
         try {
@@ -87,6 +92,18 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
             return null;
         }
     }, [goalSnapshot]);
+
+    const whyText = useMemo(() => {
+        if (
+            recommendation &&
+            (recommendation.reasonCode === 'recent_validation_failure' ||
+                recommendation.reasonCode === 'repeated_application_struggle' ||
+                recommendation.reasonCode === 'recall_gap')
+        ) {
+            return reasonCopy(recommendation.reasonCode, recommendation.reasonData);
+        }
+        return focusReason;
+    }, [recommendation, focusReason]);
 
     const handleAddPress = () => {
         const canAddMore = engineTasks.length < maxTasks;
@@ -170,10 +187,10 @@ const WeeklyPlanTab: React.FC<WeeklyPlanTabProps> = ({ isPremium }) => {
                 </TouchableOpacity>
             )}
 
-            {!!focusReason && sequence.rows.length > 0 && (
+            {!!whyText && sequence.rows.length > 0 && (
                 <View style={styles.whyCard}>
                     <Text style={styles.whyTitle}>{t('Почему это?')}</Text>
-                    <Text style={styles.whyText}>{focusReason}</Text>
+                    <Text style={styles.whyText}>{whyText}</Text>
                 </View>
             )}
 
