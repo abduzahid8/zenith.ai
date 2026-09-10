@@ -60,3 +60,11 @@ modules/device-activity/ios/zenythai.app/
 
 # Supabase
 supabase/.temp/
+
+# Apple private keys — NEVER commit. A tracked .p8 was removed from the
+# working tree in the server-trust-layer phase; the owner MUST still
+# revoke/rotate it in App Store Connect and purge it from git history
+# (see delivery report for the filter-repo commands). History rewrite is
+# intentionally NOT done automatically.
+*.p8
+AuthKey_*.p8
