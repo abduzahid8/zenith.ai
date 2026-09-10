@@ -33,6 +33,7 @@ export interface FinalizeSessionInput {
     blueprint: SessionBlueprint;
     /** Explicit recommendation-time skill (preferred over re-derivation). */
     targetSkillKey?: string | null;
+    lessonSource?: string;
     cards: LearningCard[];
     status: Record<string, CardStatus>;
     /** DailyPlan task this session works toward (curriculum scope only). */
@@ -124,6 +125,8 @@ async function runFinalization(input: FinalizeSessionInput): Promise<FinalizeSes
                     origin,
                     strategy: input.strategy,
                     reasonCode: input.reasonCode ?? null,
+                    scope: input.scope,
+                    lessonSource: input.lessonSource,
                     outcome: evaluation === 'pass' ? 'pass' : 'partial',
                 }),
             );
@@ -171,6 +174,8 @@ async function runFinalization(input: FinalizeSessionInput): Promise<FinalizeSes
             origin,
             strategy: input.strategy,
             reasonCode: input.reasonCode ?? null,
+            scope: input.scope,
+            lessonSource: input.lessonSource,
             outcome: evaluation === 'non_rewarding' ? 'unknown' : evaluation,
             outcomeValue: evaluation === 'pass' ? 1 : evaluation === 'partial' ? 0.5 : 0,
         }),

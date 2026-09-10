@@ -36,6 +36,118 @@ const TASK_TYPE_BY_HOBBY: Record<HobbyId, TaskType[]> = {
 // Сервис генерации
 // ─────────────────────────────────────────────
 
+/**
+ * Canonical prompt construction shared by both generation entry points,
+ * so the AI sees byte-identical instructions either way.
+ */
+function buildGenerationMessages(
+  hobby: HobbyId,
+  dayNumber: number,
+  completedTopics: string[],
+  skillLevel: 'beginner' | 'intermediate' = 'beginner',
+): ChatMessage[] {
+  const taskTypes = TASK_TYPE_BY_HOBBY[hobby];
+  const doType = taskTypes[Math.floor(Math.random() * taskTypes.length)];
+  const hobbyContext = HOBBY_CONTEXT[hobby];
+
+  const messages: ChatMessage[] = [
+    {
+      role: 'user',
+      content: `Ты — генератор образовательного контента для приложения Zenyth.
+Создай 1 урок по теме: "${hobbyContext}".
+День обучения пользователя: #${dayNumber}.
+Уровень: ${skillLevel === 'beginner' ? 'начинающий' : 'средний'}.
+Уже пройденные темы (НЕ ПОВТОРЯЙ): ${completedTopics.length > 0 ? completedTopics.join(', ') : 'нет данных'}.
+${hobby === 'chess' ? 'Выбери тип задания: "chess_puzzle".' : `Выбери тип задания: "${doType}".`}
+
+ОТВЕЧАЙ СТРОГО В JSON-ФОРМАТЕ (без markdown-обёртки):
+{
+  "learn": {
+    "title": "Краткое название темы урока",
+    "body": "Объяснение темы (3-5 предложений, понятным языком)",
+    "keywords": ["термин1", "термин2", "термин3"]
+  },
+  "do": {
+    "type": "${hobby === 'chess' ? 'chess_puzzle' : doType}",
+    "prompt": "${hobby === 'chess' ? 'Найди лучший ход (или мат в 1/2 хода) в этой позиции.' : 'Чёткое задание для пользователя'}",
+    "correctAnswer": "Правильный ответ (если применимо, иначе null)",
+    "hints": ["Подсказка 1", "Подсказка 2"]${hobby === 'chess' ? ',\n    "puzzleFen": "Стартовая позиция в формате FEN (например: 6k1/8/6K1/8/8/8/8/7Q w - - 0 1)",\n    "puzzleMoves": ["Правильные ходы в формате UCI, например: [\\"h1h7\\"]"]' : ''}
+  }${hobby === 'chess' ? ',\n  "tests": [\n    {\n      "type": "multiple_choice",\n      "prompt": "Вопрос с 4 вариантами ответа",\n      "options": ["Вариант A", "Вариант B", "Вариант C", "Вариант D"],\n      "correctOptionIndex": 0\n    },\n    {\n      "type": "multiple_choice",\n      "prompt": "Второй вопрос с 4 вариантами ответа",\n      "options": ["Вариант A", "Вариант B", "Вариант C", "Вариант D"],\n      "correctOptionIndex": 1\n    },\n    {\n      "type": "fill_blank",\n      "prompt": "Задание на вставку слов",\n      "blanksText": "Текст с пропусками в виде ___",\n      "wordPool": ["слово1", "слово2", "слово3"],\n      "correctOrder": ["слово1", "слово2"]\n    },\n    {\n      "type": "fill_blank",\n      "prompt": "Второй тест на вставку слов",\n      "blanksText": "Текст с пропусками в виде ___",\n      "wordPool": ["слово1", "слово2", "слово3"],\n      "correctOrder": ["слово1", "слово2"]\n    },\n    {\n      "type": "free_text",\n      "prompt": "Открытый вопрос по теме теории",\n      "correctAnswer": "Эталонный правильный ответ"\n    }\n  ]' : ''}
+}
+
+ПРАВИЛА:
+- Давай новую тему, не из пройденных
+- Язык: русский (объяснения) + изучаемый язык (примеры)
+- Для chess_puzzle — сгенерируй легальный и простой puzzleFen и puzzleMoves (1-2 полухода, например, мат в 1 ход или взятие фигуры). Сгенерируй короткий совет для шахматной задачи в поле "prompt". Он должен занимать ровно 2 строки на мобильном экране. Не используй координаты, не раскрывай точный ход, не превышай 95 символов и не делай его короче 75 символов. Пример хорошего совета: "Найди фигуру без защиты. Иногда лучший ход — просто забрать то, что соперник оставил."
+- Для code — включи starterCode как часть prompt
+- Не используй markdown в body и prompt`,
+    },
+  ];
+  return messages;
+}
+
+/**
+ * Fresh AI generation with explicit source contract (no cache involved).
+ * AI/parse success -> { source: 'generated' }; any failure -> hand-built
+ * fallback lesson with { source: 'fallback' }. Callers persist source
+ * alongside their own cache entries — never infer it from lesson ids.
+ */
+async function fetchFreshLesson(
+  hobby: HobbyId,
+  dayNumber: number,
+  messages: ChatMessage[],
+): Promise<{ lesson: LessonContent; source: 'generated' | 'fallback' }> {
+  let generatedLesson: Partial<LessonContent> = {};
+
+  try {
+    const response = await aiService.sendMessage(messages);
+
+    // Парсим JSON из ответа более надежно
+    let raw = '';
+    if (typeof response === 'string') {
+      const mdMatch = response.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (mdMatch) {
+        raw = mdMatch[1];
+      } else {
+        const firstBrace = response.indexOf('{');
+        const lastBrace = response.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1) {
+          raw = response.substring(firstBrace, lastBrace + 1);
+        } else {
+          raw = response;
+        }
+      }
+    } else {
+      raw = JSON.stringify(response);
+    }
+
+    const parsed = JSON.parse(raw);
+    generatedLesson = parsed;
+  } catch (e) {
+    console.warn('[lessonGenerator] AI generation error:', e);
+    // Fallback: возвращаем шаблонный урок с честным источником
+    return { lesson: lessonGeneratorService.getFallbackLesson(hobby, dayNumber), source: 'fallback' as const };
+  }
+
+  // Собираем полный объект урока
+  const lesson: LessonContent = {
+    id: `${hobby}_gen_d${dayNumber}`,
+    hobby,
+    day: dayNumber,
+    learn: generatedLesson.learn ?? {
+      title: 'Новая тема',
+      body: 'Продолжай изучение...',
+      keywords: [],
+    },
+    do: generatedLesson.do ?? {
+      type: 'free_text',
+      prompt: 'Напиши всё, что запомнил из прошлых уроков.',
+    },
+    tests: generatedLesson.tests,
+  };
+  return { lesson, source: 'generated' as const };
+}
+
 export const lessonGeneratorService = {
 
   /**
@@ -65,92 +177,10 @@ export const lessonGeneratorService = {
     // 2. Генерируем через AI
     console.log(`[lessonGenerator] Generating lesson for ${hobby} day ${dayNumber}`);
 
-    const taskTypes = TASK_TYPE_BY_HOBBY[hobby];
-    const doType = taskTypes[Math.floor(Math.random() * taskTypes.length)];
-    const hobbyContext = HOBBY_CONTEXT[hobby];
+    const messages = buildGenerationMessages(hobby, dayNumber, completedTopics, skillLevel);
 
-    const messages: ChatMessage[] = [
-      {
-        role: 'user',
-        content: `Ты — генератор образовательного контента для приложения Zenyth.
-Создай 1 урок по теме: "${hobbyContext}".
-День обучения пользователя: #${dayNumber}.
-Уровень: ${skillLevel === 'beginner' ? 'начинающий' : 'средний'}.
-Уже пройденные темы (НЕ ПОВТОРЯЙ): ${completedTopics.length > 0 ? completedTopics.join(', ') : 'нет данных'}.
-${hobby === 'chess' ? 'Выбери тип задания: "chess_puzzle".' : `Выбери тип задания: "${doType}".`}
-
-ОТВЕЧАЙ СТРОГО В JSON-ФОРМАТЕ (без markdown-обёртки):
-{
-  "learn": {
-    "title": "Краткое название темы урока",
-    "body": "Объяснение темы (3-5 предложений, понятным языком)",
-    "keywords": ["термин1", "термин2", "термин3"]
-  },
-  "do": {
-    "type": "${hobby === 'chess' ? 'chess_puzzle' : doType}",
-    "prompt": "${hobby === 'chess' ? 'Найди лучший ход (или мат в 1/2 хода) в этой позиции.' : 'Чёткое задание для пользователя'}",
-    "correctAnswer": "Правильный ответ (если применимо, иначе null)",
-    "hints": ["Подсказка 1", "Подсказка 2"]${hobby === 'chess' ? ',\n    "puzzleFen": "Стартовая позиция в формате FEN (например: 6k1/8/6K1/8/8/8/8/7Q w - - 0 1)",\n    "puzzleMoves": ["Правильные ходы в формате UCI, например: [\\"h1h7\\"]"]' : ''}
-  }${hobby === 'chess' ? ',\n  "tests": [\n    {\n      "type": "multiple_choice",\n      "prompt": "Вопрос с 4 вариантами ответа",\n      "options": ["Вариант A", "Вариант B", "Вариант C", "Вариант D"],\n      "correctOptionIndex": 0\n    },\n    {\n      "type": "multiple_choice",\n      "prompt": "Второй вопрос с 4 вариантами ответа",\n      "options": ["Вариант A", "Вариант B", "Вариант C", "Вариант D"],\n      "correctOptionIndex": 1\n    },\n    {\n      "type": "fill_blank",\n      "prompt": "Задание на вставку слов",\n      "blanksText": "Текст с пропусками в виде ___",\n      "wordPool": ["слово1", "слово2", "слово3"],\n      "correctOrder": ["слово1", "слово2"]\n    },\n    {\n      "type": "fill_blank",\n      "prompt": "Второй тест на вставку слов",\n      "blanksText": "Текст с пропусками в виде ___",\n      "wordPool": ["слово1", "слово2", "слово3"],\n      "correctOrder": ["слово1", "слово2"]\n    },\n    {\n      "type": "free_text",\n      "prompt": "Открытый вопрос по теме теории",\n      "correctAnswer": "Эталонный правильный ответ"\n    }\n  ]' : ''}
-}
-
-ПРАВИЛА:
-- Давай новую тему, не из пройденных
-- Язык: русский (объяснения) + изучаемый язык (примеры)
-- Для chess_puzzle — сгенерируй легальный и простой puzzleFen и puzzleMoves (1-2 полухода, например, мат в 1 ход или взятие фигуры). Сгенерируй короткий совет для шахматной задачи в поле "prompt". Он должен занимать ровно 2 строки на мобильном экране. Не используй координаты, не раскрывай точный ход, не превышай 95 символов и не делай его короче 75 символов. Пример хорошего совета: "Найди фигуру без защиты. Иногда лучший ход — просто забрать то, что соперник оставил."
-- Для code — включи starterCode как часть prompt
-- Не используй markdown в body и prompt`,
-      },
-    ];
-
-    let generatedLesson: Partial<LessonContent> = {};
-
-    try {
-      const response = await aiService.sendMessage(messages);
-
-      // Парсим JSON из ответа более надежно
-      let raw = '';
-      if (typeof response === 'string') {
-        const mdMatch = response.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (mdMatch) {
-          raw = mdMatch[1];
-        } else {
-          const firstBrace = response.indexOf('{');
-          const lastBrace = response.lastIndexOf('}');
-          if (firstBrace !== -1 && lastBrace !== -1) {
-            raw = response.substring(firstBrace, lastBrace + 1);
-          } else {
-            raw = response;
-          }
-        }
-      } else {
-        raw = JSON.stringify(response);
-      }
-
-      const parsed = JSON.parse(raw);
-      generatedLesson = parsed;
-    } catch (e) {
-      console.warn('[lessonGenerator] AI generation error:', e);
-      // Fallback: возвращаем шаблонный урок
-      return lessonGeneratorService.getFallbackLesson(hobby, dayNumber);
-    }
-
-    // 3. Собираем полный объект урока
-    const lesson: LessonContent = {
-      id: `${hobby}_gen_d${dayNumber}`,
-      hobby,
-      day: dayNumber,
-      learn: generatedLesson.learn ?? {
-        title: 'Новая тема',
-        body: 'Продолжай изучение...',
-        keywords: [],
-      },
-      do: generatedLesson.do ?? {
-        type: 'free_text',
-        prompt: 'Напиши всё, что запомнил из прошлых уроков.',
-      },
-      tests: generatedLesson.tests,
-    };
+    const fresh = await fetchFreshLesson(hobby, dayNumber, messages);
+    const lesson = fresh.lesson;
 
     // 4. Кэшируем результат
     try {
@@ -160,6 +190,45 @@ ${hobby === 'chess' ? 'Выбери тип задания: "chess_puzzle".' : `�
     }
 
     return lesson;
+  },
+
+  /**
+   * Генерация с явным источником (v3-кэш хранит { lesson, source }).
+   * AI success -> source='generated'; AI/parse failure -> source='fallback'.
+   * Старый v2-кэш здесь не читается: у него нет источника.
+   */
+  generateLessonWithSource: async (
+    hobby: HobbyId,
+    dayNumber: number,
+    completedTopics: string[],
+    skillLevel: 'beginner' | 'intermediate' = 'beginner'
+  ): Promise<{ lesson: LessonContent; source: 'generated' | 'fallback' }> => {
+    const cacheKey = `lesson_gen_v3_${hobby}_day${dayNumber}`;
+    try {
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached) as { lesson?: LessonContent; source?: string };
+        if (parsed && parsed.lesson && (parsed.source === 'generated' || parsed.source === 'fallback')) {
+          console.log(`[lessonGenerator] Returning cached lesson: ${cacheKey} (${parsed.source})`);
+          return { lesson: parsed.lesson as LessonContent, source: parsed.source };
+        }
+      }
+    } catch (e) {
+      console.warn('[lessonGenerator] Cache read error:', e);
+    }
+    // Defer prompt construction to the canonical path by reusing the same
+    // inputs generateLesson would use (no duplication of prompt templates).
+    const fresh = await fetchFreshLesson(
+      hobby,
+      dayNumber,
+      buildGenerationMessages(hobby, dayNumber, completedTopics, skillLevel),
+    );
+    try {
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(fresh));
+    } catch (e) {
+      console.warn('[lessonGenerator] Cache write error:', e);
+    }
+    return fresh;
   },
 
   /**

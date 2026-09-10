@@ -124,7 +124,7 @@ export const GamificationDebugScreen: React.FC = () => {
         if (lesson) {
             Alert.alert(
                 `📖 ${lesson.learn.title}`,
-                `Тип задания: ${lesson.do.type}\n\nЗадание: ${lesson.do.prompt.slice(0, 120)}...`,
+                `Тип задания: ${lesson.do?.type ?? '—'}\n\nЗадание: ${(lesson.do?.prompt ?? '—').slice(0, 120)}...`,
                 [{ text: 'OK' }]
             );
             addLog(`📖 Показан урок: ${lesson.id}`);
@@ -269,12 +269,12 @@ export const GamificationDebugScreen: React.FC = () => {
                         <Text style={s.lessonBody} numberOfLines={3}>{currentLesson.learn.body}</Text>
                         <View style={s.lessonMeta}>
                             <Text style={s.tag}>📚 {currentLesson.id}</Text>
-                            <Text style={s.tag}>🎯 {currentLesson.do.type}</Text>
+                            <Text style={s.tag}>🎯 {currentLesson.do?.type ?? '—'}</Text>
                         </View>
                         <Text style={s.taskPrompt} numberOfLines={2}>
-                            Задание: {currentLesson.do.prompt}
+                            Задание: {currentLesson.do?.prompt ?? '—'}
                         </Text>
-                        {currentLesson.do.hints && (
+                        {currentLesson.do?.hints && (
                             <Text style={s.hint}>💡 {currentLesson.do.hints[0]}</Text>
                         )}
                     </View>

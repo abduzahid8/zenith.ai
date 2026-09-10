@@ -57,9 +57,15 @@ export interface LearningEvent {
      * Recommendation execution context (reason codes only, never UI text):
      * which strategy built this session and why. Enables later analysis of
      * recommendation -> session -> outcome without an analytics subsystem.
+     * Attempt events inherit the session's intent directly so no join is
+     * needed to reconstruct why each evidence row exists.
      */
     strategy?: string;
-    reasonCode?: string;
+    reasonCode?: string | null;
+    /** Curriculum scope the session ran under (curriculum/targeted/none). */
+    scope?: string;
+    /** Factual lesson origin (static_bank/generated/fallback/discovery). */
+    lessonSource?: string;
     source: EvidenceSource;
     eventType: LearningEventType;
     outcome?: MasteryOutcome;
@@ -160,6 +166,11 @@ export interface AttemptEventInput {
     phase?: SessionPhase;
     sessionKind: SessionKind;
     origin?: SessionOrigin;
+    /** Execution intent inherited from the session (codes only). */
+    scope?: string;
+    strategy?: string;
+    reasonCode?: string | null;
+    lessonSource?: string;
     outcome: MasteryOutcome;
     artifactRef?: string;
     /**
@@ -207,6 +218,10 @@ export function buildAttemptEvent(input: AttemptEventInput & { cardType: string 
         phase: input.phase,
         sessionKind: input.sessionKind,
         origin: input.origin,
+        scope: input.scope,
+        strategy: input.strategy,
+        reasonCode: input.reasonCode ?? undefined,
+        lessonSource: input.lessonSource,
         source: sourceFor(input.sessionKind),
         eventType: 'attempt',
         outcome: input.outcome,
@@ -229,6 +244,10 @@ export interface ExposureEventInput {
     phase?: SessionPhase;
     sessionKind: SessionKind;
     origin?: SessionOrigin;
+    scope?: string;
+    strategy?: string;
+    reasonCode?: string | null;
+    lessonSource?: string;
     occurredAt?: string;
 }
 
@@ -253,6 +272,10 @@ export function buildExposureEvent(input: ExposureEventInput): LearningEvent {
         phase: input.phase,
         sessionKind: input.sessionKind,
         origin: input.origin,
+        scope: input.scope,
+        strategy: input.strategy,
+        reasonCode: input.reasonCode ?? undefined,
+        lessonSource: input.lessonSource,
         source: sourceFor(input.sessionKind),
         eventType: 'concept_exposed',
         evidenceStrength: 'none',
@@ -273,6 +296,8 @@ export interface CompletionEventInput {
     origin?: SessionOrigin;
     strategy?: string;
     reasonCode?: string | null;
+    scope?: string;
+    lessonSource?: string;
     occurredAt?: string;
 }
 
@@ -303,6 +328,8 @@ export function buildSessionCompletedEvent(
         origin: input.origin,
         strategy: input.strategy,
         reasonCode: input.reasonCode ?? undefined,
+        scope: input.scope,
+        lessonSource: input.lessonSource,
         source: sourceFor(input.sessionKind),
         eventType: 'session_completed',
         outcome: input.outcome,
@@ -334,6 +361,8 @@ export function buildTaskCompletedEvent(
         origin: input.origin,
         strategy: input.strategy,
         reasonCode: input.reasonCode ?? undefined,
+        scope: input.scope,
+        lessonSource: input.lessonSource,
         source: 'daily_task',
         eventType: 'task_completed',
         outcome: input.outcome,

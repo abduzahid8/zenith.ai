@@ -73,14 +73,22 @@ export function normalizeLessonContent(
     const keywords = Array.isArray(lesson.learn?.keywords) ? lesson.learn.keywords.filter(nonEmptyString) : [];
     const validTests = Array.isArray(lesson.tests) ? lesson.tests.filter(isValidTestStep) : [];
     const doValid = isValidDoTask(lesson.do);
+    // Authoritative contract: capabilities describe EXACTLY what the runtime
+    // can render. Malformed parts are stripped (never fabricated over):
+    // invalid do/tests disappear from the lesson object itself.
     const normalized: LessonContent = {
         ...lesson,
-        learn: { ...lesson.learn, keywords },
+        learn: learnValid
+            ? { ...lesson.learn, keywords }
+            : { title: '', body: '', keywords: [] },
+        do: doValid ? lesson.do : undefined,
         tests: validTests.length > 0 ? validTests : undefined,
     };
     const capabilities: LessonCapabilities = {
         hasConcept: learnValid,
-        hasRecallSource: keywords.length > 0 || validTests.length > 0,
+        // The runtime falls back to a title recap from valid learn content,
+        // so valid learn alone is a truthful recall source (policy §8).
+        hasRecallSource: learnValid || keywords.length > 0 || validTests.length > 0,
         hasApplication: doValid,
         hasValidation: validTests.length > 0,
     };
@@ -154,8 +162,11 @@ export async function loadSessionLessonResult(req: SessionLessonRequest): Promis
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { lessonGeneratorService } = require('../services/lessonGeneratorService');
             const completedTopics = lessonGeneratorService.getCompletedTopics(req.artifacts, hobby);
-            lesson = await lessonGeneratorService.generateLesson(hobby, day, completedTopics);
-            source = 'generated';
+            // Explicit source contract: AI success -> 'generated',
+            // AI/parse failure -> hand-built 'fallback'. Never inferred.
+            const fresh = await lessonGeneratorService.generateLessonWithSource(hobby, day, completedTopics);
+            lesson = fresh.lesson;
+            source = fresh.source;
         }
 
         if (lesson && hobby === 'chess') {

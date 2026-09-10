@@ -68,6 +68,13 @@ export interface SkillState {
     recall: SkillDimension;
     application: SkillDimension;
     validation: SkillDimension;
+    /**
+     * Validation finals from trusted sources (strong/summative strength).
+     * Only these may open the strong stage or future trusted proof.
+     * Generated-unverified medium validation still feeds the estimate,
+     * practice recommendations and history — just never strong status.
+     */
+    trustedValidationSamples: number;
     /** 0..100 internal estimate, null when nothing interactive measured. */
     masteryEstimate: number | null;
     /** 0..1 evidence depth, separate from the estimate. */
@@ -341,6 +348,7 @@ export function projectSkillState(input: {
         const recall = dimensionOf(recallSamples);
         const application = dimensionOf(applicationSamples);
         const validation = dimensionOf(validationSamples);
+        const trustedValidationSamples = validationSamples.filter(s => s.weight >= 3).length;
 
         // Mastery estimate: validation 45 / application 35 / recall 20 over
         // PRESENT channels (renormalized). Missing channels cap confidence.
@@ -416,6 +424,7 @@ export function projectSkillState(input: {
             (validation.score ?? 0) >= 75 &&
             sessionSet.size >= 3 &&
             confidence >= 0.6 &&
+            trustedValidationSamples > 0 &&
             ![...dayMap.values()].some(d => d.unresolved.validationFails > 0)
         ) {
             stage = 'strong';
@@ -439,6 +448,7 @@ export function projectSkillState(input: {
             recentFailures,
             recentPartials,
             recoveredStruggles,
+            trustedValidationSamples,
             needsLightReview,
             lastPracticedAt,
             stage,

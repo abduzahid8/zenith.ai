@@ -647,3 +647,116 @@ describe('closure — review need clears after revisit, history stays', () => {
         expect(rec.type).not.toBe('review_skill');
     });
 });
+
+describe('closure — trusted validation gates proof and stage', () => {
+    const chess = getProgram('chess-foundations')!;
+    const chessEv = (s: {
+        session: string; card?: string; outcome: MasteryOutcome;
+        phase?: 'recall' | 'apply' | 'validate'; day?: number; prov?: 'static_bank' | 'generated_unverified';
+    }): LearningEvent =>
+        buildAttemptEvent({
+            sessionId: s.session,
+            userId: 'u1',
+            hobbyId: 'chess',
+            lessonId: `chess_d${s.day ?? 4}`,
+            lessonDay: s.day ?? 4,
+            // Distinct card per phase: event ids are deterministic
+            // (sessionId:attempt:cardId:attemptNo), so recall and apply in the
+            // same session must not share a card id or one is deduped.
+            cardId: s.card ?? `${s.phase ?? 'apply'}-${s.session}`,
+            attemptNo: 1,
+            phase: s.phase ?? 'apply',
+            sessionKind: 'structured',
+            outcome: s.outcome,
+            cardType: (s.phase ?? 'apply') === 'recall' ? 'recall' : s.phase === 'validate' ? 'challenge' : 'apply',
+            provenance: s.prov,
+            occurredAt: at(),
+        });
+    const chessStates = (events: LearningEvent[]) =>
+        projectSkillState({ program: chess, events }).skills;
+    const chessRec = (events: LearningEvent[], minutes = 30, lessonCaps?: any) =>
+        getNextBestLearningAction({
+            hobbyId: 'chess',
+            program: chess,
+            skillStates: chessStates(events),
+            currentCurriculumDay: 5,
+            availableMinutes: minutes,
+            dailyTasks: [],
+            ...(lessonCaps ? { lessonCaps } : {}),
+        });
+
+    it('fallback recorded validation is known but never trusted: no prove_skill', () => {
+        const { recordLessonCapabilities, __resetLessonCapabilitiesForTests } =
+            require('../services/lessonCapabilityRegistry') as typeof import('../services/lessonCapabilityRegistry');
+        __resetLessonCapabilitiesForTests();
+        try {
+            recordLessonCapabilities({
+                hobbyId: 'chess', day: 20, lessonId: 'chess_fallback_d20',
+                hasConcept: true, hasRecallSource: true, hasApplication: true, hasValidation: true,
+                source: 'fallback', validationProvenance: 'generated_unverified',
+            });
+            const strong = [
+                chessEv({ session: 's1', outcome: 'pass', phase: 'recall', day: 20, prov: 'static_bank' }),
+                chessEv({ session: 's1', outcome: 'pass', phase: 'apply', day: 20, prov: 'static_bank' }),
+                chessEv({ session: 's2', outcome: 'pass', phase: 'recall', day: 20, prov: 'static_bank' }),
+                chessEv({ session: 's2', outcome: 'pass', phase: 'apply', day: 20, prov: 'static_bank' }),
+            ];
+            const rec = chessRec(strong, 30);
+            expect(rec.type).not.toBe('prove_skill');
+        } finally {
+            __resetLessonCapabilitiesForTests();
+        }
+    });
+
+    it('generated_unverified PASS cannot make stage strong', () => {
+        const events = [1, 2, 3].flatMap(n => [
+            chessEv({ session: `s${n}`, outcome: 'pass', phase: 'recall', day: 4, prov: 'static_bank' }),
+            chessEv({ session: `s${n}`, outcome: 'pass', phase: 'apply', day: 4, prov: 'static_bank' }),
+            chessEv({ session: `s${n}`, outcome: 'pass', phase: 'validate', day: 4, prov: 'generated_unverified' }),
+        ]);
+        const rules = chessStates(events).find(s => s.skillKey === 'rules')!;
+        expect(rules.validation.score).toBe(100);
+        expect(rules.stage).not.toBe('strong');
+    });
+
+    it('generated_unverified validation does not suppress trusted-proof readiness', () => {
+        const events = [
+            chessEv({ session: 's1', outcome: 'pass', phase: 'recall', day: 4, prov: 'static_bank' }),
+            chessEv({ session: 's1', outcome: 'pass', phase: 'apply', day: 4, prov: 'static_bank' }),
+            chessEv({ session: 's2', outcome: 'pass', phase: 'validate', day: 4, prov: 'generated_unverified' }),
+        ];
+        const rec = chessRec(events, 30, () => ({ known: true, hasTests: true, hasDoTask: true }));
+        // Readiness intact (trusted count is zero), content trusted by override.
+        expect(rec.type).toBe('prove_skill');
+    });
+
+    it('static trusted validation at 30min may prove, and runtime has Validate', () => {
+        const events = [
+            chessEv({ session: 's1', outcome: 'pass', phase: 'recall', day: 4, prov: 'static_bank' }),
+            chessEv({ session: 's1', outcome: 'pass', phase: 'apply', day: 4, prov: 'static_bank' }),
+            chessEv({ session: 's2', outcome: 'pass', phase: 'recall', day: 4, prov: 'static_bank' }),
+            chessEv({ session: 's2', outcome: 'pass', phase: 'apply', day: 4, prov: 'static_bank' }),
+        ];
+        const rec = chessRec(events, 30);
+        expect(rec.type).toBe('prove_skill');
+        expect(rec.skillKey).toBe('rules');
+        const runtime = sessionCapabilitiesForTest(30, true);
+        expect(runtime.canValidate).toBe(true);
+    });
+
+    it('trusted passes with depth may reach strong stage', () => {
+        const events = [1, 2, 3].flatMap(n => [
+            chessEv({ session: `s${n}`, outcome: 'pass', phase: 'recall', day: 4, prov: 'static_bank' }),
+            chessEv({ session: `s${n}`, outcome: 'pass', phase: 'apply', day: 4, prov: 'static_bank' }),
+            chessEv({ session: `s${n}`, outcome: 'pass', phase: 'validate', day: 4, prov: 'static_bank' }),
+        ]);
+        const rules = chessStates(events).find(s => s.skillKey === 'rules')!;
+        expect(rules.stage).toBe('strong');
+    });
+
+    function sessionCapabilitiesForTest(minutes: number, hasTests: boolean) {
+        const { sessionCapabilities: caps } =
+            require('../domain/sessions/sessionCapabilities') as typeof import('../domain/sessions/sessionCapabilities');
+        return caps({ minutes, kind: 'structured', scope: 'targeted', hasTests, hasDoTask: true });
+    }
+});

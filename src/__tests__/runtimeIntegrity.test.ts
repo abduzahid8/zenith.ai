@@ -441,3 +441,101 @@ describe('closure — generated lesson normalization is honest', () => {
         expect(out.capabilities.hasValidation).toBe(true);
     });
 });
+
+describe('closure — normalization is authoritative', () => {
+    const { normalizeLessonContent } = require('../services/sessionLesson') as typeof import('../services/sessionLesson');
+    const { buildLearningCards: buildCards } = require('../domain/sessions/learningCards') as typeof import('../domain/sessions/learningCards');
+    const { buildSessionBlueprint: buildBp } = require('../domain/sessions/sessionBlueprint') as typeof import('../domain/sessions/sessionBlueprint');
+
+    const baseLesson: any = {
+        id: 'python_gen_d9',
+        hobby: 'python',
+        day: 9,
+        learn: { title: 'Loops', body: 'Loop concepts explained here in detail.', keywords: ['loop'] },
+        do: { type: 'free_text', prompt: 'Explain loops.' },
+    };
+
+    it('malformed do strips application: no Apply card renders', () => {
+        const out = normalizeLessonContent({ ...baseLesson, do: { type: 'free_text', prompt: '' } }, 'generated');
+        expect(out.capabilities.hasApplication).toBe(false);
+        expect(out.lesson!.do).toBeUndefined();
+        const cards = buildCards({
+            blueprint: buildBp({ minutes: 15, lessonTitle: 'Loops' }),
+            lesson: out.lesson!,
+            kind: 'structured',
+            minutes: 15,
+        });
+        expect(cards.some((c: any) => c.type === 'apply')).toBe(false);
+    });
+
+    it('valid do keeps application: Apply may render', () => {
+        const out = normalizeLessonContent(baseLesson, 'generated');
+        expect(out.capabilities.hasApplication).toBe(true);
+        const cards = buildCards({
+            blueprint: buildBp({ minutes: 15, lessonTitle: 'Loops' }),
+            lesson: out.lesson!,
+            kind: 'structured',
+            minutes: 15,
+        });
+        expect(cards.some((c: any) => c.type === 'apply')).toBe(true);
+    });
+
+    it('malformed tests strip validation: no Challenge card', () => {
+        const out = normalizeLessonContent(
+            { ...baseLesson, tests: [{ type: 'multiple_choice', prompt: 'Q?', options: ['only'], correctOptionIndex: 9 }] },
+            'generated',
+        );
+        expect(out.capabilities.hasValidation).toBe(false);
+        expect(out.lesson!.tests).toBeUndefined();
+        expect(out.validationProvenance).toBe('none');
+    });
+});
+
+describe('closure — factual generator source', () => {
+    const { aiService } = require('../services/ai');
+    const { lessonGeneratorService } = require('../services/lessonGeneratorService');
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('AI failure reports source=fallback, not generated', async () => {
+        aiService.sendMessage.mockRejectedValueOnce(new Error('offline'));
+        const fresh = await lessonGeneratorService.generateLessonWithSource('python', 11, []);
+        expect(fresh.source).toBe('fallback');
+        expect(fresh.lesson.id).toContain('fallback');
+    });
+
+    it('AI success reports source=generated and caches it', async () => {
+        aiService.sendMessage.mockResolvedValueOnce(
+            JSON.stringify({
+                learn: { title: 'T', body: 'Body here.', keywords: ['k'] },
+                do: { type: 'free_text', prompt: 'Do it.' },
+            }),
+        );
+        const first = await lessonGeneratorService.generateLessonWithSource('python', 12, []);
+        expect(first.source).toBe('generated');
+        expect(first.lesson.id).toContain('_gen_');
+        const calls = aiService.sendMessage.mock.calls.length;
+        const second = await lessonGeneratorService.generateLessonWithSource('python', 12, []);
+        expect(second.source).toBe('generated');
+        expect(aiService.sendMessage.mock.calls.length).toBe(calls);
+    });
+});
+
+describe('closure — attempt events carry execution metadata', () => {
+    it('scope/strategy/reason/lesson-source survive on attempt rows', () => {
+        const { buildAttemptEvent } = require('../domain/sessions/learningEvents') as typeof import('../domain/sessions/learningEvents');
+        const e = buildAttemptEvent({
+            sessionId: 's', userId: 'u1', hobbyId: 'python', lessonId: 'python_d15', lessonDay: 15,
+            cardId: 'a', attemptNo: 1, phase: 'apply', sessionKind: 'structured', origin: 'your_day',
+            scope: 'curriculum', strategy: 'practice_application', reasonCode: 'repeated_application_struggle',
+            lessonSource: 'static_bank', outcome: 'pass', cardType: 'apply',
+        });
+        expect(e.scope).toBe('curriculum');
+        expect(e.strategy).toBe('practice_application');
+        expect(e.reasonCode).toBe('repeated_application_struggle');
+        expect(e.lessonSource).toBe('static_bank');
+        expect(e.artifactRef).toBeUndefined();
+    });
+});

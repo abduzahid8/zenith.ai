@@ -296,15 +296,16 @@ export function getNextBestLearningAction(input: RecommendInput): LearningRecomm
         };
     }
 
-    // D. Ready to prove: strong recall+app, validation missing, time allows,
-    // AND the target lesson is positively known to validate. Unknown or
-    // known-invalid capability downgrades — never assume proof exists.
+    // D. Ready to prove: strong recall+app, no TRUSTED validation yet, time
+    // allows, AND the target lesson is positively known to validate from a
+    // trusted source. Generated-unverified/unknown capability downgrades —
+    // never assume proof exists (§4: trustedValidation required).
     if (minutes >= 20) {
         const ready = encountered.find(
             s =>
                 (s.recall.score ?? 0) >= 75 &&
                 (s.application.score ?? 0) >= 75 &&
-                s.validation.samples === 0 &&
+                s.trustedValidationSamples === 0 &&
                 s.independentSessions >= 2,
         );
         if (ready) {
@@ -315,6 +316,7 @@ export function getNextBestLearningAction(input: RecommendInput): LearningRecomm
             const validation = resolveValidationCapability(hobbyId, day, null, input.lessonCaps ?? null);
             const canValidate =
                 validation.state === 'known-valid' &&
+                validation.trusted &&
                 sessionCapabilities({
                     minutes,
                     kind: 'structured',

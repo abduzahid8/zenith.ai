@@ -269,7 +269,7 @@ export const SessionTimerLegacyScreen: React.FC = () => {
                                             skipTrigger={skipTrigger}
                                         />
                                     ) : activeStep === 'do' ? (
-                                        currentLesson.hobby === 'chess' && currentLesson.do.type === 'chess_puzzle' ? (
+                                        currentLesson.hobby === 'chess' && currentLesson.do?.type === 'chess_puzzle' ? (
                                             <ChessBoard
                                                 fen={currentLesson.do.puzzleFen!}
                                                 puzzleMoves={currentLesson.do.puzzleMoves!}
@@ -280,13 +280,21 @@ export const SessionTimerLegacyScreen: React.FC = () => {
                                                 isLastStep={!(isPremium && currentLesson.deepen1)}
                                                 skipTrigger={chessSkipTrigger}
                                             />
-                                        ) : (
+                                        ) : currentLesson.do ? (
                                             <DoStep
                                                 hobbyId={currentLesson.hobby}
                                                 task={currentLesson.do}
                                                 onNext={(ans, fb) => handleStepComplete('do', ans, fb)}
                                                 isLastStep={!(isPremium && currentLesson.deepen1)}
                                             />
+                                        ) : (
+                                            <TouchableOpacity
+                                                style={styles.skipButtonPill}
+                                                onPress={() => handleStepComplete('do')}
+                                                activeOpacity={0.7}
+                                            >
+                                                <Text style={styles.skipButtonText}>Продолжить</Text>
+                                            </TouchableOpacity>
                                         )
                                     ) : activeStep === 'deepen1' && currentLesson.deepen1 ? (
                                         <DoStep

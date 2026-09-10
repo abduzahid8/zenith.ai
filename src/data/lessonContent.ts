@@ -54,7 +54,7 @@ export interface LessonContent {
     body: string;         // Текст урока
     keywords: string[];   // Кликабельные термины для объяснения через AI
   };
-  do: TaskStep;           // Основное задание (для не-шахматных хобби)
+  do?: TaskStep;           // Основное задание (может отсутствовать после нормализации)
   tests?: TaskStep[];     // 5 тестов (для шахмат: 2 ABCD + 2 FillBlank + 1 FreeText)
   deepen1?: TaskStep;     // @deprecated — используется только для legacy. Premium = повторные сессии
   deepen2?: TaskStep;     // @deprecated — используется только для legacy. Premium = повторные сессии

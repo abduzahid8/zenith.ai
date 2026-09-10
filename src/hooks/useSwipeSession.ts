@@ -21,7 +21,7 @@ import { defaultScopeForKind } from '../domain/sessions/sessionIntent';
 import type { LearningStrategy, ProgressionScope } from '../domain/sessions/sessionIntent';
 import { appendLearningEvent } from '../services/learningEventRepository';
 import { loadSessionLessonResult } from '../services/sessionLesson';
-import type { ValidationProvenance } from '../services/lessonCapabilityRegistry';
+import type { LessonSource, ValidationProvenance } from '../services/lessonCapabilityRegistry';
 import { recordAttemptArtifact, saveRecallArtifact } from '../services/sessionStepEffects';
 import { finalizeSwipeSession } from '../services/sessionFinalizer';
 
@@ -81,6 +81,7 @@ export function useSwipeSession(input: SwipeSessionInput) {
 
     const [lesson, setLesson] = useState<LessonContent | null>(null);
     const [lessonProvenance, setLessonProvenance] = useState<ValidationProvenance>('none');
+    const [lessonSource, setLessonSource] = useState<LessonSource | null>(null);
     const [status, setStatus] = useState<SwipeStatus>('loading');
     const [flow, setFlow] = useState<FlowState | null>(null);
     const [paused, setPaused] = useState(false);
@@ -155,6 +156,7 @@ export function useSwipeSession(input: SwipeSessionInput) {
                 }
                 setLesson(loaded.lesson);
                 setLessonProvenance(loaded.validationProvenance);
+                setLessonSource(loaded.source);
                 setStatus('ready');
             } catch (err) {
                 console.error('[useSwipeSession] load failed:', err);
@@ -216,6 +218,10 @@ export function useSwipeSession(input: SwipeSessionInput) {
                             phase: card.phase,
                             sessionKind: kind,
                             origin,
+                            scope: input.scope ?? defaultScopeForKind(kind),
+                            strategy: input.strategy ?? 'continue_curriculum',
+                            reasonCode: input.reasonCode ?? null,
+                            lessonSource: lessonSource ?? undefined,
                         }),
                     );
                 }
@@ -263,6 +269,10 @@ export function useSwipeSession(input: SwipeSessionInput) {
                         phase: card.phase,
                         sessionKind: kind,
                         origin,
+                        scope: input.scope ?? defaultScopeForKind(kind),
+                        strategy: input.strategy ?? 'continue_curriculum',
+                        reasonCode: input.reasonCode ?? null,
+                        lessonSource: lessonSource ?? undefined,
                         outcome: outcome as MasteryOutcome,
                         artifactRef,
                         cardType: card.type,
@@ -306,6 +316,7 @@ export function useSwipeSession(input: SwipeSessionInput) {
             scope: input.scope ?? defaultScopeForKind(kind),
             strategy: input.strategy ?? 'continue_curriculum',
             reasonCode: input.reasonCode ?? null,
+            lessonSource: lessonSource ?? undefined,
             targetSkillKey: input.targetSkillKey ?? null,
             blueprint,
             cards: flow.cards,

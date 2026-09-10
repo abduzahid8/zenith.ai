@@ -1,5 +1,6 @@
 import { getLessonByDay } from '../../data/lessonContent';
 import type { TaskStep } from '../../data/lessonContent';
+import type { ValidationProvenance } from '../../services/lessonCapabilityRegistry';
 import { getLessonCapabilities } from '../../services/lessonCapabilityRegistry';
 import { buildSessionBlueprint } from './sessionBlueprint';
 import type { SessionKind } from './sessionBlueprint';
@@ -120,6 +121,16 @@ export function lessonCapabilities(hobbyId: string, day: number): LessonCapabili
 
 export type ValidationCapabilityState = 'known-valid' | 'known-invalid' | 'unknown';
 
+export interface ResolvedValidationCapability {
+    state: ValidationCapabilityState;
+    /**
+     * Proof-worthy: static_bank (or future generated_validated) provenance.
+     * generated_unverified/fallback content renders fine (known-valid) but
+     * must never back a prove_skill recommendation.
+     */
+    trusted: boolean;
+}
+
 /**
  * Validation capability for a target day across every factual source:
  * static bank first, then the recorded capabilities of already-loaded
@@ -129,21 +140,23 @@ export type ValidationCapabilityState = 'known-valid' | 'known-invalid' | 'unkno
 export function resolveValidationCapability(
     hobbyId: string,
     day: number,
-    recorded?: { hasValidation: boolean } | null,
+    recorded?: { hasValidation: boolean; validationProvenance?: ValidationProvenance } | null,
     override?: ((hobbyId: string, day: number) => { known: boolean; hasTests: boolean } | null) | null,
-): { state: ValidationCapabilityState } {
+): ResolvedValidationCapability {
     if (override) {
         const o = override(hobbyId, day);
-        if (!o || !o.known) return { state: 'unknown' };
-        return { state: o.hasTests ? 'known-valid' : 'known-invalid' };
+        if (!o || !o.known) return { state: 'unknown', trusted: false };
+        // Test doubles model curated content unless stated otherwise.
+        return { state: o.hasTests ? 'known-valid' : 'known-invalid', trusted: o.hasTests };
     }
     const caps = lessonCapabilities(hobbyId, day);
     if (caps.known) {
-        return { state: caps.hasTests ? 'known-valid' : 'known-invalid' };
+        return { state: caps.hasTests ? 'known-valid' : 'known-invalid', trusted: caps.hasTests };
     }
     const seen = recorded ?? getLessonCapabilities(hobbyId, day);
     if (seen) {
-        return { state: seen.hasValidation ? 'known-valid' : 'known-invalid' };
+        const trusted = seen.validationProvenance === 'static_bank' || seen.validationProvenance === 'generated_validated';
+        return { state: seen.hasValidation ? 'known-valid' : 'known-invalid', trusted };
     }
-    return { state: 'unknown' };
+    return { state: 'unknown', trusted: false };
 }
