@@ -187,12 +187,13 @@ export const readProjectReviewState = async (submissionId: string): Promise<Proj
     const supabase = getSupabase();
     const { data, error } = await supabase
         .from('project_certification_results')
-        .select('submission_id, authoritative_score, passed, evaluator')
+        .select('submission_id, authoritative_score, passed, evaluator, evaluated_at')
         .eq('submission_id', submissionId)
         .limit(1);
     if (error) throw new Error(error.message);
     const row = (Array.isArray(data) ? data[0] : null) as unknown as {
-        submission_id: string; authoritative_score: number; passed: boolean; evaluator: string;
+        submission_id: string; authoritative_score: number; passed: boolean;
+        evaluator: string; evaluated_at: string | null;
     } | null;
     if (!row) return null;
     return {
@@ -200,7 +201,7 @@ export const readProjectReviewState = async (submissionId: string): Promise<Proj
         authoritativeScore: row.authoritative_score,
         passed: row.passed,
         reviewer: row.evaluator,
-        reviewedAt: null,
+        reviewedAt: row.evaluated_at,
     };
 };
 
@@ -212,3 +213,12 @@ export const issueCredential = (programSlug: string, holderName: string) =>
         const row = r as unknown as { credential_id: string; created: boolean };
         return { credentialId: row.credential_id, created: row.created };
     });
+
+export type { PublicCredential, VerificationResult } from './credentialVerification';
+
+/**
+ * verifyCredential — anonymous server-backed verification returning the
+ * exact public model. Never reads local stores (see
+ * credentialVerification.verifyCredentialPublic).
+ */
+export { verifyCredentialPublic as verifyCredential } from './credentialVerification';

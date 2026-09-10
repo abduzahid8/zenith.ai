@@ -934,3 +934,40 @@ describe('pilot authority extras', () => {
         expect(r.overall).toBe(71.8);
     });
 });
+
+describe('integrity extras', () => {
+    test('39. evidence policy math: old rationale was wrong, new holds', () => {
+        // Old claim (3 items, >=65%): 2/3 suffices. At p=1/3:
+        // P(>=2/3) = C(3,2)(1/3)^2(2/3) + (1/3)^3 = 7/27 ~= 25.9% (NOT <8%).
+        const old = 3 * (1 / 3) ** 2 * (2 / 3) + (1 / 3) ** 3;
+        expect(old).toBeCloseTo(7 / 27, 10);
+        expect(old).toBeGreaterThan(0.08);
+        // At p=0.25: C(3,2)(.25^2)(.75) + .25^3 = 0.140625 + 0.015625.
+        const oldMc = 3 * 0.25 ** 2 * 0.75 + 0.25 ** 3;
+        expect(oldMc).toBeCloseTo(0.15625, 10);
+        // New policy (4 items, >=3/4): at p=0.25:
+        // C(4,3)(.25^3)(.75) + .25^4 = 0.046875 + 0.00390625 ~= 5.08%.
+        const fresh = 4 * 0.25 ** 3 * 0.75 + 0.25 ** 4;
+        expect(fresh).toBeCloseTo(0.05078125, 10);
+        expect(fresh).toBeLessThan(0.06);
+    });
+
+    test('40. retake-block messages parse to safe reason codes', () => {
+        const { parseRetakeBlock } = require('../services/trustApi') as typeof import('../services/trustApi');
+        expect(parseRetakeBlock('retake_blocked:cooldown:2026-09-11T00:00:00Z')).toEqual({
+            blocked: true, reason: 'cooldown', detail: '2026-09-11T00:00:00Z',
+        });
+        expect(parseRetakeBlock('retake_blocked:remediation_required:rules,tactics')).toEqual({
+            blocked: true, reason: 'remediation_required', detail: 'rules,tactics',
+        });
+        expect(parseRetakeBlock('all good')).toBeNull();
+    });
+
+    test('41. server credential ids stay in the high-entropy namespace', () => {
+        const { buildServerCredentialId } = require('../server/trust') as typeof import('../server/trust');
+        const id = buildServerCredentialId('abcdef0123456789abcdef0123456789');
+        expect(id).toMatch(/^ZNX-[0-9A-F]{32}$/);
+        // Local preview ids live in a disjoint namespace (never verifiable).
+        expect(id.startsWith('ZNY-')).toBe(false);
+    });
+});

@@ -90,9 +90,13 @@ export default async function globalSetup(): Promise<void> {
     psql(path.join(root, 'db-test', 'auth-shim.sql'));
 
     const migDir = path.join(root, 'supabase', 'migrations');
+    // 027 is the production issuance switch (ops-only, guardrailed on the
+    // private bank). The harness never flips production switches: tests
+    // manage issuance_enabled explicitly per test. Everything else applies.
+    const SKIP = new Set(['027_enable_chess_v2.sql']);
     const files = fs
         .readdirSync(migDir)
-        .filter(f => /^0\d+_.+\.sql$/.test(f) && f >= '011_')
+        .filter(f => /^0\d+_.+\.sql$/.test(f) && f >= '011_' && !SKIP.has(f))
         .sort();
     if (files.length === 0) throw new Error('no 011+ migrations found');
     // eslint-disable-next-line no-console

@@ -48,7 +48,8 @@ const NOT_READY_REASON =
 /**
  * Programs whose server-authoritative content AND component pipelines are
  * complete and verified end-to-end (real DB e2e). Mirrors the
- * issuance_enabled flag in credential_programs (022 enables chess).
+ * issuance_enabled flag in credential_programs (027 enables chess on the
+ * rotated replacement bank only; the compromised leaked bank stays dead).
  */
 const ISSUANCE_READY: Record<string, true> = {
     'chess-foundations': true,

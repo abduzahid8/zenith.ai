@@ -2,6 +2,8 @@ import { getSupabase } from './supabase/client';
 import { projectPublicVerification } from '../server/trust';
 import type { PublicCredential } from '../server/trust';
 
+export type { PublicCredential };
+
 /**
  * Anonymous credential verification — server-backed read path.
  *

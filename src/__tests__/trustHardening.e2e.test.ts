@@ -602,7 +602,7 @@ describe('real DB: catalog parity + readiness audit', () => {
         const rows = await db.query(
             `SELECT slug, code, title, version, required_score, requires_assessment,
                     requires_project, identity_verification_required, issuance_enabled, skills
-             FROM credential_programs WHERE slug <> '${TEST_PROGRAM}' ORDER BY slug`,
+             FROM credential_programs WHERE slug NOT IN ('${TEST_PROGRAM}', 'e2e-quad-integrity') ORDER BY slug`,
         );
         expect(rows.rowCount).toBe(5);
         for (const row of rows.rows) {
@@ -630,7 +630,7 @@ describe('real DB: catalog parity + readiness audit', () => {
     test('non-pilot programs stay blocked and content-free', async () => {
         const progs = await db.query(
             `SELECT slug, issuance_enabled FROM credential_programs
-             WHERE slug <> '${TEST_PROGRAM}' AND slug <> 'chess-foundations'`,
+             WHERE slug NOT IN ('${TEST_PROGRAM}', 'chess-foundations', 'e2e-quad-integrity')`,
         );
         expect(progs.rowCount).toBe(4);
         for (const p of progs.rows) {
@@ -641,12 +641,12 @@ describe('real DB: catalog parity + readiness audit', () => {
         // them MUST stay blocked.
         const sets = await db.query(
             `SELECT COUNT(*)::int c FROM assessment_question_sets
-             WHERE program_slug <> '${TEST_PROGRAM}' AND program_slug <> 'chess-foundations'`,
+             WHERE program_slug NOT IN ('${TEST_PROGRAM}', 'chess-foundations', 'e2e-quad-integrity')`,
         );
         expect(sets.rows[0].c).toBe(0);
         const items = await db.query(
             `SELECT program_slug FROM trusted_validation_items
-             WHERE program_slug <> '${TEST_PROGRAM}' AND program_slug <> 'chess-foundations'`,
+             WHERE program_slug NOT IN ('${TEST_PROGRAM}', 'chess-foundations', 'e2e-quad-integrity')`,
         );
         expect(items.rows).toEqual([]);
         const uid = newUid();
