@@ -47,6 +47,17 @@ beforeAll(async () => {
          VALUES ('11111111-1111-1111-1111-111111111111', '{"q1":"2","q2":"4"}', '["q1","q2"]')
          ON CONFLICT DO NOTHING`,
     );
+    await db.query(
+        `INSERT INTO skill_evidence_policy (program_slug, program_version, skill_key, min_items, min_pass_rate, rationale)
+         VALUES ('${TEST_PROGRAM}', '1.0', 'alpha', 1, 0.65, 'harness: single-item depth for infra speed')
+         ON CONFLICT (program_slug, program_version, skill_key) DO NOTHING`,
+    );
+    await db.query(
+        `INSERT INTO trusted_validation_items
+            (program_slug, program_version, hobby_id, curriculum_day, skill_key, lesson_id, payload, answer_key)
+         VALUES ('${TEST_PROGRAM}', '1.0', 'chess', 90, 'alpha', 'e2e-lesson', '{}', '{"answer":"ok"}')
+         ON CONFLICT DO NOTHING`,
+    );
 });
 
 afterAll(async () => {
@@ -63,6 +74,7 @@ afterAll(async () => {
     await db.query(`DELETE FROM project_certification_results WHERE program_slug = '${TEST_PROGRAM}'`);
     await db.query(`DELETE FROM credential_component_results WHERE program_slug = '${TEST_PROGRAM}'`);
     await db.query(`DELETE FROM user_credential_progress WHERE program_slug = '${TEST_PROGRAM}'`);
+    await db.query(`DELETE FROM skill_evidence_policy WHERE program_slug = '${TEST_PROGRAM}'`);
     await db.query(`DELETE FROM credential_programs WHERE slug = '${TEST_PROGRAM}'`);
     await db.end();
     await db2.end();
@@ -195,41 +207,55 @@ describe('real DB: malicious client ingest (§25)', () => {
 });
 
 describe('real DB: server-scored validation flow', () => {
+    // Harness seed on a synthetic day/lesson (never collides with the
+    // production bank from 021). Selection is skill-scoped: tests answer
+    // from the received safe payload, like a real user would.
     const ITEM = {
-        program: 'chess-foundations', version: '1.0', day: 4, skill: 'rules',
+        program: 'chess-foundations', version: '1.0', day: 99, skill: 'rules',
+        lesson: 'e2e-harness-knight',
         payload: { question: 'How does the knight move?', options: ['L-shape', 'Diagonal'] },
         key: { answer: 'L-shape' },
+    };
+    const ANSWERS: [string, string][] = [
+        ['How does the knight move?', 'L-shape'],
+        ['knight on g1', 'f3'],
+        ['bishop (3) + knight (3)', '6 pawns'],
+        ['Castling is ILLEGAL', 'the king is in check'],
+        ['stalemated side', 'a draw'],
+    ];
+    const answerFor = (prompt: string): string => {
+        const hit = ANSWERS.find(([frag]) => prompt.includes(frag));
+        if (!hit) throw new Error(`unmapped prompt: ${prompt}`);
+        return hit[1];
     };
 
     beforeAll(async () => {
         await db.query(
             `INSERT INTO trusted_validation_items
                 (program_slug, program_version, hobby_id, curriculum_day, skill_key, lesson_id, content_version, payload, answer_key)
-             VALUES ('${ITEM.program}', '${ITEM.version}', 'chess', ${ITEM.day}, '${ITEM.skill}', 'chess_d4', 'static-1',
-                     '${JSON.stringify(ITEM.payload)}', '${JSON.stringify(ITEM.key)}')
-             ON CONFLICT DO NOTHING`,
+              VALUES ('${ITEM.program}', '${ITEM.version}', 'chess', ${ITEM.day}, '${ITEM.skill}', '${ITEM.lesson}', 'static-1',
+                      '${JSON.stringify(ITEM.payload)}', '${JSON.stringify(ITEM.key)}')
+              ON CONFLICT DO NOTHING`,
         );
     });
 
     afterAll(async () => {
-        // Keep the production-readiness audit honest: remove harness seeds
-        // (attempts first: items are RESTRICT-protected while referenced).
+        // Remove ONLY the harness seed (production bank stays intact).
         await db.query(
             `DELETE FROM trusted_validation_attempts
-             WHERE item_id IN (SELECT id FROM trusted_validation_items WHERE lesson_id = 'chess_d4')`,
+              WHERE item_id IN (SELECT id FROM trusted_validation_items WHERE lesson_id = '${ITEM.lesson}')`,
         );
-        await db.query(`DELETE FROM trusted_validation_items WHERE lesson_id = 'chess_d4'`);
+        await db.query(`DELETE FROM trusted_validation_items WHERE lesson_id = '${ITEM.lesson}'`);
     });
 
     test('start returns safe payload; keys unreadable; pass creates server proof', async () => {
         const uid = newUid();
         await createUser(db, uid);
         const started = await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM start_trusted_validation($1, $2)', [ITEM.program, ITEM.day]).then(r => r.rows[0]),
+            db.query('SELECT * FROM start_trusted_validation($1, $2)', [ITEM.program, ITEM.skill]).then(r => r.rows[0]),
         );
         expect(started.skill_key).toBe('rules');
         expect(started.program_version).toBe('1.0');
-        expect(started.payload).toEqual(ITEM.payload);
         // The safe payload carries options but no answer field: the client
         // cannot tell which option is correct without the hidden key.
         expect(started.payload).not.toHaveProperty('answer');
@@ -243,8 +269,10 @@ describe('real DB: server-scored validation flow', () => {
             db.query('SELECT * FROM assessment_answer_keys').then(r => r.rowCount),
         );
         expect(keysLeak).toBe(0);
+        const prompt = (started.payload as { prompt?: string; question?: string }).prompt
+            ?? (started.payload as { question?: string }).question!;
         const sub = await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM submit_trusted_validation($1, $2)', [started.attempt_id, { answer: 'L-shape' }]).then(r => r.rows[0]),
+            db.query('SELECT * FROM submit_trusted_validation($1, $2)', [started.attempt_id, { answer: answerFor(prompt) }]).then(r => r.rows[0]),
         );
         expect(sub.passed).toBe(true);
         expect(sub.submitted).toBe(true);
@@ -252,22 +280,27 @@ describe('real DB: server-scored validation flow', () => {
         const proof = await db.query('SELECT * FROM learning_events WHERE id=$1', [sub.trusted_event_id]);
         expect(proof.rows[0].trusted).toBe(true);
         expect(proof.rows[0].provenance).toBe('server_scored');
+        expect(proof.rows[0].outcome).toBe('pass');
         expect(proof.rows[0].user_id).toBe(uid);
         expect(proof.rows[0].program_slug).toBe('chess-foundations');
         expect(proof.rows[0].skill_key).toBe('rules');
     });
 
-    test('wrong answer creates no proof; replay is idempotent', async () => {
+    test('failed validation is authoritative evidence; replay is idempotent', async () => {
         const uid = newUid();
         await createUser(db, uid);
         const started = await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM start_trusted_validation($1, $2)', [ITEM.program, ITEM.day]).then(r => r.rows[0]),
+            db.query('SELECT * FROM start_trusted_validation($1, $2)', [ITEM.program, ITEM.skill]).then(r => r.rows[0]),
         );
         const sub = await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM submit_trusted_validation($1, $2)', [started.attempt_id, { answer: 'Diagonal' }]).then(r => r.rows[0]),
+            db.query('SELECT * FROM submit_trusted_validation($1, $2)', [started.attempt_id, { answer: 'nope-wrong' }]).then(r => r.rows[0]),
         );
         expect(sub.passed).toBe(false);
-        expect(sub.trusted_event_id).toBeNull();
+        // Fail rows are server-vouched evidence too (trusted = verified).
+        expect(sub.trusted_event_id).toMatch(/^srv:trusted:/);
+        const proof = await db.query('SELECT trusted, outcome FROM learning_events WHERE id=$1', [sub.trusted_event_id]);
+        expect(proof.rows[0].trusted).toBe(true);
+        expect(proof.rows[0].outcome).toBe('fail');
         const replay = await asRole(db, 'authenticated', uid, () =>
             db.query('SELECT * FROM submit_trusted_validation($1, $2)', [started.attempt_id, { answer: 'L-shape' }]).then(r => r.rows[0]),
         );
@@ -279,13 +312,16 @@ describe('real DB: server-scored validation flow', () => {
         const uid = newUid();
         await createUser(db, uid);
         const started = await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM start_trusted_validation($1, $2)', [ITEM.program, ITEM.day]).then(r => r.rows[0]),
+            db.query('SELECT * FROM start_trusted_validation($1, $2)', [ITEM.program, ITEM.skill]).then(r => r.rows[0]),
         );
+        const prompt = (started.payload as { prompt?: string; question?: string }).prompt
+            ?? (started.payload as { question?: string }).question!;
+        const correct = answerFor(prompt);
         const run = (answer: string) =>
             asRole(db2, 'authenticated', uid, () =>
                 db2.query('SELECT * FROM submit_trusted_validation($1, $2)', [started.attempt_id, { answer }]).then(r => r.rows[0]),
             );
-        const [a, b] = await Promise.all([run('L-shape'), run('Diagonal')]);
+        const [a, b] = await Promise.all([run(correct), run('nope-wrong')]);
         const first = a.submitted ? a : b;
         const second = a.submitted ? b : a;
         expect(first.submitted).toBe(true);
@@ -301,7 +337,7 @@ describe('real DB: server-scored validation flow', () => {
         await createUser(db, uid);
         await asRole(db, 'authenticated', uid, () =>
             expectDbDenied(
-                db.query('SELECT * FROM start_trusted_validation($1, $2)', ['python-foundations', 15]),
+                db.query('SELECT * FROM start_trusted_validation($1, $2)', ['python-foundations', 'functions']),
                 /no trusted content/,
             ),
         );
@@ -453,9 +489,9 @@ describe('real DB: issuance gates + verification', () => {
              VALUES ($1, '${TEST_PROGRAM}', '1.0', 92, TRUE) ON CONFLICT DO NOTHING`, [uid],
         );
         await db.query(
-            `INSERT INTO credential_component_results (user_id, program_slug, program_version, component, score, authority_source)
-             VALUES ($1, '${TEST_PROGRAM}', '1.0', 'knowledge', 85, 'server_e2e'),
-                    ($1, '${TEST_PROGRAM}', '1.0', 'practical', 88, 'server_e2e')
+            `INSERT INTO credential_component_results (user_id, program_slug, program_version, component, score, passed, authority_source)
+             VALUES ($1, '${TEST_PROGRAM}', '1.0', 'knowledge', 85, TRUE, 'server_e2e'),
+                    ($1, '${TEST_PROGRAM}', '1.0', 'practical', 88, TRUE, 'server_e2e')
              ON CONFLICT DO NOTHING`, [uid],
         );
         await db.query(
@@ -465,7 +501,7 @@ describe('real DB: issuance gates + verification', () => {
              ON CONFLICT DO NOTHING`,
         );
         const v = await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM start_trusted_validation($1, $2)', [TEST_PROGRAM, 90]).then(r => r.rows[0]),
+            db.query('SELECT * FROM start_trusted_validation($1, $2)', [TEST_PROGRAM, 'alpha']).then(r => r.rows[0]),
         );
         await asRole(db, 'authenticated', uid, () =>
             db.query('SELECT * FROM submit_trusted_validation($1, $2)', [v.attempt_id, { answer: 'ok' }]),
@@ -498,13 +534,13 @@ describe('real DB: issuance gates + verification', () => {
              VALUES ($1, '${TEST_PROGRAM}', '1.0', 92, TRUE) ON CONFLICT DO NOTHING`, [uid],
         );
         await db.query(
-            `INSERT INTO credential_component_results (user_id, program_slug, program_version, component, score, authority_source)
-             VALUES ($1, '${TEST_PROGRAM}', '1.0', 'knowledge', 85, 'server_e2e'),
-                    ($1, '${TEST_PROGRAM}', '1.0', 'practical', 88, 'server_e2e')
+            `INSERT INTO credential_component_results (user_id, program_slug, program_version, component, score, passed, authority_source)
+             VALUES ($1, '${TEST_PROGRAM}', '1.0', 'knowledge', 85, TRUE, 'server_e2e'),
+                    ($1, '${TEST_PROGRAM}', '1.0', 'practical', 88, TRUE, 'server_e2e')
              ON CONFLICT DO NOTHING`, [uid],
         );
         const v = await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM start_trusted_validation($1, $2)', [TEST_PROGRAM, 90]).then(r => r.rows[0]),
+            db.query('SELECT * FROM start_trusted_validation($1, $2)', [TEST_PROGRAM, 'alpha']).then(r => r.rows[0]),
         );
         await asRole(db, 'authenticated', uid, () =>
             db.query('SELECT * FROM submit_trusted_validation($1, $2)', [v.attempt_id, { answer: 'ok' }]),
@@ -591,27 +627,33 @@ describe('real DB: catalog parity + readiness audit', () => {
         }
     });
 
-    test('production programs are honestly not issuance-ready (content gap)', async () => {
+    test('non-pilot programs stay blocked and content-free', async () => {
         const progs = await db.query(
-            `SELECT slug, issuance_enabled FROM credential_programs WHERE slug <> '${TEST_PROGRAM}'`,
+            `SELECT slug, issuance_enabled FROM credential_programs
+             WHERE slug <> '${TEST_PROGRAM}' AND slug <> 'chess-foundations'`,
         );
+        expect(progs.rowCount).toBe(4);
         for (const p of progs.rows) {
             expect(p.issuance_enabled).toBe(false);
         }
-        // No production question sets/keys or trusted items exist yet:
-        // knowledge/practical have no server source, so issuance MUST block.
+        // No sets/items/knowledge/practical banks for the other four:
+        // their knowledge/practical have no server source, so issuance for
+        // them MUST stay blocked.
         const sets = await db.query(
-            `SELECT COUNT(*)::int c FROM assessment_question_sets WHERE program_slug <> '${TEST_PROGRAM}'`,
+            `SELECT COUNT(*)::int c FROM assessment_question_sets
+             WHERE program_slug <> '${TEST_PROGRAM}' AND program_slug <> 'chess-foundations'`,
         );
+        expect(sets.rows[0].c).toBe(0);
         const items = await db.query(
-            `SELECT program_slug, lesson_id, curriculum_day FROM trusted_validation_items WHERE program_slug <> '${TEST_PROGRAM}'`,
+            `SELECT program_slug FROM trusted_validation_items
+             WHERE program_slug <> '${TEST_PROGRAM}' AND program_slug <> 'chess-foundations'`,
         );
         expect(items.rows).toEqual([]);
         const uid = newUid();
         await createUser(db, uid);
         await asRole(db, 'authenticated', uid, () =>
             expectDbDenied(
-                db.query('SELECT * FROM issue_credential($1,$2)', ['chess-foundations', 'Holder']),
+                db.query('SELECT * FROM issue_credential($1,$2)', ['python-foundations', 'Holder']),
                 /not issuance-ready/,
             ),
         );

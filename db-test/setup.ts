@@ -14,7 +14,12 @@ let localDir = '';
 const PG_BIN = '/opt/homebrew/opt/postgresql@16/bin';
 
 function sh(cmd: string): string {
-    return execSync(cmd, { stdio: ['ignore', 'pipe', 'pipe'] }).toString();
+    try {
+        return execSync(cmd, { stdio: ['ignore', 'pipe', 'pipe'] }).toString();
+    } catch (err) {
+        const stderr = (err as { stderr?: Buffer }).stderr?.toString() ?? String(err);
+        throw new Error(`command failed: ${cmd}\n${stderr.slice(-3000)}`);
+    }
 }
 
 function dockerAlive(): boolean {
@@ -87,7 +92,7 @@ export default async function globalSetup(): Promise<void> {
     const migDir = path.join(root, 'supabase', 'migrations');
     const files = fs
         .readdirSync(migDir)
-        .filter(f => /^01[1-9]\d*_.+\.sql$/.test(f))
+        .filter(f => /^0\d+_.+\.sql$/.test(f) && f >= '011_')
         .sort();
     if (files.length === 0) throw new Error('no 011+ migrations found');
     // eslint-disable-next-line no-console

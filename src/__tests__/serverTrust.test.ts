@@ -77,7 +77,7 @@ class FakeTrustServer {
         string,
         { id: string; owner: string; item: ValidationItem; status: 'started' | 'submitted'; passed: boolean | null }
     >();
-    components = new Map<string, number>();
+    components = new Map<string, { score: number; passed: boolean }>();
     enrollments = new Map<string, string>();
     issuanceEnabled = new Map<string, boolean>();
     projectResults = new Map<string, { program: string; version: string; passed: boolean }>();
@@ -135,10 +135,10 @@ class FakeTrustServer {
         const ok = scoreTrustedValidation({ answer, expectedAnswer: a.item.answer });
         a.status = 'submitted';
         a.passed = ok;
-        if (ok) {
-            // Server-created authoritative row: identity from the ITEM.
-            const id = `srv:trusted:${attemptId}:0`;
-            this.events.set(id, {
+        // EVERY finalized attempt is immutable server-verified evidence
+        // (trusted = server-vouched, even for fails).
+        const id = `srv:trusted:${attemptId}:0`;
+        this.events.set(id, {
                 schemaVersion: 1,
                 id,
                 sessionId: `srv:${attemptId}`,
@@ -155,14 +155,13 @@ class FakeTrustServer {
                 sessionKind: 'structured',
                 source: 'structured_session',
                 eventType: 'attempt',
-                outcome: 'pass',
-                outcomeValue: 1,
+                outcome: ok ? 'pass' : 'fail',
+                outcomeValue: ok ? 1 : 0,
                 evidenceStrength: 'strong',
                 provenance: 'server_scored',
                 occurredAt: '2026-09-10T00:00:00.000Z',
                 trusted: true,
             });
-        }
         return { passed: ok, submitted: true };
     }
 
@@ -203,14 +202,14 @@ class FakeTrustServer {
         a.score = s.score;
         a.passed = s.passed;
         a.status = 'submitted';
-        this.components.set(`${asUid}:1.0:final_assessment`, s.score);
+        this.components.set(`${asUid}:1.0:final_assessment`, { score: s.score, passed: s.passed });
         return { score: s.score, passed: s.passed, submitted: true };
     }
 
     recordAuthoritativeProject(owner: string, program: string, version: string, passed: boolean, role: string): void {
         if (role !== 'service_role') throw new Error('RLS: authoritative results are service-role only');
         this.projectResults.set(`${owner}:${program}:${version}`, { program, version, passed });
-        this.components.set(`${owner}:${version}:project`, passed ? 90 : 40);
+        this.components.set(`${owner}:${version}:project`, { score: passed ? 90 : 40, passed });
     }
 
     clientInsertAuthoritativeProject(): void {
@@ -219,7 +218,7 @@ class FakeTrustServer {
 
     recordServerComponent(owner: string, version: string, component: string, score: number, role: string): void {
         if (role !== 'service_role') throw new Error('RLS: components are server-written only');
-        this.components.set(`${owner}:${version}:${component}`, score);
+        this.components.set(`${owner}:${version}:${component}`, { score, passed: score >= 80 });
     }
 
     clientWriteComponent(): void {
@@ -240,10 +239,16 @@ class FakeTrustServer {
             issuanceEnabled: this.issuanceEnabled.get(program) === true,
             enrolledVersion: this.enrollments.get(`${asUid}:${program}`) ?? null,
             components: {
-                knowledge: this.components.get(`${asUid}:${version}:knowledge`) ?? null,
-                practical: this.components.get(`${asUid}:${version}:practical`) ?? null,
-                final_assessment: this.components.get(`${asUid}:${version}:final_assessment`) ?? null,
-                project: this.components.get(`${asUid}:${version}:project`) ?? null,
+                knowledge: this.components.get(`${asUid}:${version}:knowledge`)?.score ?? null,
+                practical: this.components.get(`${asUid}:${version}:practical`)?.score ?? null,
+                final_assessment: this.components.get(`${asUid}:${version}:final_assessment`)?.score ?? null,
+                project: this.components.get(`${asUid}:${version}:project`)?.score ?? null,
+            },
+            componentPass: {
+                knowledge: this.components.get(`${asUid}:${version}:knowledge`)?.passed === true,
+                practical: this.components.get(`${asUid}:${version}:practical`)?.passed === true,
+                final_assessment: this.components.get(`${asUid}:${version}:final_assessment`)?.passed === true,
+                project: this.components.get(`${asUid}:${version}:project`)?.passed === true,
             },
             requiredScore: 80,
             skillProof: skills.map(sk => {
@@ -667,11 +672,12 @@ describe('server trust layer invariants', () => {
             s.submitValidation(att, 'user-a', n === 3 ? 'wrong' : 'e4');
         }
         const proven = s.serverProvenEvents('user-a');
-        expect(proven.length).toBe(2);
+        // 2 passes + 1 fail: every finalized attempt is server evidence.
+        expect(proven.length).toBe(3);
         const coverage = trustedValidationCoverage(proven);
         expect(coverage.find(c => c.skillKey === 'rules')).toMatchObject({
-            trustedValidations: 2,
-            sessions: 2,
+            trustedValidations: 3,
+            sessions: 3,
         });
     });
 });
@@ -727,7 +733,7 @@ describe('trust hardening extras', () => {
         expect(proven[0].skillKey).toBe('rules');
     });
 
-    test('28. wrong answer in server flow creates no proof', () => {
+    test('28. failed server validation is authoritative evidence too', () => {
         const s = new FakeTrustServer();
         s.seedValidationItem(
             { id: 'item-1', program: 'chess-foundations', version: '1.0', skill: 'rules', day: 4, lessonId: 'chess_d4', answer: 'e4' },
@@ -736,11 +742,15 @@ describe('trust hardening extras', () => {
         const att = s.startValidation('user-a', 'chess-foundations', '1.0', 4);
         const r = s.submitValidation(att, 'user-a', 'd5');
         expect(r).toEqual({ passed: false, submitted: true });
-        expect(s.serverProvenEvents('user-a')).toHaveLength(0);
+        // Trusted = server-vouched outcome, even for a fail.
+        const proven = s.serverProvenEvents('user-a');
+        expect(proven).toHaveLength(1);
+        expect(proven[0].outcome).toBe('fail');
+        expect(proven[0].trusted).toBe(true);
         // Replay is idempotent: original stands, no second row.
         const replay = s.submitValidation(att, 'user-a', 'e4');
         expect(replay).toEqual({ passed: false, submitted: false });
-        expect(s.serverProvenEvents('user-a')).toHaveLength(0);
+        expect(s.serverProvenEvents('user-a')).toHaveLength(1);
     });
 
     test('29. issuance requires enrollment, components, and enabled flag', () => {
@@ -750,7 +760,7 @@ describe('trust hardening extras', () => {
         s.issuanceEnabled.set('chess-foundations', true);
         expect(() => s.issueV2('chess-foundations', 'Holder', 'user-a')).toThrow(/enrollment_required/);
         s.enroll('user-a', 'chess-foundations', '1.0');
-        expect(() => s.issueV2('chess-foundations', 'Holder', 'user-a')).toThrow(/component_missing/);
+        expect(() => s.issueV2('chess-foundations', 'Holder', 'user-a')).toThrow(/component_missing_or_failed/);
     });
 
     test('30. server credential ids carry 128-bit entropy', () => {
@@ -760,13 +770,18 @@ describe('trust hardening extras', () => {
         expect(id.replace('ZNX-', '')).toHaveLength(32);
     });
 
-    test('31. server policy: all five programs blocked until trust-ready', () => {
+    test('31. server policy: only the chess pilot is issuance-ready', () => {
         const policies = allServerIssuancePolicies();
         expect(policies).toHaveLength(5);
         for (const p of policies) {
-            expect(p.issuanceEnabled).toBe(false);
-            expect(p.issuanceBlockedReason).toMatch(/no server-authoritative/);
             expect(p.requiresProject).toBe(true);
+            if (p.programSlug === 'chess-foundations') {
+                expect(p.issuanceEnabled).toBe(true);
+                expect(p.issuanceBlockedReason).toBeNull();
+            } else {
+                expect(p.issuanceEnabled).toBe(false);
+                expect(p.issuanceBlockedReason).toMatch(/no server-authoritative/);
+            }
         }
     });
 
@@ -806,5 +821,116 @@ describe('trust hardening extras', () => {
         expect(rpc).toHaveBeenCalledWith('verify_credential', { p_credential_id: local });
         expect(res).toEqual({ found: false, credential: null });
         jest.dontMock('../services/supabase/client');
+    });
+});
+
+describe('pilot authority extras', () => {
+    test('34. expired credentials stay expired through the TS projection', () => {
+        const { projectPublicVerification } = require('../server/trust') as typeof import('../server/trust');
+        const base = {
+            credential_id: 'ZNX-abc', program_slug: 'chess-foundations', program_title: 'Chess',
+            program_version: '1.0', holder_display_name: 'H', issued_at: '2026-01-01T00:00:00.000Z',
+            expires_at: null, verified_skills: [], final_score: 85, grade: 'merit',
+        };
+        expect(projectPublicVerification({ ...base, status: 'expired' }).status).toBe('expired');
+        expect(projectPublicVerification({ ...base, status: 'active' }).status).toBe('active');
+        expect(projectPublicVerification({ ...base, status: 'revoked' }).status).toBe('revoked');
+        // Unknown future states fail closed to active only when not revoked/expired.
+        expect(projectPublicVerification({ ...base, status: 'weird' }).status).toBe('active');
+    });
+
+    test('35. server grades match the frozen credential domain exactly', () => {
+        const { gradeForScoreServer } = require('../server/trust') as typeof import('../server/trust');
+        const { gradeForScore } = require('../domain/credentials/scoring') as typeof import('../domain/credentials/scoring');
+        for (const score of [0, 40, 79, 80, 82, 84, 85, 87, 89, 90, 92, 94, 95, 97, 100]) {
+            expect(gradeForScoreServer(score, 80)).toBe(gradeForScore(score, 80));
+        }
+        expect(gradeForScoreServer(80, 80)).toBe('pass');
+        expect(gradeForScoreServer(85, 80)).toBe('merit');
+        expect(gradeForScoreServer(90, 80)).toBe('excellence');
+        expect(gradeForScoreServer(95, 80)).toBe('distinction');
+        expect(gradeForScoreServer(79, 80)).toBe('fail');
+    });
+
+    test('36. FAIL FAIL FAIL PASS is not 100%: failures stay in the denominator', () => {
+        const { evaluateAuthoritativeIssuance } = require('../server/trust') as typeof import('../server/trust');
+        const base = {
+            programSlug: 'chess-foundations', programVersion: '1.0', issuanceEnabled: true,
+            enrolledVersion: '1.0', requiredScore: 80,
+            components: { knowledge: 85, practical: 88, final_assessment: 90, project: 92 },
+            componentPass: { knowledge: true, practical: true, final_assessment: true, project: true },
+        };
+        // One item retried 4x (3 fails then a pass): latest wins for the
+        // item, but depth is still ONE distinct item < min 3 -> blocked.
+        const oneItem = evaluateAuthoritativeIssuance({
+            ...base,
+            skillProof: [],
+            finalizedEvidence: [
+                { skillKey: 'rules', minimumScore: 65, distinctItems: 1, passes: 1, minItems: 3, minPassRate: 0.65 },
+            ],
+        });
+        expect(oneItem.eligible).toBe(false);
+        expect(oneItem.reasons).toContain('skill_gate_failed:rules');
+        // Three distinct items, all failed then... 1/3 passes: rate blocks.
+        const lowRate = evaluateAuthoritativeIssuance({
+            ...base,
+            skillProof: [],
+            finalizedEvidence: [
+                { skillKey: 'rules', minimumScore: 65, distinctItems: 3, passes: 1, minItems: 3, minPassRate: 0.65 },
+            ],
+        });
+        expect(lowRate.eligible).toBe(false);
+        // 2/3 passes: rate 0.667 >= 0.65 and >= 65 -> satisfied (with all else met).
+        const ok = evaluateAuthoritativeIssuance({
+            ...base,
+            skillProof: [],
+            finalizedEvidence: [
+                { skillKey: 'rules', minimumScore: 65, distinctItems: 3, passes: 2, minItems: 3, minPassRate: 0.65 },
+            ],
+        });
+        expect(ok.eligible).toBe(true);
+    });
+
+    test('37. failed final or project can never be averaged away', () => {
+        const { evaluateAuthoritativeIssuance } = require('../server/trust') as typeof import('../server/trust');
+        const base = {
+            programSlug: 'chess-foundations', programVersion: '1.0', issuanceEnabled: true,
+            enrolledVersion: '1.0', requiredScore: 80,
+            components: { knowledge: 100, practical: 100, final_assessment: 79, project: 100 },
+            componentPass: { knowledge: true, practical: true, final_assessment: false, project: true },
+            skillProof: [],
+            finalizedEvidence: [
+                { skillKey: 'rules', minimumScore: 65, distinctItems: 3, passes: 3, minItems: 3, minPassRate: 0.65 },
+            ],
+        };
+        // Weighted total would be 94.75 — still blocked on the failed final.
+        const r = evaluateAuthoritativeIssuance(base);
+        expect(r.eligible).toBe(false);
+        expect(r.reasons).toContain('component_missing_or_failed:final_assessment');
+        const p = evaluateAuthoritativeIssuance({
+            ...base,
+            components: { ...base.components, final_assessment: 90 },
+            componentPass: { ...base.componentPass, final_assessment: true, project: false },
+        });
+        expect(p.eligible).toBe(false);
+        expect(p.reasons).toContain('component_missing_or_failed:project');
+    });
+
+    test('38. overall arithmetic still gates after all mandatory passes', () => {
+        const { evaluateAuthoritativeIssuance } = require('../server/trust') as typeof import('../server/trust');
+        const r = evaluateAuthoritativeIssuance({
+            programSlug: 'chess-foundations', programVersion: '1.0', issuanceEnabled: true,
+            enrolledVersion: '1.0', requiredScore: 80,
+            // 65*.25 + 65*.30 + 80*.25 + 80*.20 = 71.75 < 80
+            components: { knowledge: 65, practical: 65, final_assessment: 80, project: 80 },
+            componentPass: { knowledge: true, practical: true, final_assessment: true, project: true },
+            skillProof: [],
+            finalizedEvidence: [
+                { skillKey: 'rules', minimumScore: 65, distinctItems: 3, passes: 2, minItems: 3, minPassRate: 0.65 },
+            ],
+        });
+        expect(r.eligible).toBe(false);
+        expect(r.reasons).toContain('overall_requirement_not_met');
+        expect(r.overall).toBe(71.8);
     });
 });

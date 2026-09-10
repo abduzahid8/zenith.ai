@@ -264,10 +264,11 @@ export interface PublicCredential {
     programTitle: string;
     programVersion: string;
     holderDisplayName: string;
+    identityVerified: boolean;
     issuedAt: string;
     expiresAt: string | null;
-    status: 'active' | 'revoked';
-    verifiedSkills: { key: string; name: string }[];
+    status: 'active' | 'revoked' | 'expired';
+    verifiedSkills: { key: string; name: string; score?: number }[];
     finalScore: number;
     grade: string;
 }
@@ -283,22 +284,26 @@ export function projectPublicVerification(row: {
     program_title: string;
     program_version: string;
     holder_display_name: string;
+    identity_verified?: boolean;
     issued_at: string;
     expires_at: string | null;
     status: string;
-    verified_skills: { key: string; name: string }[];
+    verified_skills: { key: string; name: string; score?: number }[];
     final_score: number;
     grade: string;
 }): PublicCredential {
+    // SQL already folds revoked/expiry; preserve expired (never map to active).
+    const status = row.status === 'revoked' ? 'revoked' : row.status === 'expired' ? 'expired' : 'active';
     return {
         credentialId: row.credential_id,
         programSlug: row.program_slug,
         programTitle: row.program_title,
         programVersion: row.program_version,
         holderDisplayName: row.holder_display_name,
+        identityVerified: row.identity_verified ?? false,
         issuedAt: row.issued_at,
         expiresAt: row.expires_at,
-        status: row.status === 'revoked' ? 'revoked' : 'active',
+        status,
         verifiedSkills: row.verified_skills,
         finalScore: row.final_score,
         grade: row.grade,
@@ -307,6 +312,22 @@ export function projectPublicVerification(row: {
 
 /** Re-exported frozen source mapping for server ingestion parity. */
 export { sourceFor };
+
+/**
+ * gradeForScoreServer — ONE canonical grade system, matching the frozen
+ * credential domain exactly (src/domain/credentials/scoring.ts):
+ * fail below required, pass 80-84, merit 85-89, excellence 90-94,
+ * distinction 95-100. Mirrors the CASE in issue_credential (019).
+ */
+export type CanonicalGrade = 'fail' | 'pass' | 'merit' | 'excellence' | 'distinction';
+
+export function gradeForScoreServer(score: number, requiredScore: number): CanonicalGrade {
+    if (score < requiredScore) return 'fail';
+    if (score >= 95) return 'distinction';
+    if (score >= 90) return 'excellence';
+    if (score >= 85) return 'merit';
+    return 'pass';
+}
 
 /**
  * isServerProvenRow — the hardened server proof test. A row counts as
@@ -356,15 +377,37 @@ export interface AuthoritativeComponentSet {
     project: number | null;
 }
 
+export interface AuthoritativeComponentPass {
+    knowledge: boolean;
+    practical: boolean;
+    final_assessment: boolean;
+    project: boolean;
+}
+
+/** Per-item finalized evidence for one skill (latest per item wins). */
+export interface FinalizedSkillEvidence {
+    skillKey: string;
+    minimumScore: number;
+    /** Distinct finalized items (independent samples). */
+    distinctItems: number;
+    /** ...of which finalized as pass. Failures stay in the denominator. */
+    passes: number;
+    minItems: number;
+    minPassRate: number;
+}
+
 export interface AuthoritativeIssuanceInput {
     programSlug: string;
     programVersion: string;
     issuanceEnabled: boolean;
     enrolledVersion: string | null;
     components: AuthoritativeComponentSet;
+    componentPass: AuthoritativeComponentPass;
     requiredScore: number;
     /** Per-skill server-proven pass rates (trusted server_scored rows only). */
     skillProof: { skillKey: string; minimumScore: number; passes: number; total: number }[];
+    /** Finalized per-item evidence (v3 depth rule). Prefer over skillProof. */
+    finalizedEvidence?: FinalizedSkillEvidence[];
     weights?: { knowledge: number; practical: number; final_assessment: number; project: number };
 }
 
@@ -375,10 +418,12 @@ export interface AuthoritativeIssuanceResult {
 }
 
 /**
- * evaluateAuthoritativeIssuance — official v2 gate math. Mirrors
- * issue_credential (migration 017): kill-switch, pinned enrollment, all
- * four authoritative components present, per-skill server proof with
- * minimums (unmeasured != passed), frozen weighted overall.
+ * evaluateAuthoritativeIssuance — official v2/v3 gate math. Mirrors
+ * issue_credential (migrations 017/019): kill-switch, pinned enrollment,
+ * all four authoritative components present AND passed (a failed final or
+ * project is never averaged away), per-skill server proof with minimums
+ * (unmeasured != passed, failures stay in the denominator, depth rule
+ * over finalized per-item results when provided), frozen weighted overall.
  */
 export function evaluateAuthoritativeIssuance(
     input: AuthoritativeIssuanceInput,
@@ -388,15 +433,28 @@ export function evaluateAuthoritativeIssuance(
     if (input.enrolledVersion !== input.programVersion) reasons.push('enrollment_required');
     const missing: (keyof AuthoritativeComponentSet)[] = (
         Object.keys(input.components) as (keyof AuthoritativeComponentSet)[]
-    ).filter(k => input.components[k] === null);
-    for (const k of missing) reasons.push(`component_missing:${k}`);
-    for (const s of input.skillProof) {
-        if (s.total === 0) {
-            reasons.push(`skill_gate_failed:${s.skillKey}`);
-            continue;
+    ).filter(k => input.components[k] === null || input.componentPass[k] !== true);
+    for (const k of missing) reasons.push(`component_missing_or_failed:${k}`);
+    if (input.finalizedEvidence) {
+        for (const s of input.finalizedEvidence) {
+            if (s.distinctItems < s.minItems) {
+                reasons.push(`skill_gate_failed:${s.skillKey}`);
+                continue;
+            }
+            const rate = s.distinctItems === 0 ? 0 : s.passes / s.distinctItems;
+            if (rate < s.minPassRate || rate * 100 < s.minimumScore) {
+                reasons.push(`skill_gate_failed:${s.skillKey}`);
+            }
         }
-        const rate = (s.passes / s.total) * 100;
-        if (rate < s.minimumScore) reasons.push(`skill_gate_failed:${s.skillKey}`);
+    } else {
+        for (const s of input.skillProof) {
+            if (s.total === 0) {
+                reasons.push(`skill_gate_failed:${s.skillKey}`);
+                continue;
+            }
+            const rate = (s.passes / s.total) * 100;
+            if (rate < s.minimumScore) reasons.push(`skill_gate_failed:${s.skillKey}`);
+        }
     }
     let overall: number | null = null;
     if (missing.length === 0) {

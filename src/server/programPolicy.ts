@@ -46,6 +46,15 @@ const NOT_READY_REASON =
     'no server-authoritative trusted content/components yet: knowledge and practical have no defensible server source, no trusted validation items are seeded, and no authoritative project pipeline exists. Issuance stays blocked rather than issue unproven credentials.';
 
 /**
+ * Programs whose server-authoritative content AND component pipelines are
+ * complete and verified end-to-end (real DB e2e). Mirrors the
+ * issuance_enabled flag in credential_programs (022 enables chess).
+ */
+const ISSUANCE_READY: Record<string, true> = {
+    'chess-foundations': true,
+};
+
+/**
  * Policy for one program, derived from the frozen catalog row.
  * Throws for unknown slugs (never invent programs server-side).
  */
@@ -54,13 +63,14 @@ export function serverIssuancePolicy(programSlug: string): ServerIssuancePolicy 
         p => p.slug === programSlug,
     );
     if (!program) throw new Error(`serverIssuancePolicy: unknown program ${programSlug}`);
+    const ready = ISSUANCE_READY[program.slug] === true;
     return {
         programSlug: program.slug,
         programVersion: program.version,
         requiresProject: program.requiresProject,
         requiredComponents: [...REQUIRED_COMPONENTS],
-        issuanceEnabled: false,
-        issuanceBlockedReason: NOT_READY_REASON,
+        issuanceEnabled: ready,
+        issuanceBlockedReason: ready ? null : NOT_READY_REASON,
     };
 }
 
