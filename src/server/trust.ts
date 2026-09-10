@@ -6,19 +6,22 @@
  * scoring, learning event semantics) is FROZEN. This module does NOT
  * re-derive any of those rules — it re-exports and reuses them.
  *
- * Authority model:
- * - A client LearningEvent DESCRIBES what happened; it is never proof-grade
- *   by itself. Server rows distinguish observational/formative evidence
- *   (trusted=false) from server-trusted/summative evidence (trusted=true).
- * - Client-supplied evidenceStrength / outcomeValue / provenance /
- *   assessment scores / project scores / credential eligibility are treated
- *   as OBSERVATIONS. Authoritative projections are derived here (and mirrored
- *   in SQL migrations 011–013, where server authority wins).
- * - Only server-approved validation provenance can become proof-grade:
- *   'static_bank' / 'generated_validated' rows present in the server
- *   trusted_validation_registry, or 'server_scored' rows created by server
- *   functions. 'generated_unverified' can NEVER become trusted merely
- *   because the client reports a pass.
+ * Authority model (hardened, migrations 016+):
+ * - Client-synced learning_events rows are ALWAYS trusted=false, no matter
+ *   what the client claims (pass/structured/validate/static_bank). They
+ *   feed history/personalization/Skill State — never certification proof.
+ * - Proof-grade evidence is created ONLY by server-scored flows
+ *   (submit_trusted_validation / submit_assessment / service-role project
+ *   certification) as rows with provenance 'server_scored'. Clients can
+ *   never mint that provenance (trigger coerces it to NULL).
+ * - isTrustedValidation below still describes the FROZEN RUNTIME
+ *   distinction (hasValidation vs trustedValidation over client-observed
+ *   content provenance). The server additionally requires the row to be
+ *   server-created: see isServerProvenRow.
+ * - Client-supplied evidenceStrength / outcomeValue / assessment scores /
+ *   project scores / credential eligibility are treated as OBSERVATIONS.
+ *   Authoritative projections are derived here (and mirrored in SQL,
+ *   where server authority wins).
  *
  * Purity: this module imports ONLY pure domain code (no React Native,
  * no AsyncStorage, no Supabase client) so the same policies run in
@@ -304,3 +307,115 @@ export function projectPublicVerification(row: {
 
 /** Re-exported frozen source mapping for server ingestion parity. */
 export { sourceFor };
+
+/**
+ * isServerProvenRow — the hardened server proof test. A row counts as
+ * certification evidence ONLY when the server created it (trusted flag)
+ * with server-side provenance. Client-synced rows always fail this,
+ * even when isTrustedValidation would pass on their claimed fields.
+ * Mirrors the skill-competency query in issue_credential (migration 017).
+ */
+export function isServerProvenRow(
+    row: { trusted: boolean; provenance: string | undefined },
+): boolean {
+    return row.trusted === true && row.provenance === 'server_scored';
+}
+
+/**
+ * scoreTrustedValidation — server-side scoring for the trusted validation
+ * flow. Exact match on the answer field against the hidden key; empty or
+ * missing answers never pass. Mirrors submit_trusted_validation (016).
+ */
+export function scoreTrustedValidation(input: {
+    answer: unknown;
+    expectedAnswer: unknown;
+}): boolean {
+    if (typeof input.answer !== 'string' || input.answer.length === 0) return false;
+    if (typeof input.expectedAnswer !== 'string' || input.expectedAnswer.length === 0) {
+        return false;
+    }
+    return input.answer === input.expectedAnswer;
+}
+
+/**
+ * buildServerCredentialId — 128-bit entropy public credential id.
+ * 'ZNX-' + 32 hex chars (>=128 bits, non-sequential). Mirrors the SQL
+ * gen_random_bytes(16) construction in issue_credential (migration 017).
+ */
+export function buildServerCredentialId(randomHex32: string): string {
+    if (!/^[0-9a-f]{32}$/.test(randomHex32)) {
+        throw new Error('buildServerCredentialId: need 32 hex chars (128 bits)');
+    }
+    return `ZNX-${randomHex32.toUpperCase()}`;
+}
+
+export interface AuthoritativeComponentSet {
+    knowledge: number | null;
+    practical: number | null;
+    final_assessment: number | null;
+    project: number | null;
+}
+
+export interface AuthoritativeIssuanceInput {
+    programSlug: string;
+    programVersion: string;
+    issuanceEnabled: boolean;
+    enrolledVersion: string | null;
+    components: AuthoritativeComponentSet;
+    requiredScore: number;
+    /** Per-skill server-proven pass rates (trusted server_scored rows only). */
+    skillProof: { skillKey: string; minimumScore: number; passes: number; total: number }[];
+    weights?: { knowledge: number; practical: number; final_assessment: number; project: number };
+}
+
+export interface AuthoritativeIssuanceResult {
+    eligible: boolean;
+    reasons: string[];
+    overall: number | null;
+}
+
+/**
+ * evaluateAuthoritativeIssuance — official v2 gate math. Mirrors
+ * issue_credential (migration 017): kill-switch, pinned enrollment, all
+ * four authoritative components present, per-skill server proof with
+ * minimums (unmeasured != passed), frozen weighted overall.
+ */
+export function evaluateAuthoritativeIssuance(
+    input: AuthoritativeIssuanceInput,
+): AuthoritativeIssuanceResult {
+    const reasons: string[] = [];
+    if (!input.issuanceEnabled) reasons.push('program_not_issuance_ready');
+    if (input.enrolledVersion !== input.programVersion) reasons.push('enrollment_required');
+    const missing: (keyof AuthoritativeComponentSet)[] = (
+        Object.keys(input.components) as (keyof AuthoritativeComponentSet)[]
+    ).filter(k => input.components[k] === null);
+    for (const k of missing) reasons.push(`component_missing:${k}`);
+    for (const s of input.skillProof) {
+        if (s.total === 0) {
+            reasons.push(`skill_gate_failed:${s.skillKey}`);
+            continue;
+        }
+        const rate = (s.passes / s.total) * 100;
+        if (rate < s.minimumScore) reasons.push(`skill_gate_failed:${s.skillKey}`);
+    }
+    let overall: number | null = null;
+    if (missing.length === 0) {
+        const w = input.weights ?? {
+            knowledge: 0.25,
+            practical: 0.3,
+            final_assessment: 0.25,
+            project: 0.2,
+        };
+        const c = input.components;
+        overall =
+            Math.round(
+                (c.knowledge! * w.knowledge +
+                    c.practical! * w.practical +
+                    c.final_assessment! * w.final_assessment +
+                    c.project! * w.project) *
+                    10,
+            ) / 10;
+        if (overall < input.requiredScore) reasons.push('overall_requirement_not_met');
+    }
+    return { eligible: reasons.length === 0, reasons, overall };
+}

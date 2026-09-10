@@ -2,12 +2,12 @@
 module.exports = {
     preset: 'ts-jest',
     testEnvironment: 'node',
-    roots: ['<rootDir>/src'],
-    testMatch: ['**/__tests__/**/*.test.ts'],
-    // Real-DB integration tests run only under jest.config.e2e.js.
-    testPathIgnorePatterns: ['/node_modules/', '\\.e2e\\.test\\.ts$'],
+    roots: ['<rootDir>/src', '<rootDir>/db-test'],
+    testMatch: ['**/__tests__/**/*.e2e.test.ts'],
+    testTimeout: 60000,
+    globalSetup: '<rootDir>/db-test/setup.ts',
+    globalTeardown: '<rootDir>/db-test/teardown.ts',
     moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
-    // Mock React Native and AsyncStorage for pure logic tests
     moduleNameMapper: {
         '^@react-native-async-storage/async-storage$':
             '<rootDir>/src/__tests__/__mocks__/asyncStorage.ts',
@@ -15,7 +15,6 @@ module.exports = {
         '^react-native-url-polyfill/auto$':
             '<rootDir>/src/__tests__/__mocks__/emptyMock.ts',
     },
-    // Ignore node_modules except Expo packages if needed
     transformIgnorePatterns: ['/node_modules/'],
     watchman: false,
 };

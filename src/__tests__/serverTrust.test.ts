@@ -1,35 +1,56 @@
 /**
- * Server trust layer invariants (24 required cases).
+ * Server trust layer invariants.
  *
- * FakeTrustServer mirrors migrations 011-013 row-for-row in contract:
- * ownership/attribution trigger, trust derivation, idempotent ingest,
- * assessment guard + server scoring, project authority split, issuance
- * gate, anonymous verification. Anything the SQL forbids, the fake throws
- * on (like RLS 42501). Policy math itself is the real src/server/trust.ts.
+ * FakeTrustServer mirrors migrations 011-017 row-for-row in contract:
+ * client ingest NEVER yields trusted rows; proof comes only from
+ * server-scored flows; RLS/forbidden writes throw (like 42501); issuance
+ * follows the authoritative v2 gates. Policy math itself is the real
+ * src/server/trust.ts + src/server/programPolicy.ts.
+ *
+ * Real-DB integration tests live in trustHardening.e2e.test.ts and prove
+ * the ACTUAL SQL. These unit tests pin the contract logic.
  */
 
 import {
+    buildServerCredentialId,
     buildTrustedRegistry,
     deriveEvidenceStrength,
     deriveOutcomeValue,
+    evaluateAuthoritativeIssuance,
     evaluateIssuanceGate,
+    isServerProvenRow,
     isTrustedValidation,
     projectPublicVerification,
     projectSkillState,
     scoreAssessmentFromAnswers,
+    scoreTrustedValidation,
     trustedValidationCoverage,
 } from '../server/trust';
+import { allServerIssuancePolicies, serverIssuancePolicy } from '../server/programPolicy';
 import { buildAttemptEvent } from '../domain/sessions/learningEvents';
 import type { LearningEvent } from '../domain/sessions/learningEvents';
-import { getProgram } from '../domain/credentials/catalog';
+import { getProgram, CREDENTIAL_PROGRAMS } from '../domain/credentials/catalog';
+import { buildCredentialId } from '../domain/credentials/scoring';
 
 // ---------------------------------------------------------------------------
-// FakeTrustServer — mirrors SQL migrations 011/012/013.
+// FakeTrustServer — mirrors SQL migrations 011/012/013/016/017.
 // ---------------------------------------------------------------------------
 
-interface ServerEventRow extends Omit<LearningEvent, 'userId' | 'ownerId'> {
+interface ServerEventRow extends Omit<LearningEvent, 'userId' | 'ownerId' | 'provenance'> {
     userId: string | null;
+    /** Server rows may carry server-side provenance (never client-mintable). */
+    provenance: string | undefined;
     trusted: boolean;
+}
+
+interface ValidationItem {
+    id: string;
+    program: string;
+    version: string;
+    skill: string;
+    day: number;
+    lessonId: string;
+    answer: string;
 }
 
 class FakeTrustServer {
@@ -51,29 +72,32 @@ class FakeTrustServer {
             passed: boolean | null;
         }
     >();
+    items = new Map<string, ValidationItem>();
+    validationAttempts = new Map<
+        string,
+        { id: string; owner: string; item: ValidationItem; status: 'started' | 'submitted'; passed: boolean | null }
+    >();
+    components = new Map<string, number>();
+    enrollments = new Map<string, string>();
+    issuanceEnabled = new Map<string, boolean>();
     projectResults = new Map<string, { program: string; version: string; passed: boolean }>();
     issued = new Map<string, any>();
-    revoked = new Set<string>();
 
-    /** Mirrors trigger learning_events_derive_ownership (migration 011). */
-    upsertEvent(event: LearningEvent, clientOwner: string | null, asUid: string | null): boolean {
+    /** Mirrors hardened trigger (016): client ingest NEVER trusted; server_scored coerced away. */
+    upsertEvent(
+        event: Omit<LearningEvent, 'provenance'> & { provenance?: string },
+        clientOwner: string | null,
+        asUid: string | null,
+    ): boolean {
         if (this.events.has(event.id)) return false; // idempotent retry
         const owned = clientOwner !== null && asUid !== null && clientOwner === asUid;
-        // Inline mirror of the SQL trust derivation (NOT calling
-        // isTrustedValidation, so the two stay independently checked).
-        const trusted =
-            owned &&
-            event.eventType === 'attempt' &&
-            event.sessionKind === 'structured' &&
-            event.phase === 'validate' &&
-            event.outcome === 'pass' &&
-            !!event.programVersion &&
-            (event.provenance === 'static_bank' || (event.provenance as string) === 'generated_validated') &&
-            this.registry.has(`${event.hobbyId}:${event.curriculumDay}`);
+        const provenance =
+            (event.provenance as string) === 'server_scored' ? undefined : event.provenance;
         this.events.set(event.id, {
             ...event,
+            provenance: provenance as LearningEvent['provenance'],
             userId: owned ? asUid : null,
-            trusted,
+            trusted: false,
         });
         return true;
     }
@@ -83,7 +107,66 @@ class FakeTrustServer {
         return [...this.events.values()].filter(e => e.userId === asUid);
     }
 
-    // -- assessment (migration 012) --
+    serverProvenEvents(asUid: string): ServerEventRow[] {
+        return this.readEvents(asUid).filter(isServerProvenRow);
+    }
+
+    // -- server validation flow (migration 016; service-role seeded items) --
+    seedValidationItem(item: ValidationItem, role: string): void {
+        if (role !== 'service_role') throw new Error('RLS: items are service-role only');
+        this.items.set(item.id, item);
+    }
+
+    startValidation(asUid: string, program: string, version: string, day: number): string {
+        const item = [...this.items.values()].find(
+            i => i.program === program && i.version === version && i.day === day,
+        );
+        if (!item) throw new Error('no trusted content for this program/day');
+        const id = `va-${this.validationAttempts.size + 1}`;
+        this.validationAttempts.set(id, { id, owner: asUid, item, status: 'started', passed: null });
+        return id;
+    }
+
+    /** Mirrors submit_trusted_validation: server scores, server creates proof. */
+    submitValidation(attemptId: string, asUid: string, answer: string): { passed: boolean; submitted: boolean } {
+        const a = this.validationAttempts.get(attemptId);
+        if (!a || a.owner !== asUid) throw new Error('not the attempt owner');
+        if (a.status === 'submitted') return { passed: a.passed!, submitted: false };
+        const ok = scoreTrustedValidation({ answer, expectedAnswer: a.item.answer });
+        a.status = 'submitted';
+        a.passed = ok;
+        if (ok) {
+            // Server-created authoritative row: identity from the ITEM.
+            const id = `srv:trusted:${attemptId}:0`;
+            this.events.set(id, {
+                schemaVersion: 1,
+                id,
+                sessionId: `srv:${attemptId}`,
+                userId: asUid,
+                hobbyId: 'chess',
+                programSlug: a.item.program,
+                programVersion: a.item.version,
+                lessonId: a.item.lessonId,
+                curriculumDay: a.item.day,
+                skillKey: a.item.skill,
+                cardId: a.item.id,
+                attemptNo: 1,
+                phase: 'validate',
+                sessionKind: 'structured',
+                source: 'structured_session',
+                eventType: 'attempt',
+                outcome: 'pass',
+                outcomeValue: 1,
+                evidenceStrength: 'strong',
+                provenance: 'server_scored',
+                occurredAt: '2026-09-10T00:00:00.000Z',
+                trusted: true,
+            });
+        }
+        return { passed: ok, submitted: true };
+    }
+
+    // -- assessment (migrations 012/016) --
     seedKey(setId: string, answers: Record<string, string>): void {
         this.keys.set(setId, { answers, ids: Object.keys(answers) });
     }
@@ -103,7 +186,6 @@ class FakeTrustServer {
         if (typeof patch.answers === 'object' && patch.answers !== null) {
             a.answers = patch.answers as Record<string, string>;
         }
-        // score/passed/status in the patch are stripped (guard trigger).
     }
 
     /** Mirrors submit_assessment: server scores from the key. */
@@ -121,81 +203,79 @@ class FakeTrustServer {
         a.score = s.score;
         a.passed = s.passed;
         a.status = 'submitted';
+        this.components.set(`${asUid}:1.0:final_assessment`, s.score);
         return { score: s.score, passed: s.passed, submitted: true };
     }
 
-    // -- project (migration 012): formative is client-writable, authoritative is service-role only.
     recordAuthoritativeProject(owner: string, program: string, version: string, passed: boolean, role: string): void {
         if (role !== 'service_role') throw new Error('RLS: authoritative results are service-role only');
         this.projectResults.set(`${owner}:${program}:${version}`, { program, version, passed });
+        this.components.set(`${owner}:${version}:project`, passed ? 90 : 40);
     }
 
     clientInsertAuthoritativeProject(): void {
         throw new Error('RLS: no client INSERT policy on project_certification_results');
     }
 
-    // -- issuance (migration 013) --
-    issue(program: string, version: string, holder: string, asUid: string, opts: { requiresProject: boolean }): { credentialId: string; created: boolean } {
-        const gate = evaluateIssuanceGate({
+    recordServerComponent(owner: string, version: string, component: string, score: number, role: string): void {
+        if (role !== 'service_role') throw new Error('RLS: components are server-written only');
+        this.components.set(`${owner}:${version}:${component}`, score);
+    }
+
+    clientWriteComponent(): void {
+        throw new Error('RLS: no client write policy on credential_component_results');
+    }
+
+    enroll(owner: string, program: string, version: string): void {
+        this.enrollments.set(`${owner}:${program}`, version);
+    }
+
+    // -- issuance v2 (migration 017) --
+    issueV2(program: string, holder: string, asUid: string): { credentialId: string; created: boolean } {
+        const version = '1.0';
+        const skills = getProgram(program)!.skills;
+        const gate = evaluateAuthoritativeIssuance({
             programSlug: program,
             programVersion: version,
-            requiresAssessment: true,
-            assessmentPassScore: 80,
-            assessment: this.bestAssessment(asUid, program, version),
-            requiresProject: opts.requiresProject,
-            project: this.authoritativeProject(asUid, program, version),
-            skillGates:
-                program === 'chess-foundations'
-                    ? [{ skillKey: 'rules', minTrustedValidations: 2, minSessions: 2 }]
-                    : [],
-            coverage: trustedValidationCoverage(
-                this.readEvents(asUid).filter(
-                    e =>
-                        e.trusted &&
-                        e.programSlug === program &&
-                        e.programVersion === version &&
-                        e.eventType === 'attempt' &&
-                        e.phase === 'validate' &&
-                        e.outcome === 'pass',
-                ),
-            ),
+            issuanceEnabled: this.issuanceEnabled.get(program) === true,
+            enrolledVersion: this.enrollments.get(`${asUid}:${program}`) ?? null,
+            components: {
+                knowledge: this.components.get(`${asUid}:${version}:knowledge`) ?? null,
+                practical: this.components.get(`${asUid}:${version}:practical`) ?? null,
+                final_assessment: this.components.get(`${asUid}:${version}:final_assessment`) ?? null,
+                project: this.components.get(`${asUid}:${version}:project`) ?? null,
+            },
+            requiredScore: 80,
+            skillProof: skills.map(sk => {
+                const rows = this.serverProvenEvents(asUid).filter(e => e.skillKey === sk.key);
+                return {
+                    skillKey: sk.key,
+                    minimumScore: sk.minimumScore,
+                    passes: rows.filter(e => e.outcome === 'pass').length,
+                    total: rows.length,
+                };
+            }),
         });
         if (!gate.eligible) throw new Error(`gate: ${gate.reasons.join(',')}`);
         const key = `${asUid}:${program}:${version}`;
         const existing = this.issued.get(key);
         if (existing) return { credentialId: existing.credential_id, created: false };
-        const credentialId = `ZNX-TEST-${this.issued.size + 1}`;
+        const credentialId = buildServerCredentialId('0123456789abcdef0123456789abcdef');
         this.issued.set(key, {
             credential_id: credentialId,
             program_slug: program,
             program_title: program,
             program_version: version,
             holder_display_name: holder,
+            identity_verified: false,
             issued_at: '2026-09-10T00:00:00.000Z',
             expires_at: null,
             status: 'active',
-            verified_skills: [{ key: 'rules', name: 'Rules' }],
-            final_score: 90,
+            verified_skills: skills.map(sk => ({ key: sk.key, name: sk.name, score: 100 })),
+            final_score: gate.overall,
             grade: 'A',
         });
         return { credentialId, created: true };
-    }
-
-    private bestAssessment(asUid: string, program: string, version: string) {
-        let best: { passed: boolean; score: number; programVersion: string } | null = null;
-        for (const a of this.attempts.values()) {
-            if (a.owner === asUid && a.program === program && a.version === version && a.status === 'submitted' && a.passed) {
-                if (!best || (a.score ?? 0) > best.score) {
-                    best = { passed: true, score: a.score ?? 0, programVersion: a.version };
-                }
-            }
-        }
-        return best;
-    }
-
-    private authoritativeProject(asUid: string, program: string, version: string) {
-        const r = this.projectResults.get(`${asUid}:${program}:${version}`);
-        return r ? { passed: r.passed, authoritative: true, programVersion: r.version } : null;
     }
 
     clientInsertIssued(): void {
@@ -211,7 +291,6 @@ class FakeTrustServer {
     }
 
     revokeAsServiceRole(credentialId: string): void {
-        this.revoked.add(credentialId);
         for (const row of this.issued.values()) {
             if (row.credential_id === credentialId) row.status = 'revoked';
         }
@@ -269,8 +348,32 @@ function chessRecallApply(session: string): LearningEvent[] {
     );
 }
 
+/** The complete honest server path in the fake: enroll, components, server proof, enabled. */
+function completeV2Path(s: FakeTrustServer, owner = 'user-a'): void {
+    s.issuanceEnabled.set('chess-foundations', true);
+    s.enroll(owner, 'chess-foundations', '1.0');
+    s.recordServerComponent(owner, '1.0', 'knowledge', 85, 'service_role');
+    s.recordServerComponent(owner, '1.0', 'practical', 88, 'service_role');
+    s.seedKey('set-1', { q1: 'a' });
+    s.createAttempt('att-1', owner, 'chess-foundations', '1.0', 'set-1');
+    s.submit('att-1', owner, { q1: 'a' }, 'set-1');
+    s.recordAuthoritativeProject(owner, 'chess-foundations', '1.0', true, 'service_role');
+    const skills = ['rules', 'openings', 'endgames', 'tactics'];
+    skills.forEach((skill, i) => {
+        s.seedValidationItem(
+            { id: `item-${skill}`, program: 'chess-foundations', version: '1.0', skill, day: 4, lessonId: 'chess_d4', answer: 'e4' },
+            'service_role',
+        );
+        const att = s.startValidation(owner, 'chess-foundations', '1.0', 4);
+        // Distinct items per skill: re-point the attempt's item for the fixture.
+        s.validationAttempts.get(att)!.item = { ...s.items.get('item-rules')!, skill, id: `item-${skill}` };
+        void i;
+        s.submitValidation(att, owner, 'e4');
+    });
+}
+
 // ---------------------------------------------------------------------------
-// The 24 invariants
+// The 24 invariants (hardened model)
 // ---------------------------------------------------------------------------
 
 describe('server trust layer invariants', () => {
@@ -324,7 +427,6 @@ describe('server trust layer invariants', () => {
 
     test('7. generated_unverified validation cannot become trusted', () => {
         const e = chessValidate('s1', 'v-s1', 4, 'generated_unverified');
-        // Registry lists chess day 4 — still must not trust unverified.
         expect(isTrustedValidation({ ...e, programVersion: e.programVersion }, new FakeTrustServer().registry)).toBe(false);
         const s = new FakeTrustServer();
         s.upsertEvent(e, 'user-a', 'user-a');
@@ -356,7 +458,6 @@ describe('server trust layer invariants', () => {
         const s = new FakeTrustServer();
         s.seedKey('set-1', { q1: 'a', q2: 'b', q3: 'c', q4: 'd' });
         s.createAttempt('att-1', 'user-a', 'chess-foundations', '1.0', 'set-1');
-        // Client claims 100 by submitting only what it knows; server scores 75.
         const r = s.submit('att-1', 'user-a', { q1: 'a', q2: 'b', q3: 'c', q4: 'WRONG' }, 'set-1');
         expect(r).toEqual({ score: 75, passed: false, submitted: true });
         expect(r.score).toBe(
@@ -450,24 +551,19 @@ describe('server trust layer invariants', () => {
 
     test('17. valid complete path issues exactly one credential', () => {
         const s = new FakeTrustServer();
-        // Trusted validation coverage: 2 validations across 2 sessions.
-        for (const session of ['s1', 's2']) {
-            for (const e of chessRecallApply(session)) s.upsertEvent(e, 'user-a', 'user-a');
-            s.upsertEvent(chessValidate(session, `v-${session}`), 'user-a', 'user-a');
-        }
-        expect(
-            s.readEvents('user-a').filter(e => e.trusted).length,
-        ).toBe(2);
-        s.seedKey('set-1', { q1: 'a', q2: 'b', q3: 'c', q4: 'd' });
-        s.createAttempt('att-1', 'user-a', 'chess-foundations', '1.0', 'set-1');
-        const sub = s.submit('att-1', 'user-a', { q1: 'a', q2: 'b', q3: 'c', q4: 'd' }, 'set-1');
-        expect(sub.passed).toBe(true);
-        const first = s.issue('chess-foundations', '1.0', 'Holder', 'user-a', { requiresProject: false });
+        completeV2Path(s);
+        const first = s.issueV2('chess-foundations', 'Holder', 'user-a');
         expect(first.created).toBe(true);
-        const second = s.issue('chess-foundations', '1.0', 'Holder', 'user-a', { requiresProject: false });
+        const second = s.issueV2('chess-foundations', 'Holder', 'user-a');
         expect(second.created).toBe(false);
         expect(second.credentialId).toBe(first.credentialId);
         expect(s.issued.size).toBe(1);
+        // Immutable skill objects, names from the pinned program.
+        expect(s.issued.get('user-a:chess-foundations:1.0').verified_skills[0]).toEqual({
+            key: 'rules',
+            name: 'Rules & Basics',
+            score: 100,
+        });
     });
 
     test('18. issued credential cannot be modified by normal client', () => {
@@ -477,14 +573,8 @@ describe('server trust layer invariants', () => {
 
     test('19. public verification works anonymously', () => {
         const s = new FakeTrustServer();
-        for (const session of ['s1', 's2']) {
-            for (const e of chessRecallApply(session)) s.upsertEvent(e, 'user-a', 'user-a');
-            s.upsertEvent(chessValidate(session, `v-${session}`), 'user-a', 'user-a');
-        }
-        s.seedKey('set-1', { q1: 'a' });
-        s.createAttempt('att-1', 'user-a', 'chess-foundations', '1.0', 'set-1');
-        s.submit('att-1', 'user-a', { q1: 'a' }, 'set-1');
-        const { credentialId } = s.issue('chess-foundations', '1.0', 'Holder', 'user-a', { requiresProject: false });
+        completeV2Path(s);
+        const { credentialId } = s.issueV2('chess-foundations', 'Holder', 'user-a');
         const pub = s.verifyAnon(credentialId); // anon: no uid involved
         expect(pub).not.toBeNull();
         expect(pub!.credentialId).toBe(credentialId);
@@ -494,30 +584,16 @@ describe('server trust layer invariants', () => {
 
     test('20. revoked credential verifies as revoked', () => {
         const s = new FakeTrustServer();
-        for (const session of ['s1', 's2']) {
-            for (const e of chessRecallApply(session)) s.upsertEvent(e, 'user-a', 'user-a');
-            s.upsertEvent(chessValidate(session, `v-${session}`), 'user-a', 'user-a');
-        }
-        s.seedKey('set-1', { q1: 'a' });
-        s.createAttempt('att-1', 'user-a', 'chess-foundations', '1.0', 'set-1');
-        s.submit('att-1', 'user-a', { q1: 'a' }, 'set-1');
-        const { credentialId } = s.issue('chess-foundations', '1.0', 'Holder', 'user-a', { requiresProject: false });
+        completeV2Path(s);
+        const { credentialId } = s.issueV2('chess-foundations', 'Holder', 'user-a');
         s.revokeAsServiceRole(credentialId);
         expect(s.verifyAnon(credentialId)!.status).toBe('revoked');
     });
 
     test('21. clearing AsyncStorage does not delete server credential', () => {
-        // Server rows live outside device storage: simulate a device wipe by
-        // dropping every local handle; the server map is untouched.
         const s = new FakeTrustServer();
-        for (const session of ['s1', 's2']) {
-            for (const e of chessRecallApply(session)) s.upsertEvent(e, 'user-a', 'user-a');
-            s.upsertEvent(chessValidate(session, `v-${session}`), 'user-a', 'user-a');
-        }
-        s.seedKey('set-1', { q1: 'a' });
-        s.createAttempt('att-1', 'user-a', 'chess-foundations', '1.0', 'set-1');
-        s.submit('att-1', 'user-a', { q1: 'a' }, 'set-1');
-        const { credentialId } = s.issue('chess-foundations', '1.0', 'Holder', 'user-a', { requiresProject: false });
+        completeV2Path(s);
+        const { credentialId } = s.issueV2('chess-foundations', 'Holder', 'user-a');
         const wipedLocalHandles: unknown[] = []; // device storage cleared
         void wipedLocalHandles;
         expect(s.verifyAnon(credentialId)!.credentialId).toBe(credentialId);
@@ -526,10 +602,13 @@ describe('server trust layer invariants', () => {
     test('22. forged local credential does not verify publicly', () => {
         const s = new FakeTrustServer();
         expect(s.verifyAnon('FORGED-LOCAL-123')).toBeNull();
+        // Local preview ids (ZNY-...) never match the server namespace.
+        const local = buildCredentialId('CHF', 'user-a', '2026-09-10T00:00:00.000Z');
+        expect(local.startsWith('ZNY-')).toBe(true);
+        expect(s.verifyAnon(local)).toBeNull();
     });
 
     test('23. program version is pinned', () => {
-        // Events pinned to 9.9 cannot satisfy a 1.0 program gate.
         const gate = evaluateIssuanceGate({
             programSlug: 'chess-foundations',
             programVersion: '1.0',
@@ -543,16 +622,16 @@ describe('server trust layer invariants', () => {
         });
         expect(gate.eligible).toBe(false);
         expect(gate.reasons).toContain('assessment_version_mismatch');
-        // Unversioned legacy can never be trusted validation.
         const legacy = { ...chessValidate('s1', 'v-s1'), programVersion: undefined };
         expect(isTrustedValidation(legacy, new FakeTrustServer().registry)).toBe(false);
-        // Frozen projector excludes versionless legacy by default too.
         const projection = projectSkillState({ program: chess, events: [legacy as LearningEvent] });
         expect(projection.skills.find(sk => sk.skillKey === 'rules')?.stage).toBe('unseen');
     });
 
     test('24. server skill projection matches canonical fixture results', () => {
-        // Shared code: server projection IS the frozen projector.
+        // Shared code: server projection IS the frozen projector (client
+        // rows still feed Skill State; only SERVER proof feeds issuance).
+        const s = new FakeTrustServer();
         const events: LearningEvent[] = [1, 2, 3].flatMap(n => [
             ...(['recall', 'apply'] as const).map(phase =>
                 buildAttemptEvent({
@@ -572,18 +651,160 @@ describe('server trust layer invariants', () => {
             ),
             chessValidate(`s${n}`, `v-s${n}`),
         ]);
-        const projection = projectSkillState({ program: chess, events });
-        const rules = projection.skills.find(sk => sk.skillKey === 'rules')!;
-        expect(rules.stage).toBe('strong');
-        // SQL-mirror coverage over the trusted subset agrees.
-        const s = new FakeTrustServer();
         for (const e of events) s.upsertEvent(e, 'user-a', 'user-a');
-        const trusted = s.readEvents('user-a').filter(e => e.trusted);
-        expect(trusted.length).toBe(3);
-        const coverage = trustedValidationCoverage(trusted);
+        // Client rows: all untrusted under the hardened model...
+        expect(s.readEvents('user-a').every(e => e.trusted === false)).toBe(true);
+        // ...yet still feed the frozen Skill State projection.
+        const projection = projectSkillState({ program: chess, events });
+        expect(projection.skills.find(sk => sk.skillKey === 'rules')?.stage).toBe('strong');
+        // Server proof comes only from the server-scored flow.
+        s.seedValidationItem(
+            { id: 'item-rules', program: 'chess-foundations', version: '1.0', skill: 'rules', day: 4, lessonId: 'chess_d4', answer: 'e4' },
+            'service_role',
+        );
+        for (const n of [1, 2, 3]) {
+            const att = s.startValidation('user-a', 'chess-foundations', '1.0', 4);
+            s.submitValidation(att, 'user-a', n === 3 ? 'wrong' : 'e4');
+        }
+        const proven = s.serverProvenEvents('user-a');
+        expect(proven.length).toBe(2);
+        const coverage = trustedValidationCoverage(proven);
         expect(coverage.find(c => c.skillKey === 'rules')).toMatchObject({
-            trustedValidations: 3,
-            sessions: 3,
+            trustedValidations: 2,
+            sessions: 2,
         });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Hardening extras (016/017 model)
+// ---------------------------------------------------------------------------
+
+describe('trust hardening extras', () => {
+    test('25. forged client PASS can never become trusted', () => {
+        const s = new FakeTrustServer();
+        // The exact malicious payload from the audit: every claim maxed out.
+        const forged = chessValidate('evil', 'v-evil', 4, 'static_bank');
+        expect(forged.sessionKind).toBe('structured');
+        expect(forged.phase).toBe('validate');
+        expect(forged.outcome).toBe('pass');
+        s.upsertEvent(forged, 'user-a', 'user-a');
+        const row = s.events.get(forged.id)!;
+        expect(row.trusted).toBe(false);
+        expect(isServerProvenRow(row)).toBe(false);
+    });
+
+    test('26. client cannot mint server_scored provenance', () => {
+        const s = new FakeTrustServer();
+        const e = { ...chessValidate('s1', 'v-s1'), provenance: 'server_scored' as const };
+        s.upsertEvent(e, 'user-a', 'user-a');
+        const row = s.events.get(e.id)!;
+        expect(row.provenance).not.toBe('server_scored');
+        expect(row.trusted).toBe(false);
+    });
+
+    test('27. cross-program relabel never yields proof; server derives identity', () => {
+        const s = new FakeTrustServer();
+        // Attacker replays a chess registry day as python/functions.
+        const relabeled = buildAttemptEvent({
+            sessionId: 'evil', userId: 'user-a', hobbyId: 'python', lessonId: 'python_d15',
+            lessonDay: 15, cardId: 'v-evil', attemptNo: 1, phase: 'validate',
+            sessionKind: 'structured', outcome: 'pass', cardType: 'challenge',
+            provenance: 'static_bank', occurredAt: '2026-09-10T00:00:00.000Z',
+        });
+        s.upsertEvent(relabeled, 'user-a', 'user-a');
+        expect(s.events.get(relabeled.id)!.trusted).toBe(false);
+        // The server flow derives chess/rules from its own item, never client fields.
+        s.seedValidationItem(
+            { id: 'item-1', program: 'chess-foundations', version: '1.0', skill: 'rules', day: 4, lessonId: 'chess_d4', answer: 'e4' },
+            'service_role',
+        );
+        const att = s.startValidation('user-a', 'chess-foundations', '1.0', 4);
+        s.submitValidation(att, 'user-a', 'e4');
+        const proven = s.serverProvenEvents('user-a');
+        expect(proven).toHaveLength(1);
+        expect(proven[0].programSlug).toBe('chess-foundations');
+        expect(proven[0].skillKey).toBe('rules');
+    });
+
+    test('28. wrong answer in server flow creates no proof', () => {
+        const s = new FakeTrustServer();
+        s.seedValidationItem(
+            { id: 'item-1', program: 'chess-foundations', version: '1.0', skill: 'rules', day: 4, lessonId: 'chess_d4', answer: 'e4' },
+            'service_role',
+        );
+        const att = s.startValidation('user-a', 'chess-foundations', '1.0', 4);
+        const r = s.submitValidation(att, 'user-a', 'd5');
+        expect(r).toEqual({ passed: false, submitted: true });
+        expect(s.serverProvenEvents('user-a')).toHaveLength(0);
+        // Replay is idempotent: original stands, no second row.
+        const replay = s.submitValidation(att, 'user-a', 'e4');
+        expect(replay).toEqual({ passed: false, submitted: false });
+        expect(s.serverProvenEvents('user-a')).toHaveLength(0);
+    });
+
+    test('29. issuance requires enrollment, components, and enabled flag', () => {
+        const s = new FakeTrustServer();
+        // Nothing set up: enabled=false, no enrollment, no components.
+        expect(() => s.issueV2('chess-foundations', 'Holder', 'user-a')).toThrow(/program_not_issuance_ready/);
+        s.issuanceEnabled.set('chess-foundations', true);
+        expect(() => s.issueV2('chess-foundations', 'Holder', 'user-a')).toThrow(/enrollment_required/);
+        s.enroll('user-a', 'chess-foundations', '1.0');
+        expect(() => s.issueV2('chess-foundations', 'Holder', 'user-a')).toThrow(/component_missing/);
+    });
+
+    test('30. server credential ids carry 128-bit entropy', () => {
+        expect(() => buildServerCredentialId('abc')).toThrow();
+        const id = buildServerCredentialId('0123456789abcdef0123456789abcdef');
+        expect(id).toBe('ZNX-0123456789ABCDEF0123456789ABCDEF');
+        expect(id.replace('ZNX-', '')).toHaveLength(32);
+    });
+
+    test('31. server policy: all five programs blocked until trust-ready', () => {
+        const policies = allServerIssuancePolicies();
+        expect(policies).toHaveLength(5);
+        for (const p of policies) {
+            expect(p.issuanceEnabled).toBe(false);
+            expect(p.issuanceBlockedReason).toMatch(/no server-authoritative/);
+            expect(p.requiresProject).toBe(true);
+        }
+    });
+
+    test('32. frozen catalog parity: server seed expectations', () => {
+        // If the frozen catalog changes, this test forces a matching 018+.
+        expect(CREDENTIAL_PROGRAMS).toHaveLength(5);
+        const expected: Record<string, { code: string; title: string; skills: [string, number][] }> = {
+            'python-foundations': { code: 'PYF', title: 'Zenyth Verified Skill — Python Foundations', skills: [['syntax', 0.2], ['logic', 0.25], ['functions', 0.25], ['basic_programming', 0.3]] },
+            'chess-foundations': { code: 'CHF', title: 'Zenyth Verified Skill — Chess Foundations', skills: [['rules', 0.2], ['openings', 0.25], ['endgames', 0.25], ['tactics', 0.3]] },
+            'reading-mastery': { code: 'RDG', title: 'Zenyth Verified Skill — Reading Mastery', skills: [['techniques', 0.25], ['analysis', 0.3], ['nonfiction', 0.25], ['system', 0.2]] },
+            'english-foundations': { code: 'ENF', title: 'Zenyth Verified Skill — English Foundations', skills: [['grammar', 0.3], ['vocabulary', 0.25], ['speaking', 0.25], ['writing', 0.2]] },
+            'chinese-hsk1-start': { code: 'CHN', title: 'Zenyth Verified Skill — Chinese HSK 1 Start', skills: [['pinyin', 0.3], ['characters', 0.25], ['phrases', 0.25], ['grammar', 0.2]] },
+        };
+        for (const p of CREDENTIAL_PROGRAMS) {
+            const exp = expected[p.slug];
+            expect(exp).toBeDefined();
+            expect(p.version).toBe('1.0');
+            expect(p.code).toBe(exp.code);
+            expect(p.title).toBe(exp.title);
+            expect(p.requiredScore).toBe(80);
+            expect(p.requiresProject).toBe(true);
+            expect(p.requiresIdentityVerification).toBe(false);
+            expect(p.skills.map(sk => [sk.key, sk.weight])).toEqual(exp.skills);
+            expect(p.skills.every(sk => sk.minimumScore === 65)).toBe(true);
+            const weightSum = p.skills.reduce((a, sk) => a + sk.weight, 0);
+            expect(Math.abs(weightSum - 1)).toBeLessThan(1e-9);
+        }
+        expect(() => serverIssuancePolicy('nope')).toThrow();
+    });
+
+    test('33. official verification is server-only (local previews never verify)', async () => {
+        const rpc = jest.fn().mockResolvedValue({ data: [], error: null });
+        jest.doMock('../services/supabase/client', () => ({ getSupabase: () => ({ rpc }) }));
+        const { verifyCredentialPublic } = require('../services/credentialVerification') as typeof import('../services/credentialVerification');
+        const local = buildCredentialId('CHF', 'user-a', '2026-09-10T00:00:00.000Z');
+        const res = await verifyCredentialPublic(local);
+        expect(rpc).toHaveBeenCalledWith('verify_credential', { p_credential_id: local });
+        expect(res).toEqual({ found: false, credential: null });
+        jest.dontMock('../services/supabase/client');
     });
 });
