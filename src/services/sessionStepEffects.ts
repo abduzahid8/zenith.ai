@@ -1,49 +1,41 @@
 import type { HobbyId, LessonContent } from '../data/lessonContent';
 import { useGamificationStore } from '../store/gamificationStore';
 import { useGoalStore } from '../store/goalStore';
+import type { SessionEvaluation } from '../domain/sessions/outcomePolicy';
 
 /**
- * Step side-effects adapter — mirrors useTimer.handleStepComplete store
- * operations exactly (gamification + artifacts + goal actions + day advance)
- * without any navigation or timer coupling.
+ * Session side effects, split in two responsibilities.
  *
- * The swipe session calls these at the same semantic points as the legacy
- * stepper so both presentations feed identical systems. When the legacy
- * screen retires, both callers collapse into this module (Phase 2/3).
+ * A. ATTEMPT effects (immediate, per answer): persist the artifact +
+ *    AI-feedback reference and return its id for event linking. These never
+ *    advance curriculum, sessions, goals or tasks.
+ *
+ * B. PROGRESSION effects (once, after validated session evaluation):
+ *    curriculum advance, session counter, chess solve, truth-aware goal
+ *    signals. Exactly-once per eligible session; zero times otherwise.
+ *
+ * Legacy useTimer keeps its own inline logic; the swipe session must use
+ * only this module (no direct advanceDay/incrementSessionsCompleted calls).
  */
 
-const STEP_WEIGHT: Record<string, number> = {
-    learn: 1,
-    do: 2,
-    deepen1: 3,
-    deepen2: 4,
-};
+// ---------------------------------------------------------------------------
+// A. Attempt effects
+// ---------------------------------------------------------------------------
 
-const STEP_DIFFICULTY: Record<string, 'completed_easy' | 'completed_struggled'> = {
-    do: 'completed_easy',
-    deepen1: 'completed_easy',
-    deepen2: 'completed_easy',
-};
-
-function recordGoal(lesson: LessonContent, step: string): void {
+/**
+ * Persist one answer attempt as an artifact. Returns the artifact id
+ * (artifactRef for learning events) or null when there is nothing to store.
+ * Never touches progression.
+ */
+export function recordAttemptArtifact(
+    lesson: LessonContent,
+    step: string,
+    userInput?: string,
+    aiFeedback?: string,
+): string | null {
+    if (!userInput) return null;
     try {
-        useGoalStore.getState().recordDailyAction(
-            lesson.hobby as HobbyId,
-            STEP_WEIGHT[step] || 1,
-            lesson.learn.title,
-        );
-        useGoalStore.getState().adjustDifficulty(
-            lesson.hobby as HobbyId,
-            STEP_DIFFICULTY[step] || 'completed_easy',
-        );
-    } catch (err) {
-        console.error('[sessionStepEffects] Goal record failed:', err);
-    }
-}
-
-function saveStepArtifact(lesson: LessonContent, step: string, userInput?: string, aiFeedback?: string): void {    if (!userInput) return;
-    try {
-        useGamificationStore.getState().saveArtifact({
+        return useGamificationStore.getState().saveArtifact({
             hobbyId: lesson.hobby,
             lessonId: lesson.id,
             taskType: (step.startsWith('test_') ? 'do' : step) as any,
@@ -52,77 +44,92 @@ function saveStepArtifact(lesson: LessonContent, step: string, userInput?: strin
         });
     } catch (err) {
         console.error('[sessionStepEffects] Artifact save failed:', err);
+        return null;
     }
 }
 
 /**
- * Light formative artifact for recall answers (mirrors the legacy tests step:
- * no goal actions, no day advance — the answer itself is the evidence).
+ * Light formative artifact for recall answers (legacy tests parity:
+ * no goal actions, no day advance from a recall alone).
  */
 export function saveRecallArtifact(
     lesson: LessonContent,
     userInput: string,
     aiFeedback?: string,
-): void {
+): string | null {
     // 'test_*' steps map to the 'do' artifact channel (legacy parity).
-    saveStepArtifact(lesson, 'test_recall', userInput, aiFeedback);
+    return recordAttemptArtifact(lesson, 'test_recall', userInput, aiFeedback);
+}
+
+// ---------------------------------------------------------------------------
+// B. Progression effects (exactly once per eligible session)
+// ---------------------------------------------------------------------------
+
+export interface SessionProgressionInput {
+    lesson: LessonContent;
+    evaluation: SessionEvaluation;
+    /** True when a chess puzzle was actually solved this session. */
+    chessSolved: boolean;
+}
+
+export interface SessionProgressionResult {
+    /** Whether curriculum/sessions/goal progression ran (eligible only). */
+    progressed: boolean;
+    advancedDay: boolean;
 }
 
 /**
- * Apply the completion effects of one session step.
- * `step` matches legacy activeStep ids: learn | tests | do | deepen1 | deepen2.
- * Returns whether this step finished the learning arc (advance day + session).
+ * Run validated end-of-session progression exactly once.
+ * Eligible = evaluation pass|partial. Fail/non-rewarding runs nothing.
+ *
+ * Goal signals stay truth-aware without redesigning goal scoring:
+ *   pass    -> full practice weight + completed_easy
+ *   partial -> minimal weight (participation, never mastery) + completed_struggled
+ *   fail    -> difficulty signal only (completed_struggled), no progress
+ *   non-rewarding -> nothing at all
  */
-export function applyStepEffects(
-    step: string,
-    lesson: LessonContent,
-    opts: { userInput?: string; aiFeedback?: string; isPremium: boolean },
-): { arcComplete: boolean } {
+export function applySessionProgression(input: SessionProgressionInput): SessionProgressionResult {
+    const { lesson, evaluation, chessSolved } = input;
+    if (evaluation !== 'pass' && evaluation !== 'partial' && evaluation !== 'fail') {
+        // non-rewarding (unknown/skipped/unanswered): absolutely nothing.
+        return { progressed: false, advancedDay: false };
+    }
+    if (evaluation === 'fail') {
+        // Failure signal only: difficulty adapts, but no progress, no advance.
+        try {
+            useGoalStore.getState().adjustDifficulty(lesson.hobby as HobbyId, 'completed_struggled');
+        } catch {}
+        return { progressed: false, advancedDay: false };
+    }
     const g = useGamificationStore.getState();
-
-    if (['learn', 'do', 'deepen1', 'deepen2'].includes(step)) {
+    try {
+        g.markStepComplete('learn');
+        g.markStepComplete('do');
+    } catch (err) {
+        console.error('[sessionStepEffects] markStepComplete failed:', err);
+    }
+    if (chessSolved) {
         try {
-            g.markStepComplete(step as any);
-        } catch (err) {
-            console.error('[sessionStepEffects] markStepComplete failed:', err);
+            g.recordChessSolve();
+        } catch {}
+    }
+    try {
+        if (evaluation === 'pass') {
+            useGoalStore.getState().recordDailyAction(lesson.hobby as HobbyId, 2, lesson.learn.title);
+            useGoalStore.getState().adjustDifficulty(lesson.hobby as HobbyId, 'completed_easy');
+        } else {
+            useGoalStore.getState().recordDailyAction(lesson.hobby as HobbyId, 1, lesson.learn.title);
+            useGoalStore.getState().adjustDifficulty(lesson.hobby as HobbyId, 'completed_struggled');
         }
+    } catch (err) {
+        console.error('[sessionStepEffects] Goal progression failed:', err);
     }
-    saveStepArtifact(lesson, step, opts.userInput, opts.aiFeedback);
-
-    const finishArc = () => {
-        try {
-            g.advanceDay(lesson.hobby as HobbyId);
-            g.incrementSessionsCompleted();
-        } catch (err) {
-            console.error('[sessionStepEffects] advance failed:', err);
-        }
-    };
-
-    if (step === 'learn' || step === 'tests') {
-        return { arcComplete: false };
+    try {
+        g.advanceDay(lesson.hobby as HobbyId);
+        g.incrementSessionsCompleted();
+    } catch (err) {
+        console.error('[sessionStepEffects] advance failed:', err);
+        return { progressed: true, advancedDay: false };
     }
-    if (step === 'do') {
-        if (lesson.hobby === 'chess') {
-            try {
-                g.recordChessSolve();
-            } catch {}
-            recordGoal(lesson, step);
-            finishArc();
-            return { arcComplete: true };
-        }
-        if (opts.isPremium && lesson.deepen1) return { arcComplete: false };
-        recordGoal(lesson, step);
-        finishArc();
-        return { arcComplete: true };
-    }
-    if (step === 'deepen1') {
-        if (opts.isPremium && lesson.deepen2) return { arcComplete: false };
-        recordGoal(lesson, step);
-        finishArc();
-        return { arcComplete: true };
-    }
-    // deepen2
-    recordGoal(lesson, step);
-    finishArc();
-    return { arcComplete: true };
+    return { progressed: true, advancedDay: true };
 }

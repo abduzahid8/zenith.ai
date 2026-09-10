@@ -4,7 +4,6 @@
  */
 import type { LessonContent } from '../data/lessonContent';
 import {
-    aggregateOutcome,
     budgetForMinutes,
     buildLearningCards,
     buildResultData,
@@ -14,6 +13,7 @@ import {
     splitBodyToIdeas,
     statusOf,
 } from '../domain/sessions/learningCards';
+import { evaluateSession } from '../domain/sessions/outcomePolicy';
 import {
     buildSessionBlueprint,
     normalizeKind,
@@ -192,14 +192,27 @@ describe('required cards gate advance', () => {
 });
 
 describe('outcomes flow into existing engine logic', () => {
-    it('AI verdicts parse to outcomes; aggregation prefers pass', () => {
+    it('AI verdicts parse to outcomes; required-card evaluation needs every proof', () => {
         expect(parseVerdict('👍 great')).toBe('pass');
         expect(parseVerdict('🤔 partial')).toBe('partial');
         expect(parseVerdict('❌ wrong')).toBe('fail');
-        expect(aggregateOutcome({})).toBe('unknown');
-        expect(
-            aggregateOutcome({ a: { completed: true, attempts: 1, outcome: 'fail' }, b: { completed: true, attempts: 1, outcome: 'partial' } }),
-        ).toBe('partial');
+        const cards = buildLearningCards({ blueprint: bp(30), lesson: lesson(), kind: 'structured', minutes: 30 });
+        const required = cards.filter(c => c.required && c.type !== 'result');
+        expect(required.length).toBeGreaterThan(0);
+        // One PASS cannot mask an unanswered required card.
+        const partial = { [required[0].id]: { completed: true, attempts: 1, outcome: 'pass' as const } };
+        expect(evaluateSession(cards, partial)).toBe('non_rewarding');
+    });
+
+    it('a passing recall plus a failing challenge is session FAIL, not PASS', () => {
+        const cards = buildLearningCards({ blueprint: bp(30), lesson: lesson(), kind: 'structured', minutes: 30 });
+        const recall = cards.find(c => c.type === 'recall')!;
+        const apply = cards.find(c => c.type === 'apply')!;
+        const status = {
+            [recall.id]: { completed: true, attempts: 1, outcome: 'pass' as const },
+            [apply.id]: { completed: true, attempts: 1, outcome: 'fail' as const },
+        };
+        expect(evaluateSession(cards, status)).toBe('fail');
     });
 
     it('failed session earns nothing', () => {

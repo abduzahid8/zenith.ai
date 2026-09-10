@@ -157,8 +157,8 @@ interface GamificationState {
   /** Обновить streak при открытии приложения */
   updateStreak: () => void;
 
-  /** Сохранить выполненное задание как артефакт */
-  saveArtifact: (artifact: Omit<Artifact, 'id' | 'date'>) => void;
+  /** Сохранить выполненное задание как артефакт (возвращает id для ссылок) */
+  saveArtifact: (artifact: Omit<Artifact, 'id' | 'date'>) => string;
 
   /** Перейти к следующему дню обучения по хобби */
   advanceDay: (hobby: HobbyId) => void;
@@ -377,6 +377,7 @@ export const useGamificationStore = create<GamificationState>()(
         }
 
         get().checkAndUnlockBadges();
+        return newArtifact.id;
       },
 
       // ── advanceDay ────────────────────────────────────────────

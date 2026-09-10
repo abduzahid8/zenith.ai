@@ -122,7 +122,7 @@ describe('7 — Home first screen structurally unchanged', () => {
 describe('8 — no second session engine', () => {
     it('completion grants live in exactly one domain module', () => {
         const { execSync } = require('child_process') as typeof import('child_process');
-        const out = execSync('git grep -l "countsAsFullCompletion:" -- src | sort', {
+        const out = execSync('git grep -l "countsAsFullCompletion:" -- src ":!src/__tests__" | sort', {
             cwd: ROOT,
             encoding: 'utf8',
         }).trim().split('\n').filter(Boolean);
@@ -131,7 +131,8 @@ describe('8 — no second session engine', () => {
 
     it('swipe controller reuses the shared pipeline (no fork)', () => {
         const hook = readSrc('src/hooks/useSwipeSession.ts');
-        expect(hook).toMatch(/resolveCompletionPlan/);
+        expect(hook).toMatch(/canCompleteStructuredTask/);
+        expect(hook).toMatch(/evaluateSession/);
         expect(hook).toMatch(/buildSessionBlueprint/);
         expect(readSrc('src/domain/sessions/learningCards.ts')).not.toMatch(/countsAsFullCompletion/);
     });

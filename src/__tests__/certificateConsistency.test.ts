@@ -192,9 +192,12 @@ describe('Phase 1 architecture guardrails', () => {
     });
 
     it('no screen/component scores certificates independently', () => {
+        // Catalog slug lookup (getProgramForHobby) is not scoring: screens may
+        // resolve WHICH program to read, but the numbers must come from the
+        // canonical hook. Forbid dataset construction + direct progress calls.
         const { execSync } = require('child_process') as typeof import('child_process');
         const out = execSync(
-            'git grep -l "toEngineTaskInputs\\|\\.getProgress(\\|getProgramForHobby" -- src/screens src/components src/screens/tabs || true',
+            'git grep -l "toEngineTaskInputs\\|\\.getProgress(\\|buildProgress\\|computeSkillGraph" -- src/screens src/components || true',
             { cwd: ROOT, encoding: 'utf8' },
         ).trim();
         expect(out).toBe('');

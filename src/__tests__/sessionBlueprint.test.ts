@@ -82,10 +82,11 @@ describe('parseVerdict', () => {
 });
 
 describe('isRewardedOutcome', () => {
-    it('rewards evidence, never failure or skips', () => {
+    it('rewards evidence, never failure, skips, or unknown', () => {
+        // UNKNOWN is zero evidence: it must never grant completion/advance.
         expect(isRewardedOutcome('pass')).toBe(true);
         expect(isRewardedOutcome('partial')).toBe(true);
-        expect(isRewardedOutcome('unknown')).toBe(true);
+        expect(isRewardedOutcome('unknown')).toBe(false);
         expect(isRewardedOutcome('fail')).toBe(false);
         expect(isRewardedOutcome('skipped')).toBe(false);
     });

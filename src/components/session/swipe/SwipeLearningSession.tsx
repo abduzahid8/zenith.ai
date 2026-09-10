@@ -92,11 +92,12 @@ export const SwipeLearningSession: React.FC<SwipeLearningSessionProps> = (props)
         (cardId: string, passed: number, total: number, skipped: number) => {
             const outcome: StepOutcome =
                 passed >= total ? 'pass' : passed > 0 ? 'partial' : skipped > 0 ? 'unknown' : 'fail';
+            // No synthetic answer text: the validated outcome is the evidence.
             session.answer(
                 cardId,
                 outcome,
-                `Challenge ${passed}/${total}`,
-                '',
+                undefined,
+                undefined,
                 passed >= total ? undefined : `${passed}/${total} correct — review and retry.`,
             );
         },

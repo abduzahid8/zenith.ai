@@ -6,10 +6,16 @@ import type { CertificationProgress, CredentialProgram } from '../domain/credent
 
 /**
  * Session evidence deltas — what ONE session actually improved.
- * Derived on the fly from the same engine data the credential system
- * already observes (daily tasks + artifacts + skill graph). No new
- * tables, no stored silo: snapshot the skill graph at session start,
- * diff it at session finish.
+ *
+ * LEGACY AUTHORITY NOTICE (Phase 3A): snapshot/diff here reads TODAY-ONLY
+ * daily tasks with empty sessions, which can disagree with the canonical
+ * certificate hook (28-day history). New learning truth lives in:
+ * LearningEvent history (learningEventRepository) + outcomePolicy
+ * evaluation + useSwipeSession finish(). This module stays ONLY for:
+ * - weakestOpenSkill() (Quick Session recommendation, until Phase 3B)
+ * - toEngineTaskInputs() (pure conversion)
+ * Do NOT add new consumers of captureSkillSnapshot/diffSkillSnapshot,
+ * and do NOT display their deltas as canonical progress.
  */
 
 export interface SkillMove {

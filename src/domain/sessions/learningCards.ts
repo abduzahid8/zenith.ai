@@ -457,19 +457,6 @@ export function flowTransition(state: FlowState, event: FlowEvent, maxRetries: n
         }
     }
 }
-
-/** Aggregate interactive outcomes into one session outcome (existing rule). */
-export function aggregateOutcome(status: Record<string, CardStatus>): StepOutcome {
-    const outcomes = Object.values(status)
-        .map(s => s.outcome)
-        .filter((o): o is StepOutcome => !!o);
-    if (outcomes.length === 0) return 'unknown';
-    if (outcomes.includes('pass')) return 'pass';
-    if (outcomes.includes('partial')) return 'partial';
-    if (outcomes.includes('fail')) return 'fail';
-    return 'unknown';
-}
-
 export interface SessionResultData {
     kind: SessionKind;
     objectiveTitle: string;
@@ -498,10 +485,8 @@ export function buildResultData(input: {
     nextTitle?: string | null;
 }): SessionResultData {
     const interactive = input.cards.filter(c => c.type === 'recall' || c.type === 'apply' || c.type === 'challenge');
-    const verified = interactive.filter(c => {
-        const o = input.status[c.id]?.outcome;
-        return o === 'pass' || o === 'partial';
-    }).length;
+    // Verified = PASS only. Partial is weaker evidence, never "verified".
+    const verified = interactive.filter(c => input.status[c.id]?.outcome === 'pass').length;
     const stepsCompleted = input.cards.filter(c => c.type !== 'result' && input.status[c.id]?.completed).length;
     return {
         kind: input.kind,

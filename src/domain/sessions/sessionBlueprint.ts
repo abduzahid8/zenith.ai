@@ -225,7 +225,9 @@ export function parseSessionParams(raw: {
 
 /** Outcomes that earn progression (day advance, session count, task credit). */
 export function isRewardedOutcome(outcome: StepOutcome): boolean {
-    return outcome === 'pass' || outcome === 'partial' || outcome === 'unknown';
+    // UNKNOWN is zero evidence (offline/free-form): it must never complete
+    // tasks, advance curriculum, or count as verified (outcome policy).
+    return outcome === 'pass' || outcome === 'partial';
 }
 
 /** A quick formative check built from any lesson — no bank content needed. */
