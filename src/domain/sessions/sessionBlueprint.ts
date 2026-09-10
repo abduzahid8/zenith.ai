@@ -1,6 +1,6 @@
 import { TaskType } from '../../services/supabase/types';
 import type { LearningStrategy, ProgressionScope } from './sessionIntent';
-import { defaultScopeForKind } from './sessionIntent';
+import { defaultScopeForKind, normalizeSessionIntent } from './sessionIntent';
 
 /**
  * Session blueprint — one Learning Objective per session, time-scaled phases.
@@ -196,6 +196,7 @@ export function parseSessionParams(raw: {
     origin?: string | string[] | null;
     kind?: string | string[] | null;
     skillDay?: string | string[] | null;
+    skill?: string | string[] | null;
     scope?: string | string[] | null;
     strategy?: string | string[] | null;
     reason?: string | string[] | null;
@@ -204,6 +205,7 @@ export function parseSessionParams(raw: {
     taskId: string | null;
     discoveryId: string | null;
     skillDay: number | null;
+    skillKey: string | null;
     scope: ProgressionScope;
     strategy: LearningStrategy;
     reasonCode: string | null;
@@ -235,6 +237,11 @@ export function parseSessionParams(raw: {
             ? strategyRaw
             : 'continue_curriculum';
     const reasonRaw = (first(raw.reason) ?? '').trim().slice(0, 64);
+    const skillRaw = first(raw.skill);
+    const skillKey = skillRaw && /^[A-Za-z0-9_-]{1,64}$/.test(skillRaw) ? skillRaw : null;
+    // Canonicalize the execution contract: malformed deep links normalize
+    // to safe semantics (the finalizer enforces progression independently).
+    const intent = normalizeSessionIntent({ kind, scope, strategy });
     return {
         minutes: Number.isFinite(parsed) && parsed > 0 ? parsed : undefined,
         taskId: taskId && TASK_ID_RE.test(taskId) ? taskId : null,
@@ -243,11 +250,12 @@ export function parseSessionParams(raw: {
             Number.isFinite(skillDayParsed) && skillDayParsed >= 1 && skillDayParsed <= 28
                 ? Math.floor(skillDayParsed)
                 : null,
-        scope,
-        strategy,
+        skillKey,
+        scope: intent.scope,
+        strategy: intent.strategy,
         reasonCode: reasonRaw.length > 0 ? reasonRaw : null,
         context: {
-            kind,
+            kind: intent.kind,
             origin: normalizeOrigin(first(raw.origin)),
             taskId: taskId && TASK_ID_RE.test(taskId) ? taskId : null,
             discoveryId: discoveryId && TASK_ID_RE.test(discoveryId) ? discoveryId : null,

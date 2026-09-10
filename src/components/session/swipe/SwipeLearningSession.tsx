@@ -6,10 +6,12 @@ import { fonts } from '../../../theme';
 import { useAppTheme } from '../../../theme/useAppTheme';
 import { useUserProfileStore } from '../../../store/userProfileStore';
 import type { SessionKind, SessionOrigin, StepOutcome } from '../../../domain/sessions/sessionBlueprint';
+import { authorizeStepIndex } from '../../../domain/sessions/learningCards';
 import type { LearningStrategy, ProgressionScope } from '../../../domain/sessions/sessionIntent';
 import { HOBBY_META } from '../../../data/lessonContent';
 import { useSwipeSession } from '../../../hooks/useSwipeSession';
 import { LearningCardRenderer } from './LearningCardRenderer';
+import { SessionClock } from './SessionClock';
 import StopConfirmationModal from '../StopConfirmationModal';
 
 interface SwipeLearningSessionProps {
@@ -19,6 +21,7 @@ interface SwipeLearningSessionProps {
     discoveryId?: string | null;
     minutes: number;
     skillDay?: number | null;
+    targetSkillKey?: string | null;
     scope?: ProgressionScope;
     strategy?: LearningStrategy;
     reasonCode?: string | null;
@@ -33,13 +36,13 @@ interface SwipeLearningSessionProps {
  * validated outcomes out. Finite and goal-directed (ends in result).
  */
 export const SwipeLearningSession: React.FC<SwipeLearningSessionProps> = (props) => {
-    const { kind, origin, taskId, discoveryId, minutes, skillDay, scope, strategy, reasonCode, onExit, onContinueNext } = props;
+    const { kind, origin, taskId, discoveryId, minutes, skillDay, targetSkillKey, scope, strategy, reasonCode, onExit, onContinueNext } = props;
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
     const { height } = useWindowDimensions();
     const isPremium = useUserProfileStore(s => s.isPremium);
 
-    const session = useSwipeSession({ kind, origin, taskId, discoveryId, minutes, skillDay, scope, strategy, reasonCode });
+    const session = useSwipeSession({ kind, origin, taskId, discoveryId, minutes, skillDay, targetSkillKey, scope, strategy, reasonCode });
     const listRef = useRef<FlatList>(null);
     const finishOnce = useRef(false);
     const [stopVisible, setStopVisible] = useState(false);
@@ -71,18 +74,22 @@ export const SwipeLearningSession: React.FC<SwipeLearningSessionProps> = (props)
         }
     }, [session.index, cards, session.status]);
 
-    // Clamp overscroll past the furthest unlocked card (required gating).
+    // Forward navigation is AUTHORIZED by the domain reducer, never by the
+    // gesture itself: overscroll past unanswered required cards snaps back.
     const handleMomentumEnd = useCallback(
         (e: any) => {
             const y = e?.nativeEvent?.contentOffset?.y ?? 0;
             const target = Math.round(y / height);
-            if (target > session.maxUnlocked) {
-                scrollTo(session.maxUnlocked);
-            } else {
-                session.dispatch({ type: 'GOTO', index: target });
+            const at = authorizeStepIndex(
+                { cards: session.cards, index: session.index, maxUnlocked: session.maxUnlocked, status: session.cardStatus },
+                target,
+            );
+            if (at !== target) {
+                scrollTo(at);
             }
+            session.dispatch({ type: 'GOTO', index: target });
         },
-        [session.maxUnlocked, session.dispatch, height, scrollTo],
+        [session.cards, session.index, session.maxUnlocked, session.cardStatus, session.dispatch, height, scrollTo],
     );
 
     const handleAnswer = useCallback(
@@ -148,9 +155,11 @@ export const SwipeLearningSession: React.FC<SwipeLearningSessionProps> = (props)
                     onPress={() => session.setPaused(!session.paused)}
                     activeOpacity={0.7}
                 >
-                    <Text style={styles.timeText}>
-                        {session.paused ? '▶' : '❚❚'} {session.elapsedLabel}
-                    </Text>
+                    <SessionClock
+                        paused={session.paused}
+                        stopped={!!session.finished}
+                        onTick={session.onTick}
+                    />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.closeButton} onPress={() => setStopVisible(true)} activeOpacity={0.7}>
                     <Text style={styles.closeText}>×</Text>
@@ -162,6 +171,7 @@ export const SwipeLearningSession: React.FC<SwipeLearningSessionProps> = (props)
 
             <FlatList
                 ref={listRef}
+                testID="swipe-card-list"
                 data={cards}
                 keyExtractor={c => c.id}
                 renderItem={({ item }) => (

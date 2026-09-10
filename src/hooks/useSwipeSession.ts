@@ -31,6 +31,7 @@ export interface SwipeSessionInput {
     discoveryId?: string | null;
     minutes: number;
     skillDay?: number | null;
+    targetSkillKey?: string | null;
     hobbyId?: string | null;
     /** Execution contract from the recommendation (defaults by kind). */
     scope?: ProgressionScope;
@@ -80,10 +81,15 @@ export function useSwipeSession(input: SwipeSessionInput) {
     const [lesson, setLesson] = useState<LessonContent | null>(null);
     const [status, setStatus] = useState<SwipeStatus>('loading');
     const [flow, setFlow] = useState<FlowState | null>(null);
-    const [elapsed, setElapsed] = useState(0);
     const [paused, setPaused] = useState(false);
     const [finished, setFinished] = useState<SessionResultData | null>(null);
     const [finishing, setFinishing] = useState(false);
+    // Elapsed seconds live in a ref (updated by the isolated SessionClock):
+    // ticking must never rerender the card tree.
+    const elapsedRef = useRef(0);
+    const handleTick = useCallback((seconds: number) => {
+        elapsedRef.current = seconds;
+    }, []);
     const [nextAction, setNextAction] = useState<SwipeNextAction | null>(null);
 
     const task = useMemo(
@@ -164,12 +170,8 @@ export function useSwipeSession(input: SwipeSessionInput) {
         }
     }, [status, cards, flow]);
 
-    // Elapsed clock starts immediately; pause only freezes counting.
-    useEffect(() => {
-        if (status !== 'ready' || paused || finished) return;
-        const id = setInterval(() => setElapsed(e => e + 1), 1000);
-        return () => clearInterval(id);
-    }, [status, paused, finished]);
+    // No local clock here on purpose: SessionClock owns the interval so
+    // ticking never rerenders cards (and retries/answers never race it).
 
     const emit = useCallback((event: LearningEvent) => {
         try {
@@ -295,12 +297,13 @@ export function useSwipeSession(input: SwipeSessionInput) {
             scope: input.scope ?? defaultScopeForKind(kind),
             strategy: input.strategy ?? 'continue_curriculum',
             reasonCode: input.reasonCode ?? null,
+            targetSkillKey: input.targetSkillKey ?? null,
             blueprint,
             cards: flow.cards,
             status: flow.status,
             targetTaskId: kind === 'structured' ? (taskId ?? null) : null,
             targetTaskTitle: task?.title ?? null,
-            elapsedSeconds: elapsed,
+            elapsedSeconds: elapsedRef.current,
             chessSolved: chessSolvedRef.current,
         }).then(
             ({ result, nextAction: next }) => {
@@ -317,13 +320,7 @@ export function useSwipeSession(input: SwipeSessionInput) {
         });
         finalizePromiseRef.current = running;
         return running;
-    }, [flow, lesson, hobby, finished, kind, origin, blueprint, taskId, task?.title, user, elapsed]);
-
-    const elapsedLabel = useMemo(() => {
-        const m = Math.floor(elapsed / 60);
-        const s = elapsed % 60;
-        return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-    }, [elapsed]);
+    }, [flow, lesson, hobby, finished, kind, origin, blueprint, taskId, task?.title, user]);
 
     return {
         status,
@@ -334,10 +331,9 @@ export function useSwipeSession(input: SwipeSessionInput) {
         index: flow?.index ?? 0,
         maxUnlocked: flow?.maxUnlocked ?? 0,
         cardStatus: flow?.status ?? {},
-        elapsed,
-        elapsedLabel,
         paused,
         setPaused,
+        onTick: handleTick,
         finishing,
         finished,
         nextAction,

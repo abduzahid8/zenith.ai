@@ -9,6 +9,7 @@ export interface SessionRouteParams {
     origin: SessionOrigin;
     kind: SessionKind;
     skillDay?: number | null;
+    skillKey?: string | null;
     scope?: ProgressionScope;
     strategy?: LearningStrategy;
     reasonCode?: string | null;
@@ -28,6 +29,7 @@ export function buildSessionRoute(p: SessionRouteParams): string {
     q.push(`kind=${p.kind}`);
     q.push(`origin=${p.origin}`);
     if (p.skillDay != null) q.push(`skillDay=${p.skillDay}`);
+    if (p.skillKey) q.push(`skill=${p.skillKey}`);
     if (p.scope) q.push(`scope=${p.scope}`);
     if (p.strategy) q.push(`strategy=${p.strategy}`);
     if (p.reasonCode) q.push(`reason=${p.reasonCode}`);
@@ -67,8 +69,9 @@ export function targetedProofRoute(
     skillDay: number,
     origin: SessionOrigin,
     reasonCode?: string | null,
+    skillKey?: string | null,
 ): string {
-    return buildSessionRoute({ minutes, kind: 'structured', origin, skillDay, scope: 'targeted', strategy: 'prove_skill', reasonCode: reasonCode ?? null });
+    return buildSessionRoute({ minutes, kind: 'structured', origin, skillDay, skillKey: skillKey ?? null, scope: 'targeted', strategy: 'prove_skill', reasonCode: reasonCode ?? null });
 }
 
 /** Discovery: weightless micro-topic, never touches certification. */
@@ -86,19 +89,26 @@ export function routeForRecommendation(
     rec: LearningRecommendation,
     origin: SessionOrigin,
 ): string {
+    // Safe fallback: continue on the real frontier/task. Targeted strategies
+    // without their required day are invalid — never invent day 1.
+    const fallback = (): string => {
+        if (rec.taskId) {
+            return sessionRouteForTask({ id: rec.taskId, duration_minutes: rec.minutes }, origin);
+        }
+        return buildSessionRoute({ minutes: rec.minutes, kind: 'structured', origin, scope: 'curriculum', strategy: 'continue_curriculum' });
+    };
     if (
         rec.type === 'repair_recall' ||
         rec.type === 'practice_application' ||
         rec.type === 'review_skill'
     ) {
         // Encountered day is guaranteed by the engine for these types.
-        return quickPracticeRoute(rec.minutes, rec.curriculumDay ?? 1, rec.type);
+        if (rec.curriculumDay == null) return fallback();
+        return quickPracticeRoute(rec.minutes, rec.curriculumDay, rec.type);
     }
     if (rec.type === 'prove_skill') {
-        return targetedProofRoute(rec.minutes, rec.curriculumDay ?? 1, origin, rec.reasonCode);
+        if (rec.curriculumDay == null) return fallback();
+        return targetedProofRoute(rec.minutes, rec.curriculumDay, origin, rec.reasonCode, rec.skillKey ?? null);
     }
-    if (rec.taskId) {
-        return sessionRouteForTask({ id: rec.taskId, duration_minutes: rec.minutes }, origin);
-    }
-    return buildSessionRoute({ minutes: rec.minutes, kind: 'structured', origin, scope: 'curriculum', strategy: 'continue_curriculum' });
+    return fallback();
 }

@@ -75,6 +75,27 @@ const RN: any = {
     },
     Image: 'Image',
     ActivityIndicator: 'ActivityIndicator',
+    FlatList: ({ data, renderItem, keyExtractor, ...props }: any) =>
+        React.createElement(
+            'FlatList',
+            props,
+            (data ?? []).map((item: any, index: number) => {
+                const el = renderItem({ item, index, separators: {} });
+                // Stable keys like the real virtualized list: without them
+                // every parent rerender would remount all rows (and wipe
+                // interactive card state), which never happens on device.
+                return React.cloneElement(el, {
+                    key: keyExtractor ? keyExtractor(item, index) : String(index),
+                });
+            }),
+        ),
+    TextInput: ({ children, ...props }: any) =>
+        React.createElement('TextInput', props, children),
+    Modal: ({ children, visible, ...props }: any) =>
+        (visible ? React.createElement('Modal', props, children) : null),
+    KeyboardAvoidingView: ({ children, ...props }: any) =>
+        React.createElement('KeyboardAvoidingView', props, children),
+    useWindowDimensions: () => ({ width: 390, height: 844, scale: 3, fontScale: 1 }),
     AppState: {
         addEventListener: jest.fn(() => ({ remove: jest.fn() })),
         currentState: 'active',

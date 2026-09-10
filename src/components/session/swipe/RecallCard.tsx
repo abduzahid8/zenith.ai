@@ -43,6 +43,18 @@ export const RecallCard: React.FC<RecallCardProps> = ({
 
     const isChoice = !recall.tests?.length && !!recall.options && recall.options.length > 0 && typeof recall.correctOptionIndex === 'number';
 
+    // Stable task identity: the parent re-renders every elapsed second and
+    // DoStep resets on task change — an inline literal would wipe typing.
+    const textTask = useMemo(
+        () => ({
+            type: 'free_text' as const,
+            prompt: recall.prompt,
+            correctAnswer: recall.correctAnswer,
+            hints: recall.hint ? [recall.hint] : undefined,
+        }),
+        [recall.prompt, recall.correctAnswer, recall.hint],
+    );
+
     if (recall.tests && recall.tests.length > 0) {
         return (
             <View style={styles.viewport}>
@@ -95,7 +107,7 @@ export const RecallCard: React.FC<RecallCardProps> = ({
                 <View style={styles.doHost}>
                     <DoStep
                         hobbyId={hobbyId}
-                        task={{ type: 'free_text', prompt: recall.prompt, correctAnswer: recall.correctAnswer, hints: recall.hint ? [recall.hint] : undefined }}
+                        task={textTask}
                         onNext={(ans, fb) => onAnswerFeedback(ans, fb)}
                         isLastStep
                     />

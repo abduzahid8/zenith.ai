@@ -26,6 +26,7 @@ import { useGoalStore } from '../../store/goalStore';
 import { GoalSnapshot } from '../../types/goals';
 import GoalProgressBar from '../../components/goal/GoalProgressBar';
 import { findNextIncompleteTask } from '../../domain/sessions/sessionCompletion';
+import { sessionRouteForTask } from '../../domain/sessions/sessionRouting';
 
 const booksImage = require('../../../assets/images/home-books.png');
 const targetImage = require('../../../assets/images/home-target.png');
@@ -98,12 +99,10 @@ const HomeTab: React.FC<HomeTabProps> = ({
             setShowAllDoneModal(true);
         } else {
             // One DailyPlan: resolve the SAME next task object Your Day shows
-            // and start the shared swipe session with it (no timer screen).
+            // and start the shared swipe session with it (canonical route).
             const next = findNextIncompleteTask(dailyTasks);
-            const minutes = next?.duration_minutes && next.duration_minutes > 0 ? next.duration_minutes : 15;
-            const taskParam = next?.id ? `&taskId=${next.id}` : '';
             console.log('[HomeTab] Starting swipe session - task:', next?.id ?? '(none)');
-            handleNavigate(`/session-timer?minutes=${minutes}${taskParam}&kind=structured&origin=home_start`);
+            handleNavigate(sessionRouteForTask(next ?? {}, 'home_start'));
         }
     };
 

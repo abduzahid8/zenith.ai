@@ -402,21 +402,48 @@ export type FlowEvent =
     | { type: 'GOTO'; index: number };
 
 /**
+ * Forward-navigation authorization — the single gate for swipe movement.
+ * - at/below the high-water mark: always allowed (revisiting).
+ * - exactly one past it: allowed only when the frontier card permits exit
+ *   (passive cards and completed required cards do; unanswered required
+ *   cards and the terminal result do not).
+ * - anything further: denied, stay where you are.
+ * Viewing never grants permission beyond this rule.
+ */
+export function authorizeStepIndex(state: FlowState, target: number): number {
+    const last = state.cards.length - 1;
+    if (last < 0) return 0;
+    const t = Math.max(0, Math.min(target, last));
+    if (t <= state.maxUnlocked) return t;
+    if (t === state.maxUnlocked + 1) {
+        const frontier = state.cards[state.maxUnlocked];
+        if (frontier && canAdvanceFrom(state, frontier.id)) return t;
+    }
+    return state.index;
+}
+
+/**
  * Deterministic flow transitions.
- * - fail/partial on a required card with retries left: insert one feedback
- *   card (real explanation) right after, allow a single retry.
- * - pass (or retries exhausted): mark complete, unlock next.
+ * - VIEW/GOTO move only through authorizeStepIndex: dragging toward the
+ *   next card never unlocks an unanswered required card.
+ * - PASS completes the proof card.
+ * - PARTIAL/FAIL with retries left insert one real-explanation support card
+ *   and keep the card open for retry; with budget exhausted (or no support
+ *   content) the card completes truthfully with its actual outcome.
+ * - UNKNOWN/SKIPPED complete without evidence (skip must not trap the user;
+ *   evaluation treats them as non-rewarding).
  */
 export function flowTransition(state: FlowState, event: FlowEvent, maxRetries: number): FlowState {
     switch (event.type) {
         case 'VIEW': {
             const idx = state.cards.findIndex(c => c.id === event.id);
             if (idx < 0) return state;
-            return { ...state, index: idx, maxUnlocked: Math.max(state.maxUnlocked, idx) };
+            const at = authorizeStepIndex(state, idx);
+            return { ...state, index: at, maxUnlocked: Math.max(state.maxUnlocked, at) };
         }
         case 'GOTO': {
-            const clamped = Math.max(0, Math.min(event.index, state.maxUnlocked));
-            return { ...state, index: clamped };
+            const at = authorizeStepIndex(state, event.index);
+            return { ...state, index: at, maxUnlocked: Math.max(state.maxUnlocked, at) };
         }
         case 'ANSWER': {
             const idx = state.cards.findIndex(c => c.id === event.id);
@@ -424,29 +451,28 @@ export function flowTransition(state: FlowState, event: FlowEvent, maxRetries: n
             const card = state.cards[idx];
             const prev = statusOf(state, event.id);
             const attempts = prev.attempts + 1;
-            const passed = event.outcome === 'pass' || event.outcome === 'partial';
+            const done = (outcome: StepOutcome) => ({
+                ...state,
+                status: { ...state.status, [event.id]: { completed: true, outcome, attempts } },
+                maxUnlocked: Math.max(state.maxUnlocked, idx + 1),
+            });
             if (!card.required) {
-                return {
-                    ...state,
-                    status: { ...state.status, [event.id]: { completed: true, outcome: event.outcome, attempts } },
-                    maxUnlocked: Math.max(state.maxUnlocked, idx + 1),
-                };
+                return done(event.outcome);
             }
-            if (passed || attempts > maxRetries) {
-                return {
-                    ...state,
-                    status: { ...state.status, [event.id]: { completed: true, outcome: event.outcome, attempts } },
-                    maxUnlocked: Math.max(state.maxUnlocked, idx + 1),
-                };
+            if (event.outcome === 'pass') {
+                return done('pass');
+            }
+            if (event.outcome === 'unknown' || event.outcome === 'skipped') {
+                return done(event.outcome);
+            }
+            // PARTIAL/FAIL: retry while budget remains, else truthful final.
+            if (prev.attempts >= maxRetries) {
+                return done(event.outcome);
             }
             // Adaptive hook: insert one explanation card, retry stays on this card.
             const explanation = (event.explanation || card.recall?.correctAnswer || '').trim();
             if (!explanation) {
-                return {
-                    ...state,
-                    status: { ...state.status, [event.id]: { completed: true, outcome: event.outcome, attempts } },
-                    maxUnlocked: Math.max(state.maxUnlocked, idx + 1),
-                };
+                return done(event.outcome);
             }
             const feedbackId = `${event.id}-feedback`;
             if (state.cards.some(c => c.id === feedbackId)) {

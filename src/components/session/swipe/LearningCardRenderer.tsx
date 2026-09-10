@@ -27,6 +27,11 @@ interface RendererProps {
     onAdvance: () => void;
 }
 
+/** Remount key so a retry genuinely re-runs the hosted interaction. */
+export function retryKey(cardId: string, attempts: number): string {
+    return `${cardId}:retry:${attempts}`;
+}
+
 /** Routes each card to its renderer. Interactive hosts reuse legacy components. */
 export const LearningCardRenderer: React.FC<RendererProps> = (props) => {
     const { card, status } = props;
@@ -48,6 +53,7 @@ export const LearningCardRenderer: React.FC<RendererProps> = (props) => {
             return (
                 <View style={styles.fill}>
                     <RecallCard
+                        key={retryKey(card.id, status.attempts)}
                         cardId={card.id}
                         hobbyId={props.hobbyId}
                         recall={card.recall}
@@ -68,6 +74,7 @@ export const LearningCardRenderer: React.FC<RendererProps> = (props) => {
             return (
                 <View style={styles.fill}>
                     <ApplyCard
+                        key={retryKey(card.id, status.attempts)}
                         cardId={card.id}
                         hobbyId={props.hobbyId}
                         task={card.task}
@@ -84,6 +91,7 @@ export const LearningCardRenderer: React.FC<RendererProps> = (props) => {
             return (
                 <View style={styles.fill}>
                     <ChallengeCard
+                        key={retryKey(card.id, status.attempts)}
                         hobbyId={props.hobbyId}
                         tests={card.taskTests}
                         task={card.task}

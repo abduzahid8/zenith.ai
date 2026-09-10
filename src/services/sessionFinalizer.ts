@@ -31,6 +31,8 @@ export interface FinalizeSessionInput {
     strategy?: LearningStrategy;
     reasonCode?: string | null;
     blueprint: SessionBlueprint;
+    /** Explicit recommendation-time skill (preferred over re-derivation). */
+    targetSkillKey?: string | null;
     cards: LearningCard[];
     status: Record<string, CardStatus>;
     /** DailyPlan task this session works toward (curriculum scope only). */
@@ -89,6 +91,9 @@ export function __resetFinalizerForTests(): void {
 
 async function runFinalization(input: FinalizeSessionInput): Promise<FinalizeSessionResult> {
     const { sessionId, userId, hobby, lesson, kind, origin, scope, blueprint, cards, status } = input;
+    // Explicit recommendation-time skill wins over re-derivation so the
+    // event preserves what the recommendation knew (catalog drift-safe).
+    const explicitSkill = input.targetSkillKey && input.targetSkillKey.length > 0 ? input.targetSkillKey : null;
     const evaluation = evaluateSession(cards, status);
     // Scope is enforced here, not trusted from any single caller: only
     // curriculum scope may touch the frontier or an unrelated task.
@@ -113,6 +118,7 @@ async function runFinalization(input: FinalizeSessionInput): Promise<FinalizeSes
                     hobbyId: hobby,
                     lessonId: lesson.id,
                     lessonDay: lesson.day,
+                    explicitSkillKey: explicitSkill,
                     taskId: targetTaskId,
                     sessionKind: kind,
                     origin,
@@ -159,6 +165,7 @@ async function runFinalization(input: FinalizeSessionInput): Promise<FinalizeSes
             hobbyId: hobby,
             lessonId: lesson.id,
             lessonDay: lesson.day,
+            explicitSkillKey: explicitSkill,
             taskId: targetTaskId ?? undefined,
             sessionKind: kind,
             origin,

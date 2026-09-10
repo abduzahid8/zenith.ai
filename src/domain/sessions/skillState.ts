@@ -44,12 +44,17 @@ export interface DayDatum {
     /** Distinct contributing sessions, chronological. */
     sessions: string[];
     /**
-     * Sessions elapsed since the latest WEAK (fail/partial) final on this
-     * day, measured against the global session order (0 = latest session).
-     * Null when the day has no weak finals. Recommendation recency uses
-     * this — never the parent skill's practice date.
+     * Unresolved weakness after strength-aware resolution: a failed final
+     * clears only on a later independent PASS of equal-or-stronger tier;
+     * partials clear the same way. Sessions-ago uses the global order.
      */
-    lastWeakSessionsAgo: number | null;
+    unresolved: {
+        recallFails: number;
+        applicationFails: number;
+        applicationPartials: number;
+        validationFails: number;
+        lastWeakSessionsAgo: number | null;
+    };
     /** A non-final attempt failed here before recovery (struggle memory). */
     struggled: boolean;
     lastAt: string | null;
@@ -74,6 +79,12 @@ export interface SkillState {
     recentPartials: number;
     /** Recovered failures: non-final failed attempts (struggle memory). */
     recoveredStruggles: number;
+    /**
+     * True while a recovered struggle still wants one light revisit: struggle
+     * history exists AND no later independent session happened after the
+     * latest struggle. A successful revisit clears it; history remains.
+     */
+    needsLightReview: boolean;
     lastPracticedAt: string | null;
     stage: SkillStage;
     /** Encountered days only (never future/unseen days). */
@@ -215,12 +226,22 @@ export function projectSkillState(input: {
         const daySet = new Set<number>();
         let lastPracticedAt: string | null = null;
         let recoveredStruggles = 0;
+        const struggleSessions = new Set<string>();
+        const weakFinals: Array<{
+            day: number;
+            channel: 'recall' | 'application' | 'validation';
+            outcome: MasteryOutcome;
+            tier: number;
+            session: string;
+            at: string;
+        }> = [];
 
         for (const { event, failedBefore } of finals) {
             if (event.skillKey !== skill.key) continue;
             const channel = channelOf(event);
             if (!channel) continue;
             recoveredStruggles += failedBefore;
+            if (failedBefore > 0) struggleSessions.add(event.sessionId);
             const sample: FinalSample = {
                 sessionId: event.sessionId,
                 outcome: (event.outcome ?? 'unknown') as MasteryOutcome,
@@ -247,7 +268,13 @@ export function projectSkillState(input: {
                         latestApplication: null,
                         latestValidation: null,
                         sessions: [],
-                        lastWeakSessionsAgo: null,
+                        unresolved: {
+                            recallFails: 0,
+                            applicationFails: 0,
+                            applicationPartials: 0,
+                            validationFails: 0,
+                            lastWeakSessionsAgo: null,
+                        },
                         struggled: false,
                         lastAt: null,
                     };
@@ -258,16 +285,57 @@ export function projectSkillState(input: {
                 else if (channel === 'application') datum.latestApplication = sample.outcome;
                 else datum.latestValidation = sample.outcome;
                 if (!datum.sessions.includes(event.sessionId)) datum.sessions.push(event.sessionId);
+                weakFinals.push({
+                    day: event.curriculumDay,
+                    channel,
+                    outcome: sample.outcome,
+                    tier: sample.weight >= 3 ? 3 : sample.weight === 2 ? 2 : 1,
+                    session: event.sessionId,
+                    at: event.occurredAt,
+                });
                 if (failedBefore > 0) datum.struggled = true;
-                if (sample.value < 1) {
-                    const ago = sessionsAgo(event.sessionId);
-                    if (ago !== null && (datum.lastWeakSessionsAgo === null || ago < datum.lastWeakSessionsAgo)) {
-                        datum.lastWeakSessionsAgo = ago;
-                    }
-                }
                 if (!datum.lastAt || event.occurredAt > datum.lastAt) datum.lastAt = event.occurredAt;
             }
             if (!lastPracticedAt || event.occurredAt > lastPracticedAt) lastPracticedAt = event.occurredAt;
+        }
+
+        // Strength-aware resolution sweep: a failed/partial final clears only
+        // on a LATER independent PASS of equal-or-stronger tier. A weak PASS
+        // never erases a stronger failure; history itself is untouched.
+        const openByDayChannel = new Map<string, Array<{ kind: 'fail' | 'partial'; tier: number; session: string }>>();
+        for (const wf of weakFinals.sort((a, b) => (a.at < b.at ? -1 : 1))) {
+            const key = `${wf.day}:${wf.channel}`;
+            const open = openByDayChannel.get(key) ?? [];
+            if (wf.outcome === 'pass') {
+                openByDayChannel.set(
+                    key,
+                    open.filter(o => o.tier > wf.tier),
+                );
+            } else if (wf.outcome === 'fail' || wf.outcome === 'partial') {
+                open.push({ kind: wf.outcome, tier: wf.tier, session: wf.session });
+                openByDayChannel.set(key, open);
+            }
+        }
+        for (const [key, open] of openByDayChannel) {
+            const [dayStr, channel] = key.split(':');
+            const day = Number(dayStr);
+            const datum = dayMap.get(day);
+            if (!datum) continue;
+            const fails = open.filter(o => o.kind === 'fail').length;
+            const partials = open.filter(o => o.kind === 'partial').length;
+            const agos = open
+                .map(o => sessionsAgo(o.session))
+                .filter((a): a is number => a !== null);
+            const unresolved = datum.unresolved;
+            if (channel === 'recall') unresolved.recallFails = fails;
+            else if (channel === 'application') {
+                unresolved.applicationFails = fails;
+                unresolved.applicationPartials = partials;
+            } else unresolved.validationFails = fails;
+            const minAgo = agos.length > 0 ? Math.min(...agos) : null;
+            if (minAgo !== null && (unresolved.lastWeakSessionsAgo === null || minAgo < unresolved.lastWeakSessionsAgo)) {
+                unresolved.lastWeakSessionsAgo = minAgo;
+            }
         }
 
         const recall = dimensionOf(recallSamples);
@@ -314,6 +382,27 @@ export function projectSkillState(input: {
 
         const days = [...dayMap.values()].sort((a, b) => a.day - b.day);
 
+        // Pending light review: struggle history exists AND no later
+        // independent session happened after the latest struggle. A revisit
+        // clears the need; the history itself is never deleted.
+        const allSkillSessions = new Set<string>(sessionSet);
+        for (const e of exposureEvents) {
+            if (
+                typeof e.curriculumDay === 'number' &&
+                e.curriculumDay >= skill.dayRange[0] &&
+                e.curriculumDay <= skill.dayRange[1]
+            ) {
+                allSkillSessions.add(e.sessionId);
+            }
+        }
+        const rankOfSession = (id: string): number => sessionOrder.indexOf(id);
+        const latestStruggleRank = Math.max(
+            -1,
+            ...[...struggleSessions].map(id => rankOfSession(id)),
+        );
+        const latestSessionRank = Math.max(-1, ...[...allSkillSessions].map(id => rankOfSession(id)));
+        const needsLightReview = struggleSessions.size > 0 && latestStruggleRank >= latestSessionRank;
+
         let stage: SkillStage = 'unseen';
         if (masteryEstimate === null) {
             stage = exposedDays.size > 0 ? 'learning' : 'unseen';
@@ -323,7 +412,12 @@ export function projectSkillState(input: {
             stage = 'recalling';
         } else if (validation.samples === 0) {
             stage = 'applying';
-        } else if ((validation.score ?? 0) >= 75 && sessionSet.size >= 3 && confidence >= 0.6) {
+        } else if (
+            (validation.score ?? 0) >= 75 &&
+            sessionSet.size >= 3 &&
+            confidence >= 0.6 &&
+            ![...dayMap.values()].some(d => d.unresolved.validationFails > 0)
+        ) {
             stage = 'strong';
         } else {
             stage = 'proving';
@@ -345,6 +439,7 @@ export function projectSkillState(input: {
             recentFailures,
             recentPartials,
             recoveredStruggles,
+            needsLightReview,
             lastPracticedAt,
             stage,
             days,

@@ -66,6 +66,12 @@ export interface LearningEvent {
     /** Mastery weight of the outcome (pass 1.0, partial 0.5, else 0). */
     outcomeValue?: number;
     evidenceStrength: EvidenceStrength;
+    /**
+     * Validation content provenance. Static curated challenges stay strong;
+     * generated/unverified validation never becomes strong silently.
+     * Only set on challenge attempts; other events omit it.
+     */
+    provenance?: 'static_bank' | 'generated_unverified';
     /** Artifact id in the artifact system — never raw answer text. */
     artifactRef?: string;
     occurredAt: string;
@@ -169,6 +175,18 @@ const CARD_KIND_BY_TYPE: Record<string, InteractiveCardKind> = {
 export function buildAttemptEvent(input: AttemptEventInput & { cardType: string }): LearningEvent {
     const cardKind = CARD_KIND_BY_TYPE[input.cardType] ?? 'recall';
     const target = mapLearningTarget(input.hobbyId, input.lessonDay);
+    // Content provenance: static bank days (1-7) are curated; generated or
+    // unknown lessons are unverified. Unverified validation must NOT become
+    // strong evidence silently — it downgrades to medium.
+    const provenance: 'static_bank' | 'generated_unverified' | undefined =
+        cardKind === 'challenge'
+            ? input.lessonDay != null && input.lessonDay <= 7
+                ? 'static_bank'
+                : 'generated_unverified'
+            : undefined;
+    const baseStrength = strengthFor(input.sessionKind, cardKind);
+    const evidenceStrength =
+        cardKind === 'challenge' && provenance === 'generated_unverified' ? 'medium' : baseStrength;
     return {
         schemaVersion: LEARNING_EVENT_SCHEMA_VERSION,
         id: buildEventId(input.sessionId, 'attempt', input.cardId, input.attemptNo),
@@ -191,7 +209,8 @@ export function buildAttemptEvent(input: AttemptEventInput & { cardType: string 
         eventType: 'attempt',
         outcome: input.outcome,
         outcomeValue: evidenceValueOf(input.outcome),
-        evidenceStrength: strengthFor(input.sessionKind, cardKind),
+        evidenceStrength,
+        provenance,
         artifactRef: input.artifactRef,
         occurredAt: input.occurredAt ?? new Date().toISOString(),
     };
@@ -245,12 +264,19 @@ export interface CompletionEventInput {
     hobbyId: string;
     lessonId?: string;
     lessonDay?: number | null;
+    /** Explicit recommendation-time skill: preferred over re-derivation. */
+    explicitSkillKey?: string | null;
     taskId?: string | null;
     sessionKind: SessionKind;
     origin?: SessionOrigin;
     strategy?: string;
     reasonCode?: string | null;
     occurredAt?: string;
+}
+
+function resolvedSkillKey(target: LearningTarget, explicit?: string | null): string | null | undefined {
+    if (explicit && explicit.length > 0) return explicit;
+    return target.skillKey;
 }
 
 /** Session-completed event: final evaluation, no mastery strength itself. */
@@ -269,7 +295,7 @@ export function buildSessionCompletedEvent(
         programVersion: target.programVersion,
         lessonId: input.lessonId,
         curriculumDay: target.curriculumDay,
-        skillKey: target.skillKey,
+        skillKey: resolvedSkillKey(target, input.explicitSkillKey),
         taskId: input.taskId ?? undefined,
         sessionKind: input.sessionKind,
         origin: input.origin,
@@ -300,7 +326,7 @@ export function buildTaskCompletedEvent(
         programVersion: target.programVersion,
         lessonId: input.lessonId,
         curriculumDay: target.curriculumDay,
-        skillKey: target.skillKey,
+        skillKey: resolvedSkillKey(target, input.explicitSkillKey),
         taskId: input.taskId ?? undefined,
         sessionKind: input.sessionKind,
         origin: input.origin,

@@ -1,7 +1,7 @@
 import type { CredentialProgram } from '../credentials/types';
 import { findNextIncompleteTask } from './sessionCompletion';
 import type { MasteryOutcome } from './outcomePolicy';
-import type { SkillState } from './skillState';
+import type { DayDatum, SkillState } from './skillState';
 import { lessonCapabilities, sessionCapabilities } from './sessionCapabilities';
 
 export type RecommendationType =
@@ -124,38 +124,36 @@ export function getNextBestLearningAction(input: RecommendInput): LearningRecomm
         return i < 0 ? Number.MAX_SAFE_INTEGER : i;
     };
 
-    // Collect UNRESOLVED weak encountered days (finals only; discovery already excluded
-    // upstream because strength-none events never enter SkillState mastery).
-    // A historical FAIL followed by later independent PASS is resolved: only
-    // the latest channel state plus genuine recency can keep a blocker alive.
-    // lastWeakSessionsAgo <= RECENT means the weakness is still live; older
-    // weakness degrades to struggle memory (light review at most).
+    // Collect UNRESOLVED weak encountered days. Resolution is
+    // strength-aware (a weaker later PASS never erases a stronger FAIL),
+    // so only live blockers compete here; resolved history stays for
+    // struggle memory but cannot outrank anything. Recency uses the weak
+    // finals' own sessions — never the parent skill's practice date.
     const RECENT_SESSIONS = 2;
-    const recentEnough = (d: { lastWeakSessionsAgo: number | null }): boolean =>
-        d.lastWeakSessionsAgo !== null && d.lastWeakSessionsAgo <= RECENT_SESSIONS;
-    const weakInLast = (outcomes: MasteryOutcome[], n: number): number =>
-        outcomes.slice(-n).filter(o => o === 'fail' || o === 'partial').length;
+    const recentEnough = (u: DayDatum['unresolved']): boolean =>
+        u.lastWeakSessionsAgo !== null && u.lastWeakSessionsAgo <= RECENT_SESSIONS;
 
     const weakDays: DaySignal[] = [];
     for (const s of encountered) {
         for (const d of s.days) {
-            if (d.latestValidation === 'fail' && recentEnough(d)) {
-                weakDays.push({ skill: s, day: d.day, kind: 'validation_fail', recencyRank: rankOf(s.skillKey), repeats: d.validation.filter(o => o === 'fail').length });
+            const u = d.unresolved;
+            if (u.validationFails > 0 && recentEnough(u)) {
+                weakDays.push({ skill: s, day: d.day, kind: 'validation_fail', recencyRank: rankOf(s.skillKey), repeats: u.validationFails });
             } else if (
-                weakInLast(d.application, 3) >= 2 &&
+                (u.applicationFails > 0 || u.applicationPartials >= 2) &&
                 (d.latestApplication === 'fail' || d.latestApplication === 'partial') &&
-                recentEnough(d)
+                recentEnough(u)
             ) {
-                weakDays.push({ skill: s, day: d.day, kind: 'application_weak', recencyRank: rankOf(s.skillKey), repeats: weakInLast(d.application, 3) });
+                weakDays.push({ skill: s, day: d.day, kind: 'application_weak', recencyRank: rankOf(s.skillKey), repeats: u.applicationFails + u.applicationPartials });
             } else if (
-                d.validation.every(o => o !== 'fail') &&
-                weakInLast(d.recall, 3) >= 2 &&
+                u.validationFails === 0 &&
+                u.recallFails >= 2 &&
                 d.latestRecall === 'fail' &&
-                recentEnough(d)
+                recentEnough(u)
             ) {
                 // Recall repair only when validation does not already explain
                 // the struggle away (a failed proof outranks recall gaps).
-                weakDays.push({ skill: s, day: d.day, kind: 'recall_weak', recencyRank: rankOf(s.skillKey), repeats: weakInLast(d.recall, 3) });
+                weakDays.push({ skill: s, day: d.day, kind: 'recall_weak', recencyRank: rankOf(s.skillKey), repeats: u.recallFails });
             }
         }
     }
@@ -242,7 +240,7 @@ export function getNextBestLearningAction(input: RecommendInput): LearningRecomm
         };
     }
     const singleRecallFail = encountered
-        .flatMap(s => s.days.filter(d => d.recall.filter(o => o === 'fail').length === 1 && d.recall.length === 1).map(d => ({ s, day: d.day })))
+        .flatMap(s => s.days.filter(d => d.unresolved.recallFails === 1 && d.recall.length === 1).map(d => ({ s, day: d.day })))
         .sort((a, b) => rankOf(a.s.skillKey) - rankOf(b.s.skillKey))[0];
     if (singleRecallFail) {
         return {
@@ -259,10 +257,12 @@ export function getNextBestLearningAction(input: RecommendInput): LearningRecomm
         };
     }
 
-    // Struggle memory: recovered FAIL->PASS histories merit a light revisit
-    // (review only — they never block the frontier like live failures do).
+    // Struggle memory: a recovered FAIL->PASS history merits a light revisit
+    // ONLY while no later independent session exists after the struggle
+    // (needsLightReview). Once revisited, history stays but the need clears —
+    // never review -> PASS -> review forever.
     const struggled = encountered
-        .filter(s => s.recoveredStruggles >= 2)
+        .filter(s => s.needsLightReview)
         .map(s => {
             const days = s.days.filter(d => d.struggled);
             return { s, day: days.length > 0 ? days[days.length - 1].day : null };
