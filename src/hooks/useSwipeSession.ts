@@ -4,32 +4,23 @@ import { useAuthStore } from '../store/authStore';
 import { useUserProfileStore } from '../store/userProfileStore';
 import { useGamificationStore } from '../store/gamificationStore';
 import { useLanguageStore } from '../store/languageStore';
-import { sessionService } from '../services/supabase/sessions';
-import { useHobbyTimeStore } from '../store/hobbyTimeStore';
 import type { HobbyId, LessonContent } from '../data/lessonContent';
-import { getLessonByDay, HOBBY_META } from '../data/lessonContent';
 import { buildSessionBlueprint } from '../domain/sessions/sessionBlueprint';
 import type { SessionKind, SessionOrigin, StepOutcome } from '../domain/sessions/sessionBlueprint';
 import { parseVerdict } from '../domain/sessions/sessionBlueprint';
-import { findNextIncompleteTask } from '../domain/sessions/sessionCompletion';
-import {
-    canCompleteStructuredTask,
-    evaluateSession,
-    isRewardingEvaluation,
-} from '../domain/sessions/outcomePolicy';
-import type { MasteryOutcome } from '../domain/sessions/outcomePolicy';
 import {
     buildLearningCards,
-    buildResultData,
     flowTransition,
     initialFlowState,
 } from '../domain/sessions/learningCards';
 import type { FlowEvent, FlowState, SessionResultData } from '../domain/sessions/learningCards';
-import { buildAttemptEvent } from '../domain/sessions/learningEvents';
+import { buildAttemptEvent, buildExposureEvent } from '../domain/sessions/learningEvents';
 import type { LearningEvent } from '../domain/sessions/learningEvents';
+import type { MasteryOutcome } from '../domain/sessions/outcomePolicy';
 import { appendLearningEvent } from '../services/learningEventRepository';
 import { loadSessionLesson } from '../services/sessionLesson';
-import { applySessionProgression, recordAttemptArtifact, saveRecallArtifact } from '../services/sessionStepEffects';
+import { recordAttemptArtifact, saveRecallArtifact } from '../services/sessionStepEffects';
+import { finalizeSwipeSession } from '../services/sessionFinalizer';
 
 export interface SwipeSessionInput {
     kind: SessionKind;
@@ -194,25 +185,20 @@ export function useSwipeSession(input: SwipeSessionInput) {
                 ) {
                     exposedRef.current.add(card.id);
                     const target = targetOf();
-                    emit({
-                        schemaVersion: 1,
-                        id: `${sessionIdRef.current}:concept_exposed:${card.id}:0`,
-                        sessionId: sessionIdRef.current,
-                        userId: user?.id,
-                        hobbyId: hobby,
-                        lessonId: target.lessonId,
-                        curriculumDay: target.lessonDay ?? undefined,
-                        taskId: target.taskId,
-                        cardId: card.id,
-                        attemptNo: 0,
-                        phase: card.phase,
-                        sessionKind: kind,
-                        origin,
-                        source: kind === 'discovery' ? 'discovery' : kind === 'certificate_review' ? 'quick_bite' : 'structured_session',
-                        eventType: 'concept_exposed',
-                        evidenceStrength: 'none',
-                        occurredAt: new Date().toISOString(),
-                    });
+                    emit(
+                        buildExposureEvent({
+                            sessionId: sessionIdRef.current,
+                            userId: user?.id,
+                            hobbyId: hobby,
+                            lessonId: target.lessonId,
+                            lessonDay: target.lessonDay,
+                            taskId: target.taskId,
+                            cardId: card.id,
+                            phase: card.phase,
+                            sessionKind: kind,
+                            origin,
+                        }),
+                    );
                 }
             }
             setFlow(prev => {
@@ -276,149 +262,45 @@ export function useSwipeSession(input: SwipeSessionInput) {
         [answer],
     );
 
-    const finish = useCallback(async (): Promise<SessionResultData | null> => {
+    // Promise guard: concurrent finish() calls share one finalization.
+    // The finalizer additionally memoizes per sessionId (survives remounts).
+    const finalizePromiseRef = useRef<Promise<SessionResultData | null> | null>(null);
+
+    const finish = useCallback((): Promise<SessionResultData | null> => {
+        if (finalizePromiseRef.current) return finalizePromiseRef.current;
         const sessionId = sessionIdRef.current;
-        if (!flow || !lesson || !hobby || !sessionId || finishing || finished) return finished;
+        if (!flow || !lesson || !hobby || !sessionId) return Promise.resolve(finished);
         setFinishing(true);
-        try {
-            // Canonical evaluation over required cards (retries included).
-            const evaluation = evaluateSession(flow.cards, flow.status);
-            const eligible = isRewardingEvaluation(evaluation);
-
-            // Task completion under the canonical policy (never on
-            // unknown/skipped/fail; partial only for non-strict sessions).
-            const targetTaskId = kind === 'structured' ? (taskId ?? null) : null;
-            const evalOutcome = evaluation === 'pass' ? 'pass' : evaluation === 'partial' ? 'partial' : 'fail';
-            let taskCompleted = false;
-            if (
-                eligible &&
-                blueprint.countsAsFullCompletion &&
-                canCompleteStructuredTask(evalOutcome, blueprint) &&
-                targetTaskId &&
-                user?.id
-            ) {
-                try {
-                    await useTaskStore.getState().completeTask(user.id, targetTaskId);
-                    taskCompleted = true;
-                    emit({
-                        schemaVersion: 1,
-                        id: `${sessionId}:task_completed:${targetTaskId}:0`,
-                        sessionId,
-                        userId: user.id,
-                        hobbyId: hobby,
-                        lessonId: lesson.id,
-                        curriculumDay: lesson.day,
-                        taskId: targetTaskId,
-                        sessionKind: kind,
-                        origin,
-                        source: 'daily_task',
-                        eventType: 'task_completed',
-                        outcome: evalOutcome,
-                        outcomeValue: evalOutcome === 'pass' ? 1 : 0.5,
-                        evidenceStrength: 'medium',
-                        occurredAt: new Date().toISOString(),
-                    });
-                } catch (err) {
-                    console.error('[useSwipeSession] task completion failed:', err);
-                }
-            }
-
-            // Exactly-once validated progression (fail sends only a
-            // difficulty signal; non-rewarding runs nothing).
-            if (eligible || evaluation === 'fail') {
-                try {
-                    applySessionProgression({ lesson, evaluation, chessSolved: chessSolvedRef.current });
-                } catch (err) {
-                    console.error('[useSwipeSession] progression failed:', err);
-                }
-            }
-
-            const durationSeconds = elapsed;
-            try {
-                if (user?.id) {
-                    await sessionService.saveSession(user.id, hobby, durationSeconds, {
-                        tasksCompleted: taskCompleted && targetTaskId ? [targetTaskId] : [],
-                    });
-                }
-            } catch (err) {
-                console.error('[useSwipeSession] session save failed:', err);
-            }
-            try {
-                if (durationSeconds > 0) {
-                    const hobbyStore = useHobbyTimeStore.getState();
-                    if (!hobbyStore.userCreatedDate) hobbyStore.setUserCreatedDate(new Date().toISOString());
-                    hobbyStore.addHobbyTime(durationSeconds);
-                }
-            } catch {}
-
-            emit({
-                schemaVersion: 1,
-                id: `${sessionId}:session_completed:-:0`,
-                sessionId,
-                userId: user?.id,
-                hobbyId: hobby,
-                lessonId: lesson.id,
-                curriculumDay: lesson.day,
-                taskId: targetTaskId ?? undefined,
-                sessionKind: kind,
-                origin,
-                source:
-                    kind === 'discovery'
-                        ? 'discovery'
-                        : kind === 'certificate_review'
-                          ? 'quick_bite'
-                          : 'structured_session',
-                eventType: 'session_completed',
-                outcome: evaluation === 'non_rewarding' ? 'unknown' : evaluation,
-                outcomeValue: evaluation === 'pass' ? 1 : evaluation === 'partial' ? 0.5 : 0,
-                evidenceStrength: 'none',
-                occurredAt: new Date().toISOString(),
-            });
-
-            const nextTitle =
-                kind === 'discovery' ? null : (getLessonByDay(hobby, lesson.day + 1)?.learn.title ?? null);
-            // One obvious next step: the next real open task (read AFTER
-            // completion so the just-finished task is excluded). Never invented.
-            const afterTasks = useTaskStore.getState().dailyTasks;
-            const nextTask = kind === 'discovery' ? null : findNextIncompleteTask(afterTasks);
-            if (nextTask?.id) {
-                const mins =
-                    nextTask.duration_minutes && nextTask.duration_minutes > 0 ? nextTask.duration_minutes : 15;
-                setNextAction({ taskId: nextTask.id, minutes: mins, title: nextTask.title });
-            } else {
-                setNextAction(null);
-            }
-            const data = buildResultData({
-                kind,
-                objectiveTitle: lesson.learn.title,
-                hobbyLabel: HOBBY_META[hobby]?.label ?? hobby,
-                minutesFocused: durationSeconds / 60,
-                status: flow.status,
-                cards: flow.cards,
-                taskCompleted,
-                taskTitle: task?.title ?? null,
-                nextTitle,
-            });
-            setFinished(data);
-            return data;
-        } finally {
+        const running = finalizeSwipeSession({
+            sessionId,
+            userId: user?.id,
+            hobby,
+            lesson,
+            kind,
+            origin,
+            blueprint,
+            cards: flow.cards,
+            status: flow.status,
+            targetTaskId: kind === 'structured' ? (taskId ?? null) : null,
+            targetTaskTitle: task?.title ?? null,
+            elapsedSeconds: elapsed,
+            chessSolved: chessSolvedRef.current,
+        }).then(
+            ({ result, nextAction: next }) => {
+                setNextAction(next);
+                setFinished(result);
+                return result;
+            },
+            err => {
+                console.error('[useSwipeSession] finish failed:', err);
+                return finished;
+            },
+        ).finally(() => {
             setFinishing(false);
-        }
-    }, [
-        flow,
-        lesson,
-        hobby,
-        finishing,
-        finished,
-        kind,
-        origin,
-        blueprint,
-        taskId,
-        task?.title,
-        user,
-        elapsed,
-        emit,
-    ]);
+        });
+        finalizePromiseRef.current = running;
+        return running;
+    }, [flow, lesson, hobby, finished, kind, origin, blueprint, taskId, task?.title, user, elapsed]);
 
     const elapsedLabel = useMemo(() => {
         const m = Math.floor(elapsed / 60);

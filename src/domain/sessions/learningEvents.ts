@@ -33,9 +33,17 @@ export interface LearningEvent {
     /** Deterministic: sessionId:eventType:cardId:attemptNo (or session/task variant). */
     id: string;
     sessionId: string;
+    /**
+     * Canonical owner scope. Authenticated events carry the user id;
+     * explicitly anonymous/local events carry 'local'. Events stored before
+     * owner scoping have NO ownerId and are never auto-attributed.
+     */
+    ownerId?: string;
     userId?: string;
     hobbyId: string;
     programSlug?: string;
+    /** Catalog version pinned at emission — history stays interpretable. */
+    programVersion?: string;
     lessonId?: string;
     curriculumDay?: number;
     skillKey?: string | null;
@@ -97,6 +105,7 @@ export function sourceFor(sessionKind: SessionKind): EvidenceSource {
 
 export interface LearningTarget {
     programSlug?: string;
+    programVersion?: string;
     curriculumDay?: number;
     skillKey?: string | null;
 }
@@ -105,16 +114,25 @@ export interface LearningTarget {
  * Stable target mapping — never from display text. lessonDay comes from the
  * bank (lesson.day); skill resolves through the program's real day ranges.
  * Unknown hobby/day yields null skillKey (honest, never invented).
+ * programVersion is pinned from the CURRENT catalog at emission time so the
+ * event stays interpretable after later catalog changes.
  */
 export function mapLearningTarget(hobbyId: string, lessonDay?: number | null): LearningTarget {
     const program = getProgramForHobby(hobbyId);
     if (!program) return {};
-    const target: LearningTarget = { programSlug: program.slug };
+    const target: LearningTarget = { programSlug: program.slug, programVersion: program.version };
     if (typeof lessonDay === 'number' && Number.isFinite(lessonDay)) {
         target.curriculumDay = lessonDay;
         target.skillKey = program.skills.find(s => lessonDay >= s.dayRange[0] && lessonDay <= s.dayRange[1])?.key ?? null;
     }
     return target;
+}
+
+/** Explicit anonymous owner when no authenticated user exists. */
+export const ANONYMOUS_OWNER = 'local' as const;
+
+export function ownerFor(userId?: string | null): string {
+    return userId ?? ANONYMOUS_OWNER;
 }
 
 export interface AttemptEventInput {
@@ -148,9 +166,11 @@ export function buildAttemptEvent(input: AttemptEventInput & { cardType: string 
         schemaVersion: LEARNING_EVENT_SCHEMA_VERSION,
         id: buildEventId(input.sessionId, 'attempt', input.cardId, input.attemptNo),
         sessionId: input.sessionId,
+        ownerId: ownerFor(input.userId),
         userId: input.userId,
         hobbyId: input.hobbyId,
         programSlug: target.programSlug,
+        programVersion: target.programVersion,
         lessonId: input.lessonId,
         curriculumDay: target.curriculumDay,
         skillKey: target.skillKey,
@@ -166,6 +186,118 @@ export function buildAttemptEvent(input: AttemptEventInput & { cardType: string 
         outcomeValue: evidenceValueOf(input.outcome),
         evidenceStrength: strengthFor(input.sessionKind, cardKind),
         artifactRef: input.artifactRef,
+        occurredAt: input.occurredAt ?? new Date().toISOString(),
+    };
+}
+
+export interface ExposureEventInput {
+    sessionId: string;
+    userId?: string;
+    hobbyId: string;
+    lessonId?: string;
+    lessonDay?: number | null;
+    taskId?: string | null;
+    cardId: string;
+    phase?: SessionPhase;
+    sessionKind: SessionKind;
+    origin?: SessionOrigin;
+    occurredAt?: string;
+}
+
+/** Concept exposure carries identity + targets, never mastery strength. */
+export function buildExposureEvent(input: ExposureEventInput): LearningEvent {
+    const target = mapLearningTarget(input.hobbyId, input.lessonDay);
+    return {
+        schemaVersion: LEARNING_EVENT_SCHEMA_VERSION,
+        id: buildEventId(input.sessionId, 'concept_exposed', input.cardId, 0),
+        sessionId: input.sessionId,
+        ownerId: ownerFor(input.userId),
+        userId: input.userId,
+        hobbyId: input.hobbyId,
+        programSlug: target.programSlug,
+        programVersion: target.programVersion,
+        lessonId: input.lessonId,
+        curriculumDay: target.curriculumDay,
+        skillKey: target.skillKey,
+        taskId: input.taskId ?? undefined,
+        cardId: input.cardId,
+        attemptNo: 0,
+        phase: input.phase,
+        sessionKind: input.sessionKind,
+        origin: input.origin,
+        source: sourceFor(input.sessionKind),
+        eventType: 'concept_exposed',
+        evidenceStrength: 'none',
+        occurredAt: input.occurredAt ?? new Date().toISOString(),
+    };
+}
+
+export interface CompletionEventInput {
+    sessionId: string;
+    userId?: string;
+    hobbyId: string;
+    lessonId?: string;
+    lessonDay?: number | null;
+    taskId?: string | null;
+    sessionKind: SessionKind;
+    origin?: SessionOrigin;
+    occurredAt?: string;
+}
+
+/** Session-completed event: final evaluation, no mastery strength itself. */
+export function buildSessionCompletedEvent(
+    input: CompletionEventInput & { outcome: MasteryOutcome; outcomeValue: number },
+): LearningEvent {
+    const target = mapLearningTarget(input.hobbyId, input.lessonDay);
+    return {
+        schemaVersion: LEARNING_EVENT_SCHEMA_VERSION,
+        id: buildEventId(input.sessionId, 'session_completed', null, 0),
+        sessionId: input.sessionId,
+        ownerId: ownerFor(input.userId),
+        userId: input.userId,
+        hobbyId: input.hobbyId,
+        programSlug: target.programSlug,
+        programVersion: target.programVersion,
+        lessonId: input.lessonId,
+        curriculumDay: target.curriculumDay,
+        skillKey: target.skillKey,
+        taskId: input.taskId ?? undefined,
+        sessionKind: input.sessionKind,
+        origin: input.origin,
+        source: sourceFor(input.sessionKind),
+        eventType: 'session_completed',
+        outcome: input.outcome,
+        outcomeValue: input.outcomeValue,
+        evidenceStrength: 'none',
+        occurredAt: input.occurredAt ?? new Date().toISOString(),
+    };
+}
+
+/** DailyPlan task-completed event: medium evidence of real completion. */
+export function buildTaskCompletedEvent(
+    input: CompletionEventInput & { outcome: 'pass' | 'partial' },
+): LearningEvent {
+    const target = mapLearningTarget(input.hobbyId, input.lessonDay);
+    return {
+        schemaVersion: LEARNING_EVENT_SCHEMA_VERSION,
+        id: `${input.sessionId}:task_completed:${input.taskId ?? 'unknown'}:0`,
+        sessionId: input.sessionId,
+        ownerId: ownerFor(input.userId),
+        userId: input.userId,
+        hobbyId: input.hobbyId,
+        programSlug: target.programSlug,
+        programVersion: target.programVersion,
+        lessonId: input.lessonId,
+        curriculumDay: target.curriculumDay,
+        skillKey: target.skillKey,
+        taskId: input.taskId ?? undefined,
+        sessionKind: input.sessionKind,
+        origin: input.origin,
+        source: 'daily_task',
+        eventType: 'task_completed',
+        outcome: input.outcome,
+        outcomeValue: input.outcome === 'pass' ? 1 : 0.5,
+        evidenceStrength: 'medium',
         occurredAt: input.occurredAt ?? new Date().toISOString(),
     };
 }

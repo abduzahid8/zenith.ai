@@ -19,6 +19,7 @@ import {
     strengthFor,
 } from '../domain/sessions/learningEvents';
 import { buildResultData } from '../domain/sessions/learningCards';
+import { buildProgressionDecision } from '../domain/sessions/progressionPolicy';
 import { applySessionProgression, recordAttemptArtifact } from '../services/sessionStepEffects';
 import {
     __resetLearningEventsForTests,
@@ -177,15 +178,19 @@ describe('14-15 — strength mapping', () => {
 describe('16-20 — progression runs once, only when eligible', () => {
     beforeEach(resetCalls);
 
+    const fullBlueprint = { countsAsFullCompletion: true, requiresValidation: false };
+    const decide = (evaluation: 'pass' | 'partial' | 'fail') =>
+        buildProgressionDecision({ kind: 'structured', evaluation, blueprint: fullBlueprint, hasTargetTask: true });
+
     it('failed session advances zero days, zero session counts', () => {
-        const res = applySessionProgression({ lesson: testLesson, evaluation: 'fail', chessSolved: false });
+        const res = applySessionProgression({ lesson: testLesson, decision: decide('fail'), chessSolved: false });
         expect(res.advancedDay).toBe(false);
         expect(gameCalls.advanceDay).toBe(0);
         expect(gameCalls.incrementSessionsCompleted).toBe(0);
     });
 
     it('eligible session advances at most once and counts one session', () => {
-        const res = applySessionProgression({ lesson: testLesson, evaluation: 'pass', chessSolved: false });
+        const res = applySessionProgression({ lesson: testLesson, decision: decide('pass'), chessSolved: false });
         expect(res.advancedDay).toBe(true);
         expect(gameCalls.advanceDay).toBe(1);
         expect(gameCalls.incrementSessionsCompleted).toBe(1);
@@ -201,13 +206,13 @@ describe('16-20 — progression runs once, only when eligible', () => {
     });
 
     it('goal signals are truth-aware (pass easy / partial struggled / fail no progress)', () => {
-        applySessionProgression({ lesson: testLesson, evaluation: 'pass', chessSolved: false });
+        applySessionProgression({ lesson: testLesson, decision: decide('pass'), chessSolved: false });
         expect(goalCalls.recordDailyAction).toBe(1);
         resetCalls();
-        applySessionProgression({ lesson: testLesson, evaluation: 'partial', chessSolved: false });
+        applySessionProgression({ lesson: testLesson, decision: decide('partial'), chessSolved: false });
         expect(goalCalls.recordDailyAction).toBe(1);
         resetCalls();
-        applySessionProgression({ lesson: testLesson, evaluation: 'fail', chessSolved: false });
+        applySessionProgression({ lesson: testLesson, decision: decide('fail'), chessSolved: false });
         expect(goalCalls.recordDailyAction).toBe(0);
         expect(goalCalls.adjustDifficulty).toBe(1);
     });
@@ -234,8 +239,8 @@ describe('21-24 — stable ids, idempotency, append-only', () => {
             sessionKind: 'structured', outcome: 'pass', cardType: 'recall',
         });
         expect(appendLearningEvent(retry)).toBe(true);
-        expect(eventsBySession('s1')).toHaveLength(2);
-        expect(eventsBySession('s1').map(e => e.outcome)).toEqual(['fail', 'pass']);
+        expect(eventsBySession('s1', 'local')).toHaveLength(2);
+        expect(eventsBySession('s1', 'local').map(e => e.outcome)).toEqual(['fail', 'pass']);
     });
 
     it('appendMany deduplicates within and across batches', () => {
@@ -263,6 +268,7 @@ describe('25-26 — event hygiene and stable targets', () => {
     it('targets resolve from bank mapping, never display text', () => {
         expect(mapLearningTarget('python', 10)).toEqual({
             programSlug: 'python-foundations',
+            programVersion: '1.0',
             curriculumDay: 10,
             skillKey: 'logic',
         });
@@ -285,8 +291,8 @@ describe('25-26 — event hygiene and stable targets', () => {
                 sessionKind: 'structured', outcome: 'pass', cardType: 'apply',
             }),
         );
-        expect(eventsByProgram('python-foundations')).toHaveLength(1);
-        expect(eventsByProgram('reading-mastery')).toHaveLength(0);
+        expect(eventsByProgram('python-foundations', 'local')).toHaveLength(1);
+        expect(eventsByProgram('reading-mastery', 'local')).toHaveLength(0);
     });
 });
 

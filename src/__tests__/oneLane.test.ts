@@ -131,9 +131,11 @@ describe('8 — no second session engine', () => {
 
     it('swipe controller reuses the shared pipeline (no fork)', () => {
         const hook = readSrc('src/hooks/useSwipeSession.ts');
-        expect(hook).toMatch(/canCompleteStructuredTask/);
-        expect(hook).toMatch(/evaluateSession/);
+        expect(hook).toMatch(/finalizeSwipeSession/);
         expect(hook).toMatch(/buildSessionBlueprint/);
+        // No direct progression calls in the controller: exactly-once lives
+        // in the guarded finalizer, never in render-path callbacks.
+        expect(hook).not.toMatch(/advanceDay|incrementSessionsCompleted|\.completeTask\(/);
         expect(readSrc('src/domain/sessions/learningCards.ts')).not.toMatch(/countsAsFullCompletion/);
     });
 });
