@@ -81,7 +81,7 @@ export async function fetchVerifyContext(programSlug: string): Promise<VerifyChi
     };
 }
 
-export type ChallengePhase = 'loading' | 'answering' | 'submitting' | 'passed' | 'failed' | 'error';
+export type ChallengePhase = 'loading' | 'answering' | 'submitting' | 'passed' | 'failed' | 'stale' | 'error';
 
 export interface VerifiedSkillChallengeProps {
     visible: boolean;
@@ -175,6 +175,13 @@ export const VerifiedSkillChallenge: React.FC<VerifiedSkillChallengeProps> = ({
             try {
                 const result = await submitTrustedValidation(attemptId, value);
                 if (!mounted.current) return;
+                // Rotation superseded the attempt mid-flight: the server
+                // recorded nothing. Never render this as pass/fail — offer
+                // exactly one action: a fresh check. No internal terms leak.
+                if (result.contentStale === true) {
+                    setPhase('stale');
+                    return;
+                }
                 const passed = result.passed === true;
                 // Re-read authoritative progress, then render from BOTH the
                 // server verdict and the full gate state. Completion is never
@@ -310,6 +317,23 @@ export const VerifiedSkillChallenge: React.FC<VerifiedSkillChallengeProps> = ({
                             >
                                 <Text style={[styles.primaryText, { color: colors.white }]}>Continue</Text>
                             </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {phase === 'stale' && (
+                        <View>
+                            <Text style={[styles.body, { color: colors.textSecondary }]}>
+                                This verification was updated. Start a new check.
+                            </Text>
+                            <View style={styles.row}>
+                                <TouchableOpacity
+                                    style={[styles.secondary, { backgroundColor: colors.background }]}
+                                    onPress={() => void start()}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.secondaryText, { color: colors.text }]}>Start new check</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     )}
 

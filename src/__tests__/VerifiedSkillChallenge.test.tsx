@@ -381,12 +381,41 @@ describe('VerifiedSkillChallenge', () => {
     });
 
     test('16. generic server errors keep the internet-connection copy (no code leak)', async () => {
-        mockStart.mockRejectedValueOnce(new Error('start_trusted_validation: no trusted content'));
+        mockStart.mockRejectedValueOnce(new Error('boom'));
         const screen = await render(<VerifiedSkillChallenge {...baseProps} />);
         expect(await screen.findByText('Verification needs an internet connection.')).toBeTruthy();
         expect(
             screen.queryByText('Verification is temporarily unavailable. Try again later.'),
         ).toBeNull();
+    });
+
+    test('17. superseded submit shows the updated copy with exactly one action', async () => {
+        mockStart.mockResolvedValue({
+            attemptId: 'att-7',
+            skillKey: 'rules',
+            programVersion: '1.0',
+            payload: { prompt: 'Q?', options: ['A'] },
+        });
+        mockSubmit.mockResolvedValue({ passed: false, submitted: false, trustedEventId: null, contentStale: true });
+        const screen = await render(<VerifiedSkillChallenge {...baseProps} />);
+        await screen.findByText('Q?');
+        await fireEvent.press(screen.getByText('A'));
+        expect(await screen.findByText('This verification was updated. Start a new check.')).toBeTruthy();
+        // No pass/fail UX, no internal terms, single action only.
+        expect(screen.queryByText('✓ Verified')).toBeNull();
+        expect(screen.queryByText('Needs another try')).toBeNull();
+        expect(screen.queryByText('Retry')).toBeNull();
+        expect(baseProps.onComplete).not.toHaveBeenCalled();
+        // "Start new check" re-runs the canonical start.
+        mockStart.mockResolvedValue({
+            attemptId: 'att-8',
+            skillKey: 'rules',
+            programVersion: '1.0',
+            payload: { prompt: 'Q2?', options: ['B'] },
+        });
+        await fireEvent.press(screen.getByText('Start new check'));
+        expect(await screen.findByText('Q2?')).toBeTruthy();
+        expect(mockStart).toHaveBeenCalledTimes(2);
     });
 });
 

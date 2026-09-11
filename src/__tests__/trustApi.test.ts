@@ -19,10 +19,10 @@ describe('isContentUnavailable', () => {
         expect(isContentUnavailable('start_trusted_validation: credential_content_unavailable')).toBe(true);
     });
 
-    test('rejects offline, auth, and content-missing errors', () => {
+    test('rejects offline, auth, and missing-attempt errors', () => {
         expect(isContentUnavailable('offline')).toBe(false);
         expect(isContentUnavailable('Network request failed')).toBe(false);
-        expect(isContentUnavailable('start_trusted_validation: no trusted content')).toBe(false);
+        expect(isContentUnavailable('start_trusted_validation: attempt not found')).toBe(false);
         expect(isContentUnavailable('')).toBe(false);
     });
 

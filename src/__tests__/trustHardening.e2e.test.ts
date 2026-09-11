@@ -360,11 +360,12 @@ describe('real DB: server-scored validation flow', () => {
     test('start with no trusted content is rejected', async () => {
         const uid = newUid();
         await createUser(db, uid);
-        // Unknown skill on a live program: content gate passes, item lookup fails.
+        // Unknown skill on a live program: same safe condition as a missing
+        // bank (035 normalizes all missing-content starts).
         await asRole(db, 'authenticated', uid, () =>
             expectDbDenied(
                 db.query('SELECT * FROM start_trusted_validation($1, $2)', ['chess-foundations', 'no-such-skill']),
-                /no trusted content/,
+                /credential_content_unavailable/,
             ),
         );
         // Program with no live release: fail closed, never "no content".
@@ -633,10 +634,12 @@ describe('real DB: issuance gates + verification', () => {
 
 describe('real DB: catalog parity + readiness audit', () => {
     test('server catalog matches the frozen TS catalog exactly', async () => {
+        // Harness programs (e2e-*) belong to whichever suites share this
+        // DB invocation; parity covers production catalog rows only.
         const rows = await db.query(
             `SELECT slug, code, title, version, required_score, requires_assessment,
                     requires_project, identity_verification_required, issuance_enabled, skills
-             FROM credential_programs WHERE slug NOT IN ('${TEST_PROGRAM}', 'e2e-quad-integrity') ORDER BY slug`,
+             FROM credential_programs WHERE slug NOT LIKE 'e2e-%' ORDER BY slug`,
         );
         expect(rows.rowCount).toBe(5);
         for (const row of rows.rows) {
@@ -664,7 +667,7 @@ describe('real DB: catalog parity + readiness audit', () => {
     test('non-pilot programs stay blocked and content-free', async () => {
         const progs = await db.query(
             `SELECT slug, issuance_enabled FROM credential_programs
-             WHERE slug NOT IN ('${TEST_PROGRAM}', 'chess-foundations', 'e2e-quad-integrity')`,
+             WHERE slug NOT IN ('chess-foundations') AND slug NOT LIKE 'e2e-%'`,
         );
         expect(progs.rowCount).toBe(4);
         for (const p of progs.rows) {
@@ -675,12 +678,12 @@ describe('real DB: catalog parity + readiness audit', () => {
         // them MUST stay blocked.
         const sets = await db.query(
             `SELECT COUNT(*)::int c FROM assessment_question_sets
-             WHERE program_slug NOT IN ('${TEST_PROGRAM}', 'chess-foundations', 'e2e-quad-integrity')`,
+             WHERE program_slug NOT IN ('chess-foundations') AND program_slug NOT LIKE 'e2e-%'`,
         );
         expect(sets.rows[0].c).toBe(0);
         const items = await db.query(
             `SELECT program_slug FROM trusted_validation_items
-             WHERE program_slug NOT IN ('${TEST_PROGRAM}', 'chess-foundations', 'e2e-quad-integrity')`,
+             WHERE program_slug NOT IN ('chess-foundations') AND program_slug NOT LIKE 'e2e-%'`,
         );
         expect(items.rows).toEqual([]);
         const uid = newUid();

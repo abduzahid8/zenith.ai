@@ -144,6 +144,12 @@ export interface ValidationResult {
     passed: boolean;
     submitted: boolean;
     trustedEventId: string | null;
+    /**
+     * True when the attempt's pinned content rotated out from under it:
+     * the server superseded the attempt and recorded ZERO proof.
+     * Never an official PASS — the UI must offer a fresh check.
+     */
+    contentStale: boolean;
 }
 
 export const startTrustedValidation = (programSlug: string, skillKey: string) =>
@@ -162,8 +168,15 @@ export const submitTrustedValidation = (attemptId: string, answer: string) =>
         p_attempt_id: attemptId,
         p_answer: { answer },
     }).then(r => {
-        const row = r as unknown as { passed: boolean; submitted: boolean; trusted_event_id: string | null };
-        return { passed: row.passed, submitted: row.submitted, trustedEventId: row.trusted_event_id };
+        const row = r as unknown as {
+            passed: boolean; submitted: boolean; trusted_event_id: string | null; content_stale?: boolean;
+        };
+        return {
+            passed: row.passed,
+            submitted: row.submitted,
+            trustedEventId: row.trusted_event_id,
+            contentStale: row.content_stale === true,
+        };
     });
 
 export interface AssessmentStart {
@@ -194,15 +207,17 @@ export const startAssessment = (programSlug: string) =>
     });
 
 export interface SubmissionResult {
-    score: number;
+    score: number | null;
     passed: boolean;
     submitted: boolean;
+    /** True when rotation superseded the attempt: nothing was scored or recorded. */
+    contentStale: boolean;
 }
 
 export const submitAssessment = (attemptId: string, answers: Record<string, string>) =>
     rpc<SubmissionResult>('submit_assessment', { p_attempt_id: attemptId, p_answers: answers }).then(r => {
-        const row = r as unknown as { score: number; passed: boolean; submitted: boolean };
-        return { score: Number(row.score), passed: row.passed, submitted: row.submitted };
+        const row = r as unknown as { score: number | null; passed: boolean; submitted: boolean; content_stale?: boolean };
+        return { score: row.score == null ? null : Number(row.score), passed: row.passed, submitted: row.submitted, contentStale: row.content_stale === true };
     });
 
 export const startKnowledgeAttempt = (programSlug: string) =>
@@ -215,8 +230,8 @@ export const startKnowledgeAttempt = (programSlug: string) =>
 
 export const submitKnowledgeAttempt = (attemptId: string, answers: Record<string, string>) =>
     rpc<SubmissionResult>('submit_knowledge_attempt', { p_attempt_id: attemptId, p_answers: answers }).then(r => {
-        const row = r as unknown as { score: number; passed: boolean; submitted: boolean };
-        return { score: Number(row.score), passed: row.passed, submitted: row.submitted };
+        const row = r as unknown as { score: number | null; passed: boolean; submitted: boolean; content_stale?: boolean };
+        return { score: row.score == null ? null : Number(row.score), passed: row.passed, submitted: row.submitted, contentStale: row.content_stale === true };
     });
 
 export const startPracticalAttempt = (programSlug: string) =>
@@ -229,8 +244,8 @@ export const startPracticalAttempt = (programSlug: string) =>
 
 export const submitPracticalAttempt = (attemptId: string, answers: Record<string, string>) =>
     rpc<SubmissionResult>('submit_practical_attempt', { p_attempt_id: attemptId, p_answers: answers }).then(r => {
-        const row = r as unknown as { score: number; passed: boolean; submitted: boolean };
-        return { score: Number(row.score), passed: row.passed, submitted: row.submitted };
+        const row = r as unknown as { score: number | null; passed: boolean; submitted: boolean; content_stale?: boolean };
+        return { score: row.score == null ? null : Number(row.score), passed: row.passed, submitted: row.submitted, contentStale: row.content_stale === true };
     });
 
 export interface CredentialProgress {

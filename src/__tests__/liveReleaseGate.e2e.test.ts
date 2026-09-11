@@ -316,7 +316,7 @@ describe('real DB: new starts require the live release', () => {
         }
     });
 
-    test('9/10/11. rotation never moves pinned attempts; new users get live content', async () => {
+    test('9/10/11. rotation supersedes pinned attempts; new users get live content', async () => {
         const slug = 'e2e-live-pinned';
         await makeProgram(slug);
         await addRelease(slug, 'gate-v1', 'active');
@@ -358,25 +358,32 @@ describe('real DB: new starts require the live release', () => {
             await addKnowledgeItem(slug, 'gate-v2', 'k1');
             await addPracticalItem(slug, 'gate-v2', 'p1');
             await addQuestionSet(slug, 'd4d4d4d4-4444-4444-8444-444444444444', 'gate-v2');
-            // Trusted attempt row keeps its pinned version.
+            // Trusted attempt row keeps its pinned version; the row is
+            // superseded only when its owner starts again (035).
             const tRow = await db.query(
-                `SELECT content_version FROM trusted_validation_attempts WHERE id = $1`,
+                `SELECT status, content_version FROM trusted_validation_attempts WHERE id = $1`,
                 [t1.attempt_id],
             );
             expect(tRow.rows[0].content_version).toBe('gate-v1');
-            // Knowledge / practical / final resume the exact same attempts.
+            // Knowledge / practical / final supersede the stale attempt and
+            // mint a fresh live one (035 replaces resume-across-rotation).
             const k2 = await startKnowledge(uid, slug);
-            expect(k2.attempt_id).toBe(k1.attempt_id);
+            expect(k2.attempt_id).not.toBe(k1.attempt_id);
             const p2 = await startPractical(uid, slug);
-            expect(p2.attempt_id).toBe(p1.attempt_id);
+            expect(p2.attempt_id).not.toBe(p1.attempt_id);
             const f2 = await startFinal(uid, slug);
-            expect(f2.attempt_id).toBe(f1.attempt_id);
-            expect(f2.retake_reason).toBe('active_attempt');
+            expect(f2.attempt_id).not.toBe(f1.attempt_id);
+            expect(f2.retake_reason).not.toBe('active_attempt');
+            const oldRows = await db.query(
+                `SELECT status FROM knowledge_attempts WHERE id = $1`,
+                [k1.attempt_id],
+            );
+            expect(oldRows.rows[0].status).toBe('superseded');
             const fRow = await db.query(
-                `SELECT bank_version FROM assessment_attempts WHERE id = $1`,
+                `SELECT status, bank_version FROM assessment_attempts WHERE id = $1`,
                 [f1.attempt_id],
             );
-            expect(fRow.rows[0].bank_version).toBe('gate-v1');
+            expect(fRow.rows[0]).toMatchObject({ status: 'superseded', bank_version: 'gate-v1' });
             // A NEW user after rotation lands on live content everywhere.
             const uid2 = newUid();
             await createUser(db, uid2);
