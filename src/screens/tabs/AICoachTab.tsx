@@ -21,6 +21,14 @@ import { getProgramForHobby } from '../../domain/credentials/catalog';
 import { eventsByProgram } from '../../services/learningEventRepository';
 import { projectSkillState } from '../../domain/sessions/skillState';
 import { getNextBestLearningAction } from '../../domain/sessions/nextBestAction';
+import { useLearningIntelligence } from '../../hooks/useLearningIntelligence';
+import {
+    VerifiedSkillChallenge,
+    VerifySkillCta,
+    fetchVerifyContext,
+    shouldShowVerifyChip,
+    VerifyChipContext,
+} from '../../components/session/VerifiedSkillChallenge';
 import { useGamificationStore } from '../../store/gamificationStore';
 import { useLanguageStore } from '../../store/languageStore';
 import { useGoalStore } from '../../store/goalStore';
@@ -167,6 +175,8 @@ const AICoachTab: React.FC = () => {
     const [coachSeeded, setCoachSeeded] = useState(false);
     const [inputText, setInputText] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [verifyCtx, setVerifyCtx] = useState<VerifyChipContext>({ issuable: false, verifiedSkillKeys: [] });
+    const [challenge, setChallenge] = useState<{ programSlug: string; skillKey: string; skillName: string } | null>(null);
     const [goalSnapshot, setGoalSnapshot] = useState<GoalSnapshot | null>(null);
     const [focusResult, setFocusResult] = useState<DailyFocusResult | null>(null);
     const [dailyPlan, setDailyPlan] = useState<DailyPlan | null>(null);
@@ -235,7 +245,13 @@ const AICoachTab: React.FC = () => {
                 .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
                 .concat([{ role: 'user', content }]);
             const context = buildUserContext(selectedHobby as HobbyId);
-            const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined, context);
+            // Factual system state only (server-derived): which skills carry
+            // a finalized passing trusted result. The LLM never decides
+            // readiness, skill choice, or pass/fail from this.
+            const verifiedLine = verifyCtx.verifiedSkillKeys.length > 0
+                ? `\n- Server-verified skills: ${verifyCtx.verifiedSkillKeys.join(', ')}`
+                : '';
+            const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined, context + verifiedLine);
             setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: response }]);
         } catch {
             setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: 'Sorry, I hit an error. Try again?' }]);
@@ -246,6 +262,52 @@ const AICoachTab: React.FC = () => {
     };
 
     const hobby = (selectedHobby || useUserProfileStore.getState().selectedHobby) as HobbyId | null;
+    // Canonical recommendation (frozen engine): the ONLY trigger for the
+    // Verify action. The UI never infers readiness itself.
+    const { recommendation: proveRec, program: proveProgram } = useLearningIntelligence({ minutes: 30 });
+
+    // Server verify context: issuance flag + server-verified skills.
+    // Fail-closed: any error hides (never invents) the official action.
+    useEffect(() => {
+        let cancelled = false;
+        const slug = proveProgram?.slug;
+        if (proveRec?.type !== 'prove_skill' || !proveRec.skillKey || !slug) {
+            setVerifyCtx({ issuable: false, verifiedSkillKeys: [] });
+            return;
+        }
+        fetchVerifyContext(slug).then(ctx => {
+            if (!cancelled) setVerifyCtx(ctx);
+        }).catch(() => {
+            if (!cancelled) setVerifyCtx({ issuable: false, verifiedSkillKeys: [] });
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [proveRec?.type, proveRec?.skillKey, proveProgram?.slug]);
+
+    const verifyTarget = useMemo(
+        () => (proveProgram ? shouldShowVerifyChip(proveRec, verifyCtx) : null),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [proveRec, verifyCtx, proveProgram?.slug],
+    );
+
+    const handleVerifyComplete = (passed: boolean) => {
+        // NOTE: do not close here — the sheet stays open on its own
+        // Verified / Needs-another-try result until the user Continues.
+        const done = challenge;
+        if (!done) return;
+        setMessages(prev => [...prev, {
+            id: `coach-verify-${Date.now()}`,
+            role: 'assistant',
+            content: passed
+                ? `🎉 **${done.skillName} verified!**\n\nNice work — this skill is locked in. What's next?`
+                : `Not verified yet — no worries.\n\nKeep practicing and try another verification when you're ready.`,
+        }]);
+        scrollToEnd();
+        // Re-read the truth (server + canonical recommendation). Nothing is
+        // patched manually: the chip visibility recomputes from fresh state.
+        fetchVerifyContext(done.programSlug).then(setVerifyCtx).catch(() => {});
+    };
     /** Next real DailyPlan task -> shared swipe session (same task object). */
     const startNextTaskSession = () => {
         const next = findNextIncompleteTask(useTaskStore.getState().dailyTasks);
@@ -367,12 +429,24 @@ const AICoachTab: React.FC = () => {
                             <Text style={styles.thinkingText}>Thinking...</Text>
                         </View>
                     ) : messages.length > 0 && !showInput ? (
-                        <View style={styles.chipRow}>
-                            {actionChips.map((chip, i) => (
-                                <TouchableOpacity key={i} style={styles.chip} onPress={chip.action} activeOpacity={0.7}>
-                                    <Text style={styles.chipLabel}>{chip.icon} {chip.label}</Text>
-                                </TouchableOpacity>
-                            ))}
+                        <View>
+                            {verifyTarget && proveProgram && (
+                                <VerifySkillCta
+                                    skillName={verifyTarget.skillName}
+                                    onPress={() => setChallenge({
+                                        programSlug: proveProgram.slug,
+                                        skillKey: verifyTarget.skillKey,
+                                        skillName: verifyTarget.skillName,
+                                    })}
+                                />
+                            )}
+                            <View style={styles.chipRow}>
+                                {actionChips.map((chip, i) => (
+                                    <TouchableOpacity key={i} style={styles.chip} onPress={chip.action} activeOpacity={0.7}>
+                                        <Text style={styles.chipLabel}>{chip.icon} {chip.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
                         </View>
                     ) : null
                 }
@@ -402,6 +476,18 @@ const AICoachTab: React.FC = () => {
                         <SendIcon color="white" />
                     </TouchableOpacity>
                 </View>
+            )}
+
+            {/* Verified skill challenge: server-owned sheet, no new route. */}
+            {challenge && (
+                <VerifiedSkillChallenge
+                    visible={challenge !== null}
+                    programSlug={challenge.programSlug}
+                    skillKey={challenge.skillKey}
+                    skillName={challenge.skillName}
+                    onClose={() => setChallenge(null)}
+                    onComplete={handleVerifyComplete}
+                />
             )}
         </KeyboardAvoidingView>
     );

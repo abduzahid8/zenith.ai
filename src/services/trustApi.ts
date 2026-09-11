@@ -31,6 +31,53 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
     return (Array.isArray(data) ? data[0] : data) as T;
 }
 
+export interface ProgramAvailability {
+    slug: string;
+    issuable: boolean;
+}
+
+/**
+ * Official program availability, read from server state. The client never
+ * decides issuability: an official Verify action is offered only when the
+ * server row says issuance_enabled. Throws offline/unauthenticated, in
+ * which case callers must hide (never invent) official actions.
+ */
+export const getProgramAvailability = async (): Promise<ProgramAvailability[]> => {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+        .from('credential_programs')
+        .select('slug, issuance_enabled');
+    if (error) throw new Error(error.message);
+    const rows = (Array.isArray(data) ? data : []) as unknown as {
+        slug: string; issuance_enabled: boolean;
+    }[];
+    return rows.map(r => ({ slug: r.slug, issuable: r.issuance_enabled === true }));
+};
+
+export interface TrustedSkillResult {
+    skillKey: string;
+    passed: boolean;
+}
+
+/**
+ * Server-authoritative skill verification state: which skills have a
+ * finalized passing trusted result for this user+program. Official UI
+ * reads this — never local stores — so a forged local "verified" flag
+ * can never produce verified UX.
+ */
+export const getTrustedSkillResults = async (programSlug: string): Promise<TrustedSkillResult[]> => {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+        .from('trusted_item_results')
+        .select('skill_key, finalized_passed')
+        .eq('program_slug', programSlug);
+    if (error) throw new Error(error.message);
+    const rows = (Array.isArray(data) ? data : []) as unknown as {
+        skill_key: string; finalized_passed: boolean;
+    }[];
+    return rows.map(r => ({ skillKey: r.skill_key, passed: r.finalized_passed === true }));
+};
+
 export interface TrustedChallenge {
     attemptId: string;
     skillKey: string;
