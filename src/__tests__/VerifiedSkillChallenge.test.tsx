@@ -23,6 +23,8 @@ jest.mock('../services/trustApi', () => ({
     getProgramAvailability: jest.fn(),
     getTrustedSkillResults: jest.fn(),
     getSkillVerification: jest.fn(),
+    // Mirrors the real predicate (unit-tested in trustApi.test.ts).
+    isContentUnavailable: jest.fn((m: string) => m.includes('credential_content_unavailable')),
 }));
 jest.mock('@supabase/supabase-js', () => ({
     createClient: jest.fn(() => ({})),
@@ -356,6 +358,35 @@ describe('VerifiedSkillChallenge', () => {
         });
         await fireEvent.press(retryScreen.getByText('Retry'));
         expect(await retryScreen.findByText('Q?')).toBeTruthy();
+    });
+
+    test('15. fail-closed server error says temporarily unavailable, never blames the network', async () => {
+        mockStart.mockRejectedValueOnce(new Error('credential_content_unavailable'));
+        const screen = await render(<VerifiedSkillChallenge {...baseProps} />);
+        expect(
+            await screen.findByText('Verification is temporarily unavailable. Try again later.'),
+        ).toBeTruthy();
+        expect(screen.queryByText('Verification needs an internet connection.')).toBeNull();
+        expect(screen.queryByText('✓ Verified')).toBeNull();
+        expect(baseProps.onComplete).not.toHaveBeenCalled();
+        // Retry recovers when content is back.
+        mockStart.mockResolvedValue({
+            attemptId: 'att-6',
+            skillKey: 'rules',
+            programVersion: '1.0',
+            payload: { prompt: 'Q?', options: ['A'] },
+        });
+        await fireEvent.press(screen.getByText('Retry'));
+        expect(await screen.findByText('Q?')).toBeTruthy();
+    });
+
+    test('16. generic server errors keep the internet-connection copy (no code leak)', async () => {
+        mockStart.mockRejectedValueOnce(new Error('start_trusted_validation: no trusted content'));
+        const screen = await render(<VerifiedSkillChallenge {...baseProps} />);
+        expect(await screen.findByText('Verification needs an internet connection.')).toBeTruthy();
+        expect(
+            screen.queryByText('Verification is temporarily unavailable. Try again later.'),
+        ).toBeNull();
     });
 });
 

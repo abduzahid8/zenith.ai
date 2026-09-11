@@ -684,6 +684,12 @@ describe('integrity: rotation resurrection regression (synthetic ROT program)', 
              VALUES ('${ROT}', '1.0', 'rot-v2', 'synthetic2', 'passed', 'approved', 'synthetic', NOW(), 'active')
              ON CONFLICT (program_slug, program_version, content_version) DO NOTHING`,
         );
+        // Activation retires the old release (atomic activation): the gate
+        // requires exactly one live release, so rot-v1 must step down here.
+        await db.query(
+            `UPDATE credential_content_releases SET status = 'retired'
+             WHERE program_slug = '${ROT}' AND program_version = '1.0' AND content_version = 'rot-v1'`,
+        );
         // The v1 PASS now counts ZERO (version mismatch + compromised).
         expect(await qualifyingCount(uid)).toEqual({ items: 0, passes: 0 });
         // History remains queryable (auditability preserved).
@@ -1194,5 +1200,28 @@ describe('ops: release-hygiene regressions (synthetic fixture)', () => {
                      '{"kind":"mate_in_1","prompt":"mate?","fen":"7k/8/5K2/8/8/8/8/6Q1 w - - 0 1"}', '{"answer":"g1g7"}')
              ON CONFLICT DO NOTHING`,
         );
+    });
+
+    afterAll(async () => {
+        // Hermetic cleanup: files share one DB per invocation (globalSetup
+        // runs once), so leaked rows break order-dependent suites.
+        await db.query(`DELETE FROM trusted_item_results WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM trusted_validation_attempts WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM knowledge_attempts WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM practical_attempts WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM assessment_attempts WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM learning_events WHERE program_slug = '${FIX}'`);
+        await db.query(
+            `DELETE FROM assessment_answer_keys WHERE question_set_id IN
+             (SELECT id FROM assessment_question_sets WHERE program_slug = '${FIX}')`,
+        );
+        await db.query(`DELETE FROM assessment_question_sets WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM trusted_validation_items WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM knowledge_items WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM practical_items WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM credential_component_results WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM user_credential_progress WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM credential_content_releases WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM credential_programs WHERE slug = '${FIX}'`);
     });
 });

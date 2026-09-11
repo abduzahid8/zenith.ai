@@ -240,6 +240,16 @@ describe('real DB: server-scored validation flow', () => {
     };
 
     beforeAll(async () => {
+        // Live release for the harness version (034 gate: new starts
+        // require exactly one active + QA-passed + human-approved release).
+        await db.query(
+            `INSERT INTO credential_content_releases
+                (program_slug, program_version, content_version, artifact_sha256,
+                 machine_qa_status, human_review_status, reviewer, reviewed_at, status)
+              VALUES ('${ITEM.program}', '${ITEM.version}', 'static-1', 'synthetic-fixture', 'passed', 'approved',
+                      'synthetic-fixture', NOW(), 'active')
+              ON CONFLICT (program_slug, program_version, content_version) DO NOTHING`,
+        );
         await db.query(
             `INSERT INTO trusted_validation_items
                 (program_slug, program_version, hobby_id, curriculum_day, skill_key, lesson_id, content_version, payload, answer_key)
@@ -256,6 +266,11 @@ describe('real DB: server-scored validation flow', () => {
               WHERE item_id IN (SELECT id FROM trusted_validation_items WHERE lesson_id = '${ITEM.lesson}')`,
         );
         await db.query(`DELETE FROM trusted_validation_items WHERE lesson_id = '${ITEM.lesson}'`);
+        await db.query(
+            `DELETE FROM credential_content_releases
+              WHERE program_slug = '${ITEM.program}' AND program_version = '${ITEM.version}'
+                AND content_version = 'static-1'`,
+        );
     });
 
     test('start returns safe payload; keys unreadable; pass creates server proof', async () => {
@@ -345,10 +360,18 @@ describe('real DB: server-scored validation flow', () => {
     test('start with no trusted content is rejected', async () => {
         const uid = newUid();
         await createUser(db, uid);
+        // Unknown skill on a live program: content gate passes, item lookup fails.
+        await asRole(db, 'authenticated', uid, () =>
+            expectDbDenied(
+                db.query('SELECT * FROM start_trusted_validation($1, $2)', ['chess-foundations', 'no-such-skill']),
+                /no trusted content/,
+            ),
+        );
+        // Program with no live release: fail closed, never "no content".
         await asRole(db, 'authenticated', uid, () =>
             expectDbDenied(
                 db.query('SELECT * FROM start_trusted_validation($1, $2)', ['python-foundations', 'functions']),
-                /no trusted content/,
+                /credential_content_unavailable/,
             ),
         );
     });

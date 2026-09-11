@@ -15,6 +15,7 @@ import type { LearningRecommendation } from '../../domain/sessions/nextBestActio
 import {
     getProgramAvailability,
     getSkillVerification,
+    isContentUnavailable,
     startTrustedValidation,
     submitTrustedValidation,
 } from '../../services/trustApi';
@@ -128,6 +129,7 @@ export const VerifiedSkillChallenge: React.FC<VerifiedSkillChallengeProps> = ({
     const [options, setOptions] = useState<string[]>([]);
     const [answer, setAnswer] = useState('');
     const [verification, setVerification] = useState<SkillVerification | null>(null);
+    const [contentUnavailable, setContentUnavailable] = useState(false);
     const mounted = useRef(true);
 
     useEffect(() => {
@@ -142,6 +144,7 @@ export const VerifiedSkillChallenge: React.FC<VerifiedSkillChallengeProps> = ({
         setAnswer('');
         setAttemptId(null);
         setVerification(null);
+        setContentUnavailable(false);
         try {
             const challenge = await startTrustedValidation(programSlug, skillKey);
             if (!mounted.current) return;
@@ -149,8 +152,12 @@ export const VerifiedSkillChallenge: React.FC<VerifiedSkillChallengeProps> = ({
             setPrompt(promptOf(challenge.payload));
             setOptions(optionsOf(challenge.payload));
             setPhase('answering');
-        } catch {
-            if (mounted.current) setPhase('error');
+        } catch (err) {
+            if (!mounted.current) return;
+            // Fail-closed server response (no live release) is NOT a
+            // network problem: say so explicitly, leak no error codes.
+            setContentUnavailable(isContentUnavailable(err instanceof Error ? err.message : String(err)));
+            setPhase('error');
         }
     }, [programSlug, skillKey]);
 
@@ -309,7 +316,9 @@ export const VerifiedSkillChallenge: React.FC<VerifiedSkillChallengeProps> = ({
                     {phase === 'error' && (
                         <View>
                             <Text style={[styles.body, { color: colors.textSecondary }]}>
-                                Verification needs an internet connection.
+                                {contentUnavailable
+                                    ? 'Verification is temporarily unavailable. Try again later.'
+                                    : 'Verification needs an internet connection.'}
                             </Text>
                             <View style={styles.row}>
                                 <TouchableOpacity

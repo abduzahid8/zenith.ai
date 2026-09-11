@@ -24,6 +24,17 @@ export function parseRetakeBlock(message: string): RetakeBlock | null {
     return { blocked: true, reason: m[1] as RetakeReason, detail: m[2] ?? null };
 }
 
+/**
+ * Fail-closed content gate: the server raises `credential_content_unavailable`
+ * when no live (active + QA-passed + human-approved) content release exists
+ * for the program/version. Unlike offline errors this is a valid server
+ * response — the client must say "temporarily unavailable", never blame
+ * the network and never expose internal codes.
+ */
+export function isContentUnavailable(message: string): boolean {
+    return message.includes('credential_content_unavailable');
+}
+
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
     const supabase = getSupabase();
     const { data, error } = await supabase.rpc(fn, args);
