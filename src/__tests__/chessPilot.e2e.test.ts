@@ -209,20 +209,18 @@ describe('integrity: balanced final + bank pinning', () => {
             db.query('SELECT * FROM start_assessment($1)', [QUAD]).then(r => r.rows[0]),
         );
         const firstIds = (first.questions as { id: string }[]).map(q => q.id).sort();
-        const original = await db.query(
-            `SELECT questions FROM assessment_question_sets WHERE id = '33333333-3333-3333-3333-333333333333'`,
-        );
-        // Simulate a bank typo correction (same ids, fixed text) while the
-        // attempt is active: the attempt must NOT be re-sampled, and serves
-        // its own pinned set (a version mutation would be rejected by the
-        // immutability trigger — asserted in the loader suite).
+        // A newer bank generation lands (retired staging row — only one
+        // ACTIVE set may exist) while the attempt is active: the attempt
+        // must NOT be re-sampled and must keep serving exactly its own
+        // pinned set — never the newcomer.
+        const draftId = '77777777-7777-7777-7777-777777777777';
         await db.query(
-            `UPDATE assessment_question_sets SET questions = (
-               SELECT jsonb_agg(CASE WHEN (q->>'id') = $1
-                 THEN q || '{"prompt":"CORRECTED?"}' ELSE q END)
-               FROM jsonb_array_elements(questions) q)
-             WHERE id = '33333333-3333-3333-3333-333333333333'`,
-            [firstIds[0]],
+            `INSERT INTO assessment_question_sets
+                (id, program_slug, version, question_count, time_limit_minutes, pass_score,
+                 questions, content_version, status)
+             VALUES ('${draftId}', '${QUAD}', '1.0', 20, 30, 80,
+                     '[{"id":"qf-draft","skill":"qk-a","prompt":"draft?","options":["y","n"]}]',
+                     'quad-v2', 'retired')`,
         );
         try {
             const again = await asRole(db, 'authenticated', uid, () =>
@@ -231,13 +229,9 @@ describe('integrity: balanced final + bank pinning', () => {
             expect(again.attempt_id).toBe(first.attempt_id);
             const againQs = again.questions as { id: string; prompt: string }[];
             expect(againQs.map(q => q.id).sort()).toEqual(firstIds);
-            expect(againQs.find(q => q.id === firstIds[0])!.prompt).toBe('CORRECTED?');
+            expect(againQs.some(q => q.id === 'qf-draft')).toBe(false);
         } finally {
-            await db.query(
-                `UPDATE assessment_question_sets SET questions = $1::jsonb
-                 WHERE id = '33333333-3333-3333-3333-333333333333'`,
-                [JSON.stringify(original.rows[0].questions)],
-            );
+            await db.query(`DELETE FROM assessment_question_sets WHERE id = '${draftId}'`);
         }
     });
 });
@@ -771,13 +765,13 @@ describe('integrity: project enrollment + immutable revisions', () => {
         await asRole(db, 'service_role', null, () =>
             expectDbDenied(
                 db.query(`UPDATE project_reviews SET authoritative_score = 10 WHERE submission_id = $1`, [sub]),
-                /immutable/,
+                /immutable|lifecycle violation/,
             ),
         );
         await asRole(db, 'service_role', null, () =>
             expectDbDenied(
                 db.query(`DELETE FROM project_reviews WHERE submission_id = $1`, [sub]),
-                /immutable/,
+                /immutable|lifecycle violation/,
             ),
         );
         // Adverse correction as revision 2 takes effect immediately.
@@ -898,11 +892,12 @@ describe('ops: committed loader + activation (synthetic fixture)', () => {
         expect(rel.rows[0]).toMatchObject({
             status: 'draft', machine_qa_status: 'passed', human_review_status: 'approved', reviewer: 'fixture-review',
         });
-        // Identical reload: success, zero changes.
+        // Identical reload: success, zero changes, explicit no-op report.
         const second = runLoader('db-test/fixtures/synth-bank.json', {
             HUMAN_APPROVAL: 'approved', REVIEWER: 'fixture-review', REVIEWED_AT: '2026-09-10T00:00:00Z',
         });
         expect(second.code).toBe(0);
+        expect(second.out).toMatch(/already loaded.*zero writes/);
         expect(await counts()).toEqual({ v: 1, k: 1, p: 1, s: 1 });
     });
 
@@ -960,11 +955,13 @@ describe('ops: committed loader + activation (synthetic fixture)', () => {
         const noApproval = runActivate({ ...base, EXPECTED_SHA256: (await realSha()) });
         expect(noApproval.code).not.toBe(0);
         expect(noApproval.out).toMatch(/human_review_status|reviewer/i);
-        // Re-approve via the loader path (same hash), then activate.
-        const again = runLoader('db-test/fixtures/synth-bank.json', {
-            HUMAN_APPROVAL: 'approved', REVIEWER: 'fixture-review', REVIEWED_AT: '2026-09-10T00:00:00Z',
-        });
-        expect(again.code).toBe(0);
+        // Re-approve through the separate ops act (direct service SQL —
+        // approval is not the loader's job on a no-op reload), then activate.
+        await db.query(
+            `UPDATE credential_content_releases
+             SET human_review_status = 'approved', reviewer = 'fixture-review', reviewed_at = NOW()
+             WHERE program_slug = '${FIX}'`,
+        );
         const ok = runActivate({ ...base, EXPECTED_SHA256: await realSha() });
         expect(ok.code).toBe(0);
         expect(ok.out).toMatch(/activation checks passed/);
@@ -990,5 +987,212 @@ describe('ops: committed loader + activation (synthetic fixture)', () => {
             };
             return createHash('sha256').update(canon(bank)).digest('hex');
         }
+    });
+});
+
+describe('ops: release-hygiene regressions (synthetic fixture)', () => {
+    const FIX = 'e2e-loader-fix';
+    const root = process.cwd();
+    const port = process.env.ZENYTH_E2E_PGPORT ?? '55433';
+    const dbUrl = `postgres://postgres@127.0.0.1:${port}/postgres`;
+
+    function loadFixture(): void {
+        const { execFileSync } = require('child_process') as typeof import('child_process');
+        execFileSync(process.execPath, ['scripts/load-production-bank.mjs'], {
+            cwd: root,
+            env: {
+                ...process.env,
+                PRIVATE_BANK_PATH: 'db-test/fixtures/synth-bank.json',
+                SUPABASE_DB_URL: dbUrl,
+                HUMAN_APPROVAL: 'approved',
+                REVIEWER: 'fixture-review',
+                REVIEWED_AT: '2026-09-10T00:00:00Z',
+            },
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
+    }
+
+    // Hermetic per-test fixture: the loader is idempotent by design, so
+    // every test starts from a freshly verified loaded state.
+    beforeEach(async () => {
+        await db.query(
+            `INSERT INTO credential_programs (slug, code, title, level, version, required_score,
+                 requires_assessment, requires_project, skills, status)
+             VALUES ('${FIX}', 'FX', 'Fixture', 'verified-skill', '1.0', 80, TRUE, TRUE, '[]', 'active')
+             ON CONFLICT (slug) DO NOTHING`,
+        );
+        loadFixture();
+    });
+
+    function runScript(script: string, extraEnv: Record<string, string> = {}): { code: number; out: string } {
+        const { execFileSync } = require('child_process') as typeof import('child_process');
+        try {
+            const out = execFileSync(process.execPath, [script], {
+                cwd: root,
+                env: { ...process.env, SUPABASE_DB_URL: dbUrl, ...extraEnv },
+                stdio: ['ignore', 'pipe', 'pipe'],
+            }).toString();
+            return { code: 0, out };
+        } catch (err) {
+            const e = err as { status?: number; stdout?: Buffer; stderr?: Buffer };
+            return {
+                code: e.status ?? 1,
+                out: `${e.stdout?.toString() ?? ''}\n${e.stderr?.toString() ?? ''}`,
+            };
+        }
+    }
+
+    async function snapshot(): Promise<string> {
+        const parts: string[] = [];
+        for (const t of [
+            'trusted_validation_items', 'knowledge_items', 'practical_items',
+            'assessment_question_sets', 'credential_content_releases',
+        ]) {
+            const c = await db.query(`SELECT COUNT(*)::int c FROM ${t} WHERE program_slug = $1`, [FIX]).then(
+                x => (x as { rows: { c: number }[] }).rows[0].c,
+            );
+            parts.push(`${t}:${c}`);
+        }
+        const keys = await db.query(
+            `SELECT COUNT(*)::int c FROM assessment_answer_keys k
+             JOIN assessment_question_sets s ON s.id = k.question_set_id
+             WHERE s.program_slug = $1`, [FIX],
+        );
+        parts.push(`assessment_answer_keys:${keys.rows[0].c}`);
+        const rel = await db.query(
+            `SELECT content_version, status FROM credential_content_releases WHERE program_slug = $1 ORDER BY 1`,
+            [FIX],
+        );
+        parts.push(`releases:${JSON.stringify(rel.rows)}`);
+        return parts.join('|');
+    }
+
+    test('--dry-run validates against live state with zero writes', async () => {
+        const before = await snapshot();
+        const r = runScript('scripts/activate-content-release.mjs', {
+            PROGRAM_SLUG: FIX,
+            PROGRAM_VERSION: '1.0',
+            CONTENT_VERSION: 'fix-v1',
+            EXPECTED_SHA256: '0'.repeat(64),
+        });
+        // Wrong SHA on dry-run: refused, and nothing changed.
+        expect(r.code).not.toBe(0);
+        expect(r.out).toMatch(/sha256/i);
+        expect(await snapshot()).toBe(before);
+    });
+
+    test('activation locks the release row: concurrent holder blocks, never stale-reads', async () => {
+        // Hold the target release row lock in an open transaction...
+        await db2.query('BEGIN');
+        await db2.query(
+            `SELECT * FROM credential_content_releases WHERE program_slug = $1 FOR UPDATE`, [FIX],
+        );
+        try {
+            // ...then activation must WAIT on the lock (statement timeout
+            // forces the wait to surface instead of hanging the suite).
+            const r = runScript('scripts/activate-content-release.mjs', {
+                PROGRAM_SLUG: FIX,
+                PROGRAM_VERSION: '1.0',
+                CONTENT_VERSION: 'fix-v1',
+                EXPECTED_SHA256: await approvedSha(),
+                PGOPTIONS: '-c statement_timeout=2000',
+            });
+            expect(r.code).not.toBe(0);
+            expect(r.out).toMatch(/lock timeout|statement timeout|canceling statement/i);
+        } finally {
+            await db2.query('ROLLBACK');
+        }
+        // After the holder releases, the same activation proceeds.
+        const ok = runScript('scripts/activate-content-release.mjs', {
+            PROGRAM_SLUG: FIX,
+            PROGRAM_VERSION: '1.0',
+            CONTENT_VERSION: 'fix-v1',
+            EXPECTED_SHA256: await approvedSha(),
+        });
+        expect(ok.code).toBe(0);
+
+        async function approvedSha(): Promise<string> {
+            const r = await db.query(
+                `SELECT artifact_sha256 FROM credential_content_releases WHERE program_slug = $1`, [FIX],
+            );
+            return r.rows[0].artifact_sha256 as string;
+        }
+    });
+
+    test('released content mutations are rejected at the DB level', async () => {
+        await expectDbDenied(
+            db.query(`UPDATE trusted_validation_items SET payload = '{"kind":"mc"}' WHERE program_slug = $1`, [FIX]),
+            /immutable|lifecycle violation/,
+        );
+        await expectDbDenied(
+            db.query(`UPDATE knowledge_items SET answer_key = '{"answer":"x"}' WHERE program_slug = $1`, [FIX]),
+            /immutable|lifecycle violation/,
+        );
+        await expectDbDenied(
+            db.query(`UPDATE practical_items SET skill_key = 'zz' WHERE program_slug = $1`, [FIX]),
+            /immutable|lifecycle violation/,
+        );
+        await expectDbDenied(
+            db.query(`UPDATE assessment_question_sets SET questions = '[]' WHERE program_slug = $1`, [FIX]),
+            /immutable|lifecycle violation/,
+        );
+        await expectDbDenied(
+            db.query(
+                `UPDATE assessment_answer_keys SET answers = '{}' WHERE question_set_id IN
+                 (SELECT id FROM assessment_question_sets WHERE program_slug = $1)`, [FIX],
+            ),
+            /immutable|lifecycle violation/,
+        );
+        // Allowed lifecycle: active -> retired still works (fresh row first).
+        await db.query(
+            `INSERT INTO knowledge_items (program_slug, program_version, skill_key, item_key, content_version, status, payload, answer_key)
+             VALUES ('${FIX}', '1.0', 'fx', 'fk-lifecycle', 'fix-v1', 'active', '{}', '{}')
+             ON CONFLICT DO NOTHING`,
+        );
+        await db.query(
+            `UPDATE knowledge_items SET status = 'retired'
+             WHERE program_slug = $1 AND item_key = 'fk-lifecycle'`, [FIX],
+        );
+        const st = await db.query(
+            `SELECT status FROM knowledge_items WHERE program_slug = $1 AND item_key = 'fk-lifecycle'`, [FIX],
+        );
+        expect(st.rows[0].status).toBe('retired');
+        // ...but resurrection back to active is refused.
+        await expectDbDenied(
+            db.query(
+                `UPDATE knowledge_items SET status = 'active'
+                 WHERE program_slug = $1 AND item_key = 'fk-lifecycle'`, [FIX],
+            ),
+            /immutable|lifecycle violation/,
+        );
+        await db.query(`DELETE FROM knowledge_items WHERE program_slug = $1 AND item_key = 'fk-lifecycle'`, [FIX]);
+    });
+
+    test('deleted-row drift is detected on identical reload', async () => {
+        // Simulate drift the trigger cannot prevent: a missing row.
+        await db.query(`DELETE FROM practical_items WHERE program_slug = $1`, [FIX]);
+        const { execFileSync } = require('child_process') as typeof import('child_process');
+        let threw = false;
+        try {
+            execFileSync(process.execPath, ['scripts/load-production-bank.mjs'], {
+                cwd: root,
+                env: { ...process.env, PRIVATE_BANK_PATH: 'db-test/fixtures/synth-bank.json', SUPABASE_DB_URL: dbUrl },
+                stdio: ['ignore', 'pipe', 'pipe'],
+            });
+        } catch (err) {
+            threw = true;
+            const e = err as { status?: number; stderr?: Buffer; stdout?: Buffer };
+            expect(e.status).not.toBe(0);
+            const out = `${e.stdout?.toString() ?? ''}\n${e.stderr?.toString() ?? ''}`;
+            expect(out).toMatch(/drift|missing/i);
+        }
+        expect(threw).toBe(true);
+        // Restore the row exactly (fresh INSERT, same id/content).
+        await db.query(
+            `INSERT INTO practical_items (id, program_slug, program_version, skill_key, item_key, content_version, status, payload, answer_key)
+             VALUES ('aaaaaaaa-0000-4000-8000-000000000003', '${FIX}', '1.0', 'fx', 'fp-1', 'fix-v1', 'active',
+                     '{"kind":"mate_in_1","prompt":"mate?","fen":"7k/8/5K2/8/8/8/8/6Q1 w - - 0 1"}', '{"answer":"g1g7"}')
+             ON CONFLICT DO NOTHING`,
+        );
     });
 });

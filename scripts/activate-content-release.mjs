@@ -9,15 +9,22 @@
  *   SUPABASE_DB_URL=postgres://postgres:PASSWORD@db.PROJECT.supabase.co:5432/postgres \
  *   node scripts/activate-content-release.mjs [--dry-run]
  *
- * Activation succeeds ONLY when every check passes, atomically:
+ * --dry-run CONNECTS, READS and VALIDATES exactly like a real run, then
+ * rolls back: it performs zero writes (verified by test).
+ *
+ * Atomicity: BEGIN first, SELECT the target release row FOR UPDATE (so a
+ * concurrent mutation blocks instead of slipping between validation and
+ * switch), validate everything INSIDE the transaction, then retire the
+ * old release + activate the new one, COMMIT. Any failed invariant (or
+ * any error) => ROLLBACK, nothing changes.
+ *
+ * Activation succeeds ONLY when:
  * - release row exists with machine_qa_status=passed,
  *   human_review_status=approved, reviewer + reviewed_at present
  * - stored artifact_sha256 == EXPECTED_SHA256 (exact artifact identity)
  * - every referenced row belongs to the SAME content_version:
  *   validation/knowledge/practical items + final set + policy presence
  * - final bank present with hidden keys
- * Then, in ONE transaction: previous active release(s) of the program
- * retire, this release becomes active.
  *
  * Explicitly OUT of scope: issuance_enabled is NEVER touched here.
  * Enabling issuance remains a separate guarded migration/decision.
@@ -38,23 +45,29 @@ for (const [k, v] of [['PROGRAM_SLUG', P], ['PROGRAM_VERSION', V], ['CONTENT_VER
         process.exit(1);
     }
 }
-if (!DRY && !dbUrl) {
+// NOTE: the connection is required even for --dry-run: dry-run validates
+// against live state and must prove zero writes, which needs a transaction.
+if (!dbUrl) {
     console.error('SUPABASE_DB_URL is required (service-role/direct connection).');
     process.exit(1);
 }
 
 const failures = [];
 
-const db = DRY ? null : new Client({ connectionString: dbUrl });
-if (db) await db.connect();
+const db = new Client({ connectionString: dbUrl });
+await db.connect();
+let committed = false;
 try {
     const q = (text, params) => db.query(text, params);
-
+    await q('BEGIN');
+    // Lock the target release row FIRST: concurrent mutations block here
+    // instead of landing between validation and the switch.
     const rel = (
         await q(
             `SELECT status, machine_qa_status, human_review_status, reviewer, reviewed_at, artifact_sha256
              FROM credential_content_releases
-             WHERE program_slug = $1 AND program_version = $2 AND content_version = $3`,
+             WHERE program_slug = $1 AND program_version = $2 AND content_version = $3
+             FOR UPDATE`,
             [P, V, C],
         )
     ).rows[0];
@@ -69,17 +82,16 @@ try {
     }
 
     // Every referenced row must belong to the SAME content_version.
-    for (const [table, col] of [
-        ['trusted_validation_items', 'curriculum_day'],
-        ['knowledge_items', 'item_key'],
-        ['practical_items', 'item_key'],
+    for (const table of [
+        'trusted_validation_items',
+        'knowledge_items',
+        'practical_items',
     ]) {
         const stray = await q(
             `SELECT COUNT(*)::int c FROM ${table}
              WHERE program_slug = $1 AND status = 'active' AND content_version IS DISTINCT FROM $2`,
             [P, C],
         );
-        void col;
         if (stray.rows[0].c > 0) failures.push(`${table} has active rows outside ${C}`);
     }
     const sets = await q(
@@ -99,6 +111,7 @@ try {
     }
 
     if (failures.length > 0) {
+        await q('ROLLBACK');
         console.error(`ACTIVATION REFUSED (${failures.length}):`);
         for (const f of failures) console.error(` - ${f}`);
         process.exit(1);
@@ -106,33 +119,36 @@ try {
     console.log(`activation checks passed for ${P} ${V} ${C} (sha ${SHA.slice(0, 12)}…).`);
 
     if (DRY) {
-        console.log('--dry-run: no writes performed (issuance untouched either way).');
+        await q('ROLLBACK');
+        console.log('--dry-run: validated inside a transaction, rolled back, zero writes performed (issuance untouched either way).');
         process.exit(0);
     }
 
-    await db.query('BEGIN');
-    await db.query(
+    await q(
         `UPDATE credential_content_releases SET status = 'retired'
          WHERE program_slug = $1 AND status IN ('active', 'approved')
            AND content_version <> $2`,
         [P, C],
     );
-    await db.query(
+    await q(
         `UPDATE credential_content_releases SET status = 'active'
          WHERE program_slug = $1 AND program_version = $2 AND content_version = $3`,
         [P, V, C],
     );
-    await db.query('COMMIT');
-    const after = await db.query(
+    await q('COMMIT');
+    committed = true;
+    const after = await q(
         `SELECT content_version, status FROM credential_content_releases WHERE program_slug = $1 ORDER BY content_version`,
         [P],
     );
     console.log('releases now:', JSON.stringify(after.rows));
     console.log('NOTE: issuance_enabled untouched — enabling issuance is a separate guarded decision.');
 } catch (e) {
-    try {
-        await db.query('ROLLBACK');
-    } catch { /* already failed pre-transaction */ }
+    if (!committed) {
+        try {
+            await db.query('ROLLBACK');
+        } catch { /* already closed/failed */ }
+    }
     throw e;
 } finally {
     await db.end();

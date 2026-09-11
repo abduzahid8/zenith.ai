@@ -195,6 +195,71 @@ try {
             `refusing to rewrite release ${C}: stored sha differs; ship a NEW content_version instead`,
         );
     }
+    if (rel.rowCount > 0 && rel.rows[0].artifact_sha256 === sha256) {
+        // TRUE no-op path: the exact artifact is already loaded. Verify every
+        // row matches byte-for-byte; any drift hard-fails (new version
+        // required). Zero writes in this path.
+        const diffs = [];
+        const norm = v => JSON.parse(JSON.stringify(v));
+        const sameJson = (a, b) => canonicalize(norm(a)) === canonicalize(norm(b));
+        for (const v of bank.validation ?? []) {
+            const r = await db.query(
+                `SELECT payload, answer_key, skill_key, lesson_id, status FROM trusted_validation_items
+                 WHERE program_slug = $1 AND program_version = $2 AND content_version = $3 AND curriculum_day = $4`,
+                [P, V, C, v.day],
+            );
+            if (r.rowCount === 0) diffs.push(`validation day ${v.day} missing`);
+            else {
+                const row = r.rows[0];
+                const wantPayload = { kind: 'mc', prompt: v.prompt, options: v.options };
+                if (!sameJson(row.payload, wantPayload) || !sameJson(row.answer_key, { answer: v.answer })) {
+                    diffs.push(`validation day ${v.day} content drift`);
+                }
+            }
+        }
+        for (const [table, list, keyOf] of [
+            ['knowledge_items', bank.knowledge ?? [], q => q.key],
+            ['practical_items', bank.practical ?? [], q => q.key],
+        ]) {
+            for (const qd of list) {
+                const r = await db.query(
+                    `SELECT payload, answer_key FROM ${table}
+                     WHERE program_slug = $1 AND program_version = $2 AND content_version = $3 AND item_key = $4`,
+                    [P, V, C, keyOf(qd)],
+                );
+                if (r.rowCount === 0) diffs.push(`${table} ${keyOf(qd)} missing`);
+                else {
+                    const wantPayload = { kind: qd.kind ?? 'mc', prompt: qd.prompt, options: qd.options, fen: qd.fen ?? null };
+                    if (!sameJson(r.rows[0].payload, wantPayload) || !sameJson(r.rows[0].answer_key, { answer: qd.answer })) {
+                        diffs.push(`${table} ${keyOf(qd)} content drift`);
+                    }
+                }
+            }
+        }
+        const wantQuestions = (bank.final ?? []).map(q => ({ id: q.id, skill: q.skill, prompt: q.prompt, options: q.options }));
+        const wantAnswers = Object.fromEntries((bank.final ?? []).map(q => [q.id, q.answer]));
+        const setRow = await db.query(
+            `SELECT questions FROM assessment_question_sets WHERE id = $1`, [bank.final_bank_id],
+        );
+        if (setRow.rowCount === 0) diffs.push('final bank missing');
+        else if (!sameJson(setRow.rows[0].questions, wantQuestions)) diffs.push('final bank questions drift');
+        const keyRow = await db.query(
+            `SELECT answers, question_ids FROM assessment_answer_keys WHERE question_set_id = $1`,
+            [bank.final_bank_id],
+        );
+        if (keyRow.rowCount === 0) diffs.push('final keys missing');
+        else if (!sameJson(keyRow.rows[0].answers, wantAnswers)) diffs.push('final keys drift');
+        if (diffs.length > 0) {
+            throw new Error(
+                `stored release ${C} matches sha but ${diffs.length} row(s) drift: ` +
+                `${diffs.slice(0, 5).join('; ')}; ship a NEW content_version instead`,
+            );
+        }
+        await db.query('ROLLBACK');
+        console.log(`already loaded: verified ${sha256.slice(0, 12)}… row-for-row, zero writes performed.`);
+        await db.end();
+        process.exit(0);
+    }
     const allIds = [
         ...(bank.validation ?? []).map(v => v.id),
         ...(bank.knowledge ?? []).map(q => q.id),
