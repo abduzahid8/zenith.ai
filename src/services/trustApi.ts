@@ -60,10 +60,8 @@ export interface TrustedSkillResult {
 }
 
 /**
- * Server-authoritative skill verification state: which skills have a
- * finalized passing trusted result for this user+program. Official UI
- * reads this — never local stores — so a forged local "verified" flag
- * can never produce verified UX.
+ * Raw finalized-result history (any pass, any bank). Kept only for
+ * attempt-history display — NEVER for verified state (see below).
  */
 export const getTrustedSkillResults = async (programSlug: string): Promise<TrustedSkillResult[]> => {
     const supabase = getSupabase();
@@ -76,6 +74,52 @@ export const getTrustedSkillResults = async (programSlug: string): Promise<Trust
         skill_key: string; finalized_passed: boolean;
     }[];
     return rows.map(r => ({ skillKey: r.skill_key, passed: r.finalized_passed === true }));
+};
+
+export interface SkillVerification {
+    skillKey: string;
+    skillName: string;
+    samplesCompleted: number;
+    samplesRequired: number;
+    passes: number;
+    passRate: number;
+    score: number | null;
+    verified: boolean;
+}
+
+/**
+ * Server-derived skill verification state, mirroring the issuance skill
+ * gate exactly (distinct first-sample items, min counts/rates, active
+ * items and releases, pinned versions, minimum scores). Computed by the
+ * get_skill_verification RPC over the authoritative tables — the UI
+ * defines no second rule and performs no counting itself.
+ */
+export const getSkillVerification = async (programSlug: string): Promise<SkillVerification[]> => {
+    const supabase = getSupabase();
+    const { data, error } = await supabase.rpc('get_skill_verification', {
+        p_program_slug: programSlug,
+    });
+    if (error) throw new Error(error.message);
+    const rows = (Array.isArray(data) ? data : []) as unknown as {
+        skill_key: string;
+        skill_name: string;
+        samples_completed: number;
+        samples_required: number;
+        passes: number;
+        pass_rate: number;
+        score: number | null;
+        verified: boolean;
+    }[];
+    return rows.map(r => ({
+        skillKey: r.skill_key,
+        skillName: r.skill_name,
+        samplesCompleted: Number(r.samples_completed),
+        samplesRequired: Number(r.samples_required),
+        passes: Number(r.passes),
+        passRate: Number(r.pass_rate),
+        score: r.score == null ? null : Number(r.score),
+        verified: r.verified === true,
+    }));
 };
 
 export interface TrustedChallenge {

@@ -670,3 +670,162 @@ describe('real DB: catalog parity + readiness audit', () => {
         );
     });
 });
+
+
+describe('real DB: skill verification read model mirrors the gate', () => {
+    // Each mutating test gets an isolated program (own item/release/policy)
+    // so bank mutations never leak across tests and no restore is needed.
+    const slugs: string[] = [];
+    async function makeGateProgram(slug: string): Promise<void> {
+        slugs.push(slug);
+        await db.query(
+            `INSERT INTO credential_programs
+                (slug, code, title, level, version, required_score, requires_assessment,
+                 requires_project, identity_verification_required, issuance_enabled, skills, skill_gates, status)
+             VALUES ('${slug}', 'GX', 'Gate X', 'verified-skill', '1.0',
+                     80, FALSE, FALSE, FALSE, FALSE,
+                     '[{"key":"beta","name":"Beta Skill","weight":1.0,"minimumScore":65,"dayRange":[1,7]}]',
+                     '[]', 'active')
+             ON CONFLICT (slug) DO NOTHING`,
+        );
+        await db.query(
+            `INSERT INTO skill_evidence_policy (program_slug, program_version, skill_key, min_items, min_pass_rate, rationale)
+             VALUES ('${slug}', '1.0', 'beta', 1, 0.65, 'gate parity probe')
+             ON CONFLICT (program_slug, program_version, skill_key) DO NOTHING`,
+        );
+        await db.query(
+            `INSERT INTO credential_content_releases
+                (program_slug, program_version, content_version, artifact_sha256,
+                 machine_qa_status, human_review_status, reviewer, reviewed_at, status)
+             VALUES ('${slug}', '1.0', 'gate-v1', 'synthetic', 'passed', 'approved',
+                     'synthetic', NOW(), 'active')
+             ON CONFLICT (program_slug, program_version, content_version) DO NOTHING`,
+        );
+        await db.query(
+            `INSERT INTO trusted_validation_items
+                (program_slug, program_version, hobby_id, curriculum_day, skill_key, lesson_id,
+                 content_version, status, payload, answer_key)
+             VALUES ('${slug}', '1.0', 'chess', 50, 'beta', 'gate_d50', 'gate-v1', 'active', '{}', '{"answer":"ok"}')
+             ON CONFLICT DO NOTHING`,
+        );
+    }
+
+    afterAll(async () => {
+        for (const slug of slugs) {
+            await db.query(`DELETE FROM trusted_item_results WHERE program_slug = '${slug}'`);
+            await db.query(`DELETE FROM trusted_validation_attempts WHERE program_slug = '${slug}'`);
+            await db.query(`DELETE FROM learning_events WHERE program_slug = '${slug}'`);
+            await db.query(`DELETE FROM trusted_validation_items WHERE program_slug = '${slug}'`);
+            await db.query(`DELETE FROM skill_evidence_policy WHERE program_slug = '${slug}'`);
+            await db.query(`DELETE FROM credential_content_releases WHERE program_slug = '${slug}'`);
+            await db.query(`DELETE FROM credential_programs WHERE slug = '${slug}'`);
+        }
+    });
+
+    async function passGateValidation(uid: string, slug: string, answer = 'ok') {
+        const started = await asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM start_trusted_validation($1, $2)', [slug, 'beta']).then(r => r.rows[0]),
+        );
+        return asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM submit_trusted_validation($1, $2)', [started.attempt_id, { answer }]).then(r => r.rows[0]),
+        );
+    }
+
+    async function rpcGate(uid: string, slug: string) {
+        return asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM get_skill_verification($1)', [slug]).then(r => r.rows),
+        );
+    }
+
+    test('passing the gate yields verified=true with the full row shape', async () => {
+        const slug = 'e2e-gate-basic';
+        await makeGateProgram(slug);
+        const uid = newUid();
+        await createUser(db, uid);
+        await passGateValidation(uid, slug);
+        const rows = await rpcGate(uid, slug);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({
+            skill_key: 'beta',
+            skill_name: 'Beta Skill',
+            samples_completed: 1,
+            samples_required: 1,
+            passes: 1,
+            verified: true,
+        });
+        expect(Number(rows[0].score)).toBe(100);
+    });
+
+    test('a fail never verifies', async () => {
+        const slug = 'e2e-gate-fail';
+        await makeGateProgram(slug);
+        const uid = newUid();
+        await createUser(db, uid);
+        await passGateValidation(uid, slug, 'wrong');
+        const rows = await rpcGate(uid, slug);
+        expect(rows[0].verified).toBe(false);
+        expect(Number(rows[0].score)).toBe(0);
+    });
+
+    test('unknown program returns no rows; anon cannot call the RPC', async () => {
+        const uid = newUid();
+        await createUser(db, uid);
+        const rows = await asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM get_skill_verification($1)', ['nope']).then(r => r.rows),
+        );
+        expect(rows).toHaveLength(0);
+        await expectDbDenied(
+            asRole(db, 'anon', null, () =>
+                db.query('SELECT * FROM get_skill_verification($1)', ['chess-foundations']),
+            ),
+            /permission denied/,
+        );
+    });
+
+    test('compromised item loses authority (matches issuance exclusion)', async () => {
+        const slug = 'e2e-gate-compromised';
+        await makeGateProgram(slug);
+        const uid = newUid();
+        await createUser(db, uid);
+        await passGateValidation(uid, slug);
+        expect((await rpcGate(uid, slug))[0].verified).toBe(true);
+        await db.query(
+            `UPDATE trusted_validation_items SET status = 'compromised'
+             WHERE program_slug = '${slug}'`,
+        );
+        expect((await rpcGate(uid, slug))[0].verified).toBe(false);
+    });
+
+    test('retired or unapproved release loses authority', async () => {
+        const slug = 'e2e-gate-release';
+        await makeGateProgram(slug);
+        const uid = newUid();
+        await createUser(db, uid);
+        await passGateValidation(uid, slug);
+        await db.query(
+            `UPDATE credential_content_releases SET status = 'retired'
+             WHERE program_slug = '${slug}'`,
+        );
+        expect((await rpcGate(uid, slug))[0].verified).toBe(false);
+        await db.query(
+            `UPDATE credential_content_releases SET status = 'active', human_review_status = 'pending'
+             WHERE program_slug = '${slug}'`,
+        );
+        expect((await rpcGate(uid, slug))[0].verified).toBe(false);
+    });
+
+    test('policy depth is enforced, not just the rate', async () => {
+        const slug = 'e2e-gate-policy';
+        await makeGateProgram(slug);
+        const uid = newUid();
+        await createUser(db, uid);
+        await passGateValidation(uid, slug);
+        await db.query(
+            `UPDATE skill_evidence_policy SET min_items = 2
+             WHERE program_slug = '${slug}'`,
+        );
+        const rows = await rpcGate(uid, slug);
+        expect(rows[0].verified).toBe(false);
+        expect(rows[0].samples_required).toBe(2);
+    });
+});

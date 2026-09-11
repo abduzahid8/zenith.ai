@@ -14,10 +14,11 @@ import { useAppTheme } from '../../theme/useAppTheme';
 import type { LearningRecommendation } from '../../domain/sessions/nextBestAction';
 import {
     getProgramAvailability,
-    getTrustedSkillResults,
+    getSkillVerification,
     startTrustedValidation,
     submitTrustedValidation,
 } from '../../services/trustApi';
+import type { SkillVerification } from '../../services/trustApi';
 
 /**
  * Slice 1 — prove_skill -> verified skill challenge.
@@ -32,7 +33,10 @@ import {
 export interface VerifyChipContext {
     /** Server issuance_enabled for the program. Fail-closed when unknown. */
     issuable: boolean;
-    /** Skill keys with a finalized passing trusted result (server truth). */
+    /**
+     * Skill keys whose FULL server-derived competency gate is satisfied
+     * (same semantics as issuance — never "any pass").
+     */
     verifiedSkillKeys: string[];
 }
 
@@ -60,18 +64,19 @@ export function shouldShowVerifyChip(
 }
 
 /**
- * Re-reads the truth: server issuance flag + server verified skills.
+ * Re-reads the truth: server issuance flag + server-derived FULLY gated
+ * skill verification (mirrors the issuance gate — never any-pass).
  * Throws offline/unauthenticated — callers must hide (never invent).
  */
 export async function fetchVerifyContext(programSlug: string): Promise<VerifyChipContext> {
-    const [programs, results] = await Promise.all([
+    const [programs, skills] = await Promise.all([
         getProgramAvailability(),
-        getTrustedSkillResults(programSlug),
+        getSkillVerification(programSlug),
     ]);
     const issuable = programs.some(p => p.slug === programSlug && p.issuable);
     return {
         issuable,
-        verifiedSkillKeys: results.filter(r => r.passed).map(r => r.skillKey),
+        verifiedSkillKeys: skills.filter(s => s.verified).map(s => s.skillKey),
     };
 }
 
@@ -83,7 +88,13 @@ export interface VerifiedSkillChallengeProps {
     skillKey: string;
     skillName: string;
     onClose: () => void;
-    onComplete: (passed: boolean) => void;
+    /**
+     * Server result + the FRESH server-derived verification snapshot for
+     * this skill (null when the re-read failed — never claim verified
+     * without it). The parent uses the snapshot for messaging and refresh;
+     * it performs no counting itself.
+     */
+    onComplete: (passed: boolean, verification: SkillVerification | null) => void;
 }
 
 function promptOf(payload: Record<string, unknown>): string {
@@ -116,6 +127,7 @@ export const VerifiedSkillChallenge: React.FC<VerifiedSkillChallengeProps> = ({
     const [prompt, setPrompt] = useState('');
     const [options, setOptions] = useState<string[]>([]);
     const [answer, setAnswer] = useState('');
+    const [verification, setVerification] = useState<SkillVerification | null>(null);
     const mounted = useRef(true);
 
     useEffect(() => {
@@ -129,6 +141,7 @@ export const VerifiedSkillChallenge: React.FC<VerifiedSkillChallengeProps> = ({
         setPhase('loading');
         setAnswer('');
         setAttemptId(null);
+        setVerification(null);
         try {
             const challenge = await startTrustedValidation(programSlug, skillKey);
             if (!mounted.current) return;
@@ -156,13 +169,25 @@ export const VerifiedSkillChallenge: React.FC<VerifiedSkillChallengeProps> = ({
                 const result = await submitTrustedValidation(attemptId, value);
                 if (!mounted.current) return;
                 const passed = result.passed === true;
+                // Re-read authoritative progress, then render from BOTH the
+                // server verdict and the full gate state. Completion is never
+                // derived from local counters.
+                let snapshot: SkillVerification | null = null;
+                try {
+                    const skills = await getSkillVerification(programSlug);
+                    snapshot = skills.find(s => s.skillKey === skillKey) ?? null;
+                } catch {
+                    snapshot = null;
+                }
+                if (!mounted.current) return;
+                setVerification(snapshot);
                 setPhase(passed ? 'passed' : 'failed');
-                onComplete(passed);
+                onComplete(passed, snapshot);
             } catch {
                 if (mounted.current) setPhase('error');
             }
         },
-        [attemptId, phase, onComplete],
+        [attemptId, phase, onComplete, programSlug, skillKey],
     );
 
     if (!visible) return null;
@@ -230,11 +255,29 @@ export const VerifiedSkillChallenge: React.FC<VerifiedSkillChallengeProps> = ({
                         </View>
                     )}
 
-                    {phase === 'passed' && (
+                    {phase === 'passed' && verification?.verified === true && (
                         <View>
                             <Text style={[styles.result, { color: colors.text }]}>✓ Verified</Text>
                             <Text style={[styles.body, { color: colors.textSecondary }]}>
                                 {skillName} verified — nice work, it&apos;s locked in.
+                            </Text>
+                            <TouchableOpacity
+                                style={[styles.primary, { backgroundColor: colors.buttonPrimary }]}
+                                onPress={onClose}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[styles.primaryText, { color: colors.white }]}>Continue</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {phase === 'passed' && verification?.verified !== true && (
+                        <View>
+                            <Text style={[styles.result, { color: colors.text }]}>Good result</Text>
+                            <Text style={[styles.body, { color: colors.textSecondary }]}>
+                                {verification
+                                    ? `Proof added — verification progress: ${verification.samplesCompleted} of ${verification.samplesRequired} checks completed.`
+                                    : 'Proof added — keep going to complete verification.'}
                             </Text>
                             <TouchableOpacity
                                 style={[styles.primary, { backgroundColor: colors.buttonPrimary }]}

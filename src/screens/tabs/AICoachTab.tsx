@@ -245,9 +245,9 @@ const AICoachTab: React.FC = () => {
                 .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
                 .concat([{ role: 'user', content }]);
             const context = buildUserContext(selectedHobby as HobbyId);
-            // Factual system state only (server-derived): which skills carry
-            // a finalized passing trusted result. The LLM never decides
-            // readiness, skill choice, or pass/fail from this.
+            // Factual system state only (server-derived FULLY gated skills —
+            // partial proof is never labeled verified). The LLM never
+            // decides readiness, skill choice, or pass/fail from this.
             const verifiedLine = verifyCtx.verifiedSkillKeys.length > 0
                 ? `\n- Server-verified skills: ${verifyCtx.verifiedSkillKeys.join(', ')}`
                 : '';
@@ -291,17 +291,27 @@ const AICoachTab: React.FC = () => {
         [proveRec, verifyCtx, proveProgram?.slug],
     );
 
-    const handleVerifyComplete = (passed: boolean) => {
+    const handleVerifyComplete = (passed: boolean, verification: {
+        verified: boolean;
+        samplesCompleted: number;
+        samplesRequired: number;
+    } | null) => {
         // NOTE: do not close here — the sheet stays open on its own
-        // Verified / Needs-another-try result until the user Continues.
+        // result until the user Continues.
         const done = challenge;
         if (!done) return;
+        // Messaging follows the server verdict + the FRESH server-derived
+        // gate snapshot. "Verified" appears only when the full gate holds;
+        // a bare PASS renders partial progress instead.
+        const content = !passed
+            ? `Not verified yet — no worries.\n\nKeep practicing and try another verification when you're ready.`
+            : verification?.verified === true
+                ? `🎉 **${done.skillName} verified!**\n\nNice work — this skill is locked in. What's next?`
+                : `Good result — proof added for ${done.skillName}.\n\nVerification progress: ${verification?.samplesCompleted ?? 0} of ${verification?.samplesRequired ?? 0} checks completed.`;
         setMessages(prev => [...prev, {
             id: `coach-verify-${Date.now()}`,
             role: 'assistant',
-            content: passed
-                ? `🎉 **${done.skillName} verified!**\n\nNice work — this skill is locked in. What's next?`
-                : `Not verified yet — no worries.\n\nKeep practicing and try another verification when you're ready.`,
+            content,
         }]);
         scrollToEnd();
         // Re-read the truth (server + canonical recommendation). Nothing is

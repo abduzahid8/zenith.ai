@@ -14,7 +14,7 @@ import {
     startTrustedValidation,
     submitTrustedValidation,
     getProgramAvailability,
-    getTrustedSkillResults,
+    getSkillVerification,
 } from '../services/trustApi';
 
 jest.mock('../services/trustApi', () => ({
@@ -22,6 +22,7 @@ jest.mock('../services/trustApi', () => ({
     submitTrustedValidation: jest.fn(),
     getProgramAvailability: jest.fn(),
     getTrustedSkillResults: jest.fn(),
+    getSkillVerification: jest.fn(),
 }));
 jest.mock('@supabase/supabase-js', () => ({
     createClient: jest.fn(() => ({})),
@@ -61,7 +62,19 @@ jest.mock('../theme/useAppTheme', () => ({
 const mockStart = startTrustedValidation as jest.Mock;
 const mockSubmit = submitTrustedValidation as jest.Mock;
 const mockAvailability = getProgramAvailability as jest.Mock;
-const mockResults = getTrustedSkillResults as jest.Mock;
+const mockSkillVerification = getSkillVerification as jest.Mock;
+
+const RULES_PARTIAL = {
+    skillKey: 'rules',
+    skillName: 'Rules',
+    samplesCompleted: 1,
+    samplesRequired: 4,
+    passes: 1,
+    passRate: 1,
+    score: 100,
+    verified: false,
+};
+const RULES_VERIFIED = { ...RULES_PARTIAL, samplesCompleted: 4, passes: 4, verified: true };
 
 const proveRec = {
     type: 'prove_skill' as const,
@@ -111,15 +124,38 @@ describe('shouldShowVerifyChip gate', () => {
 });
 
 describe('fetchVerifyContext re-reads server truth', () => {
-    test('maps availability + verified skills; throws stay thrown (fail-closed)', async () => {
+    const OPENINGS_PARTIAL = {
+        skillKey: 'openings',
+        skillName: 'Openings',
+        samplesCompleted: 3,
+        samplesRequired: 4,
+        passes: 3,
+        passRate: 1,
+        score: 100,
+        verified: false,
+    };
+    const ENDGAMES_WEAK = {
+        skillKey: 'endgames',
+        skillName: 'Endgames',
+        samplesCompleted: 4,
+        samplesRequired: 4,
+        passes: 2,
+        passRate: 0.5,
+        score: 50,
+        verified: false,
+    };
+
+    test('3/4/5/10. only fully gated skills count as verified; throws stay thrown', async () => {
         mockAvailability.mockResolvedValue([
             { slug: 'chess-foundations', issuable: true },
             { slug: 'python-foundations', issuable: false },
         ]);
-        mockResults.mockResolvedValue([
-            { skillKey: 'rules', passed: true },
-            { skillKey: 'openings', passed: false },
+        mockSkillVerification.mockResolvedValue([
+            { ...RULES_VERIFIED, skillName: 'Rules' },
+            OPENINGS_PARTIAL,
+            ENDGAMES_WEAK,
         ]);
+        // 4 samples at >=75% -> verified; 3/4 and weak rate are not.
         await expect(fetchVerifyContext('chess-foundations')).resolves.toEqual({
             issuable: true,
             verifiedSkillKeys: ['rules'],
@@ -156,6 +192,7 @@ describe('VerifiedSkillChallenge', () => {
     beforeEach(() => {
         baseProps.onClose = jest.fn();
         baseProps.onComplete = jest.fn();
+        mockSkillVerification.mockResolvedValue([]);
     });
 
     test('5. tapping an option calls start with program+skill, submits the answer', async () => {
@@ -195,29 +232,58 @@ describe('VerifiedSkillChallenge', () => {
         expect(screen.queryByText('L-shape')).toBeTruthy();
     });
 
-    test('8. server PASS renders Verified + reports completion', async () => {
+    test('1/11. one PASS without a full gate renders partial progress, never Verified', async () => {
         mockStart.mockResolvedValue({
             attemptId: 'att-1',
             skillKey: 'rules',
             programVersion: '1.0',
             payload: { prompt: 'Q?', options: ['A'] },
         });
-        mockSubmit.mockResolvedValue({ passed: false, submitted: true, trustedEventId: null });
-        // First drive a FAIL to prove the component tracks server truth...
-        const failScreen = await render(<VerifiedSkillChallenge {...baseProps} />);
-        await failScreen.findByText('Q?');
-        await fireEvent.press(failScreen.getByText('A'));
-        expect(await failScreen.findByText('Needs another try')).toBeTruthy();
-        expect(failScreen.queryByText('✓ Verified')).toBeNull();
-        expect(baseProps.onComplete).toHaveBeenCalledWith(false);
-
-        // ...then a PASS renders Verified.
         mockSubmit.mockResolvedValue({ passed: true, submitted: true, trustedEventId: 'srv:1' });
-        const passScreen = await render(<VerifiedSkillChallenge {...baseProps} />);
-        await passScreen.findByText('Q?');
-        await fireEvent.press(passScreen.getByText('A'));
-        expect(await passScreen.findByText('✓ Verified')).toBeTruthy();
-        expect(baseProps.onComplete).toHaveBeenCalledWith(true);
+        mockSkillVerification.mockResolvedValue([{ ...RULES_PARTIAL }]);
+        const screen = await render(<VerifiedSkillChallenge {...baseProps} />);
+        await screen.findByText('Q?');
+        await fireEvent.press(screen.getByText('A'));
+        // Partial proof: progress copy, never the verified claim.
+        expect(await screen.findByText('Good result')).toBeTruthy();
+        expect(screen.getByText(/1 of 4 checks completed/)).toBeTruthy();
+        expect(screen.queryByText('✓ Verified')).toBeNull();
+        expect(baseProps.onComplete).toHaveBeenCalledWith(true, expect.objectContaining({ verified: false }));
+    });
+
+    test('12. PASS completing the final required sample renders Verified', async () => {
+        mockStart.mockResolvedValue({
+            attemptId: 'att-1',
+            skillKey: 'rules',
+            programVersion: '1.0',
+            payload: { prompt: 'Q?', options: ['A'] },
+        });
+        mockSubmit.mockResolvedValue({ passed: true, submitted: true, trustedEventId: 'srv:1' });
+        mockSkillVerification.mockResolvedValue([{ ...RULES_VERIFIED, skillName: 'Rules' }]);
+        const screen = await render(<VerifiedSkillChallenge {...baseProps} />);
+        await screen.findByText('Q?');
+        await fireEvent.press(screen.getByText('A'));
+        expect(await screen.findByText('✓ Verified')).toBeTruthy();
+        expect(baseProps.onComplete).toHaveBeenCalledWith(true, expect.objectContaining({ verified: true }));
+    });
+
+    test('9. server FAIL renders Needs-another-try and refreshes progress', async () => {
+        mockStart.mockResolvedValue({
+            attemptId: 'att-9',
+            skillKey: 'rules',
+            programVersion: '1.0',
+            payload: { prompt: 'Q?', options: ['A'] },
+        });
+        mockSubmit.mockResolvedValue({ passed: false, submitted: true, trustedEventId: null });
+        mockSkillVerification.mockResolvedValue([{ ...RULES_PARTIAL }]);
+        const screen = await render(<VerifiedSkillChallenge {...baseProps} />);
+        await screen.findByText('Q?');
+        await fireEvent.press(screen.getByText('A'));
+        expect(await screen.findByText('Needs another try')).toBeTruthy();
+        expect(screen.queryByText('✓ Verified')).toBeNull();
+        expect(baseProps.onComplete).toHaveBeenCalledWith(false, expect.objectContaining({ verified: false }));
+        // Progress was re-read from the server (no manual counters).
+        expect(mockSkillVerification).toHaveBeenCalledWith('chess-foundations');
     });
 
     test('9/10. server FAIL never renders Verified; local forgery is inert', async () => {
@@ -421,9 +487,11 @@ describe('AICoachTab prove_skill wiring', () => {
             recommendation: { ...proveRec },
         });
         seedCoachGoal();
-        seedCoachGoal();
         mockAvailability.mockResolvedValue([{ slug: 'chess-foundations', issuable: true }]);
-        mockResults.mockResolvedValue([]);
+        // Initial state is partial (CTA visible); the submit completes the gate.
+        mockSkillVerification
+            .mockResolvedValueOnce([{ ...RULES_PARTIAL }])
+            .mockResolvedValue([{ ...RULES_VERIFIED, skillName: 'Rules' }]);
         mockStart.mockResolvedValue({
             attemptId: 'att-tab-1',
             skillKey: 'rules',
@@ -459,7 +527,51 @@ describe('AICoachTab prove_skill wiring', () => {
         expect(await screen.findByText('✓ Verified')).toBeTruthy();
         await fireEvent.press(screen.getByText('Continue'));
         expect(await screen.findByText(/Rules.*verified/i)).toBeTruthy();
-        // ...and the truth is re-read (availability + results refreshed).
-        expect(mockResults.mock.calls.length).toBeGreaterThanOrEqual(2);
+        // ...and the truth is re-read (availability + verification refreshed).
+        expect(mockSkillVerification.mock.calls.length).toBeGreaterThanOrEqual(2);
+    }, 30000);
+
+    test('2/11. PASS without a full gate keeps the CTA and reports progress', async () => {
+        const { getProgram } = require('../domain/credentials/catalog');
+        mockUseIntelligence.mockReturnValue({
+            hobbyId: 'chess',
+            program: getProgram('chess-foundations'),
+            skillStates: [],
+            recommendation: { ...proveRec },
+        });
+        seedCoachGoal();
+        mockAvailability.mockResolvedValue([{ slug: 'chess-foundations', issuable: true }]);
+        mockSkillVerification.mockResolvedValue([{ ...RULES_PARTIAL }]);
+        mockStart.mockResolvedValue({
+            attemptId: 'att-tab-2',
+            skillKey: 'rules',
+            programVersion: '1.0',
+            payload: { prompt: 'Tab Q2?', options: ['Go'] },
+        });
+        mockSubmit.mockResolvedValue({ passed: true, submitted: true, trustedEventId: 'srv:tab2' });
+        const { default: AICoachTab } = require('../screens/tabs/AICoachTab');
+        const screen = await render(<AICoachTab />);
+        let pressVerify: (() => void) | null = null;
+        const ctaDeadline = Date.now() + 8000;
+        for (;;) {
+            const footer = await liveFooter(screen);
+            if (footerHasVerifyCard(footer)) {
+                pressVerify = footerActionOnPress(footer, /Verify Rules/);
+            }
+            if (pressVerify) break;
+            if (Date.now() > ctaDeadline) throw new Error('Verify CTA never appeared');
+            await new Promise(r => setTimeout(r, 50));
+        }
+        await act(async () => {
+            pressVerify!();
+        });
+        expect(await screen.findByText('Tab Q2?')).toBeTruthy();
+        await fireEvent.press(screen.getByText('Go'));
+        // Partial proof: progress copy, never the verified claim.
+        expect(await screen.findByText('Good result')).toBeTruthy();
+        expect(screen.queryByText('✓ Verified')).toBeNull();
+        await fireEvent.press(screen.getByText('Continue'));
+        expect(await screen.findByText(/1 of 4 checks completed/)).toBeTruthy();
+        expect(screen.queryByText(/Rules.*verified/i)).toBeNull();
     }, 30000);
 });
