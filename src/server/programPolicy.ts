@@ -48,8 +48,14 @@ const NOT_READY_REASON =
 /**
  * Programs whose server-authoritative content AND component pipelines are
  * complete and verified end-to-end (real DB e2e). Mirrors the
- * issuance_enabled flag in credential_programs (027 enables chess on the
+ * issuance_enabled flag in credential_programs (030 enables chess on the
  * rotated replacement bank only; the compromised leaked bank stays dead).
+ *
+ * RUNTIME AUTHORITY WARNING: database issuance_enabled + the active
+ * content release is CANONICAL. This module is documentation and test
+ * policy only — UI/runtime code must NEVER treat ISSUANCE_READY as live
+ * release state. Read credential_programs + credential_content_releases
+ * for anything user-facing.
  */
 const ISSUANCE_READY: Record<string, true> = {
     'chess-foundations': true,

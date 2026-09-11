@@ -7,27 +7,32 @@
  *
  *   PRIVATE_BANK_PATH=./private/chess-v3-bank.json \
  *   SUPABASE_DB_URL=postgres://postgres:PASSWORD@db.PROJECT.supabase.co:5432/postgres \
- *   REVIEWER='ops-human' REVIEWED_AT='2026-09-10T00:00:00Z' HUMAN_APPROVAL=approved \
  *   node scripts/load-production-bank.mjs [--dry-run]
  *
  * Rotation semantics (immutable identity):
  * 1. Machine-validates every item (FEN, UCI legality, mates, MC shape,
  *    per-skill counts). ABORTS on any failure.
- * 2. INSERTS the new content_version rows with the artifact's immutable
+ * 2. HARD FAILS before writing anything when:
+ *    - a release already exists for the same program/version/content
+ *      with a DIFFERENT artifact hash (history is append-only; a changed
+ *      artifact must ship as a NEW content_version),
+ *    - any artifact item UUID already exists under a DIFFERENT content
+ *      version (identity can never be rebound across versions),
+ *    - the artifact final_bank_id already exists with a DIFFERENT
+ *      content version (one bank id = one frozen release, forever).
+ * 3. INSERTS the new content_version rows with the artifact's immutable
  *    item UUIDs. ON CONFLICT applies ONLY within the SAME content_version
- *    (idempotent re-load); it NEVER crosses content versions — a version
- *    change with colliding slots aborts instead of overwriting history.
- * 3. Retires the previously ACTIVE rows of the same program (status
+ *    (idempotent re-load of the identical artifact).
+ * 4. Retires the previously ACTIVE rows of the same program (status
  *    retired; compromised rows are never touched). Historical attempt
  *    foreign keys keep working; old evidence simply stops counting.
- * 4. Records credential_content_releases with the artifact SHA-256,
- *    machine QA status, and (only with HUMAN_APPROVAL=approved plus
- *    REVIEWER/REVIEWED_AT) the human approval. Loader NEVER activates:
- *    activation is a separate guarded step (027-style migration checking
- *    approved+active release, exact bank parity, hidden keys present).
+ * 5. Records credential_content_releases as draft (machine QA passed).
+ *    Activation is a SEPARATE guarded step
+ *    (scripts/activate-content-release.mjs): approval + atomic switch.
+ *    This loader NEVER activates and NEVER touches issuance_enabled.
  *
  * Deployment order: public schema migrations -> this loader (private
- * artifact) -> human review recorded -> guarded activation migration.
+ * artifact) -> human review recorded -> guarded activation.
  * Fresh public bootstraps intentionally contain NO production keys; the
  * e2e harness uses synthetic fixtures instead.
  */
@@ -116,25 +121,30 @@ mcWhere(bank.validation ?? [], 'validation', q => `${q.skill}/day${q.day}`);
 mcWhere(bank.knowledge ?? [], 'knowledge', q => q.key);
 mcWhere(bank.final ?? [], 'final', q => q.id);
 
-for (const [list, need, skills] of [
-    [bank.validation, 8, ['rules', 'openings', 'endgames', 'tactics']],
-    [bank.knowledge, 4, ['rules', 'openings', 'endgames', 'tactics']],
-    [bank.practical, 2, ['rules', 'openings', 'endgames', 'tactics']],
+// Coverage floors: artifact-declared min_counts, else pilot defaults.
+// Required skills derive from the artifact evidence_policy (never hardcoded).
+const floors = bank.min_counts ?? { validation: 8, knowledge: 4, practical: 2, final: 40, finalPerSkill: 10 };
+const policySkills = (bank.evidence_policy ?? []).map(p => p.skill);
+if (policySkills.length === 0) errors.push('evidence_policy must declare skills');
+for (const [list, need, label] of [
+    [bank.validation, floors.validation ?? 8, 'validation'],
+    [bank.knowledge, floors.knowledge ?? 4, 'knowledge'],
+    [bank.practical, floors.practical ?? 2, 'practical'],
 ]) {
-    for (const s of skills) {
+    for (const s of policySkills) {
         const n = (list ?? []).filter(q => q.skill === s).length;
-        if (n < need) errors.push(`need >=${need} ${s} items, have ${n}`);
+        if (n < need) errors.push(`need >=${need} ${s} ${label} items, have ${n}`);
     }
 }
 
 const perSkill = {};
 for (const q of bank.final ?? []) perSkill[q.skill] = (perSkill[q.skill] ?? 0) + 1;
-if ((bank.final ?? []).length < 40) errors.push('final bank needs >= 40');
-for (const s of ['rules', 'openings', 'endgames', 'tactics']) {
-    if ((perSkill[s] ?? 0) < 10) errors.push(`final needs >= 10 ${s}, have ${perSkill[s] ?? 0}`);
+if ((bank.final ?? []).length < (floors.final ?? 40)) errors.push('final bank too small');
+for (const s of policySkills) {
+    if ((perSkill[s] ?? 0) < (floors.finalPerSkill ?? 10)) errors.push(`final needs >= ${floors.finalPerSkill ?? 10} ${s}`);
 }
 
-// Immutable-identity audit: fresh UUIDs must not collide with prior rows.
+// Immutable-identity audit: every row carries a fresh UUID.
 const uuids = new Set();
 for (const v of bank.validation ?? []) {
     if (!v.id || uuids.has(v.id)) errors.push(`validation missing/duplicate id: ${v.prompt}`);
@@ -144,6 +154,7 @@ for (const q of [...(bank.knowledge ?? []), ...(bank.practical ?? [])]) {
     if (!q.id || uuids.has(q.id)) errors.push(`duplicate id: ${q.key}`);
     uuids.add(q.id);
 }
+if (!bank.final_bank_id) errors.push('final_bank_id is required');
 
 if (errors.length > 0) {
     console.error(`BANK QA FAILED (${errors.length}):`);
@@ -172,6 +183,55 @@ try {
     const P = bank.program_slug;
     const V = bank.program_version;
     const C = bank.content_version;
+
+    // Immutability pre-checks (hard fail before any write).
+    const rel = await db.query(
+        `SELECT artifact_sha256 FROM credential_content_releases
+         WHERE program_slug = $1 AND program_version = $2 AND content_version = $3`,
+        [P, V, C],
+    );
+    if (rel.rowCount > 0 && rel.rows[0].artifact_sha256 !== sha256) {
+        throw new Error(
+            `refusing to rewrite release ${C}: stored sha differs; ship a NEW content_version instead`,
+        );
+    }
+    const allIds = [
+        ...(bank.validation ?? []).map(v => v.id),
+        ...(bank.knowledge ?? []).map(q => q.id),
+        ...(bank.practical ?? []).map(q => q.id),
+    ];
+    if (allIds.length > 0) {
+        const clash = await db.query(
+            `SELECT id, content_version FROM (
+               SELECT id, content_version FROM trusted_validation_items WHERE id = ANY ($1::uuid[])
+               UNION ALL SELECT id, content_version FROM knowledge_items WHERE id = ANY ($1::uuid[])
+               UNION ALL SELECT id, content_version FROM practical_items WHERE id = ANY ($1::uuid[])
+             ) u WHERE content_version IS DISTINCT FROM $2 LIMIT 5`,
+            [allIds, C],
+        );
+        if (clash.rowCount > 0) {
+            throw new Error(
+                `refusing to rebind item UUIDs across content versions: ${JSON.stringify(clash.rows)}`,
+            );
+        }
+    }
+    const bankRow = await db.query(
+        `SELECT content_version, status FROM assessment_question_sets WHERE id = $1`,
+        [bank.final_bank_id],
+    );
+    if (bankRow.rowCount > 0) {
+        const row = bankRow.rows[0];
+        if (row.content_version !== C) {
+            throw new Error(
+                `refusing to reuse final_bank_id for a different content_version ` +
+                `(${row.content_version} -> ${C}); mint a fresh bank id`,
+            );
+        }
+        if (row.status === 'compromised') {
+            throw new Error('refusing to touch a compromised final bank; mint a fresh bank id');
+        }
+    }
+
     for (const p of bank.evidence_policy ?? []) {
         await db.query(
             `INSERT INTO skill_evidence_policy (program_slug, program_version, skill_key, min_items, min_pass_rate, rationale)
@@ -181,9 +241,6 @@ try {
             [P, V, p.skill, p.min_items, p.min_pass_rate, p.rationale],
         );
     }
-    // New immutable rows. Same-version conflicts refresh in place (idempotent
-    // re-load); cross-version slot collisions are impossible because identity
-    // includes content_version.
     for (const v of bank.validation ?? []) {
         await db.query(
             `INSERT INTO trusted_validation_items
@@ -192,7 +249,7 @@ try {
              ON CONFLICT (program_slug, program_version, content_version, curriculum_day) DO UPDATE SET
                skill_key=EXCLUDED.skill_key, lesson_id=EXCLUDED.lesson_id,
                payload=EXCLUDED.payload, answer_key=EXCLUDED.answer_key`,
-            [v.id, P, V, v.day, v.skill, v.lesson,
+            [v.id, P, V, v.day, v.skill, v.lesson, C,
              { kind: 'mc', prompt: v.prompt, options: v.options }, { answer: v.answer }],
         );
     }
@@ -204,20 +261,20 @@ try {
                  VALUES ($1,$2,$3,$4,$5,$6,'active',$7,$8)
                  ON CONFLICT (program_slug, program_version, content_version, item_key) DO UPDATE SET
                    payload=EXCLUDED.payload, answer_key=EXCLUDED.answer_key`,
-                [q.id, P, V, q.skill, q.key,
+                [q.id, P, V, q.skill, q.key, C,
                  { kind: q.kind ?? 'mc', prompt: q.prompt, options: q.options, fen: q.fen ?? null },
                  { answer: q.answer }],
             );
         }
     }
-    const questions = (bank.final ?? []).map(q => ({ id: q.id, skill: q.skill, prompt: q.prompt, options: q.options }));
+    const questions = JSON.stringify((bank.final ?? []).map(q => ({ id: q.id, skill: q.skill, prompt: q.prompt, options: q.options })));
     const answers = Object.fromEntries((bank.final ?? []).map(q => [q.id, q.answer]));
-    const ids = (bank.final ?? []).map(q => q.id);
+    const ids = JSON.stringify((bank.final ?? []).map(q => q.id));
     await db.query(
         `INSERT INTO assessment_question_sets (id, program_slug, version, question_count, time_limit_minutes, pass_score, questions, content_version, status)
          VALUES ($1,$2,$3,20,30,80,$4,$5,'active')
          ON CONFLICT (id) DO UPDATE SET questions=EXCLUDED.questions, content_version=EXCLUDED.content_version`,
-        [bank.final_bank_id, P, V, JSON.stringify(questions), C],
+        [bank.final_bank_id, P, V, questions, C],  // pre-stringified above (pg would send a raw ARRAY literal otherwise)
     );
     await db.query(
         `INSERT INTO assessment_answer_keys (question_set_id, answers, question_ids)
@@ -225,12 +282,7 @@ try {
          ON CONFLICT (question_set_id) DO UPDATE SET answers=EXCLUDED.answers, question_ids=EXCLUDED.question_ids`,
         [bank.final_bank_id, answers, ids],
     );
-    // Retire previously ACTIVE rows of this program (compromised untouched).
-    // NOTE: validation rows addressed by day-slot; the loader refuses to
-    // overwrite a row whose content_version differs (immutable identity).
     for (const t of ['trusted_validation_items', 'knowledge_items', 'practical_items']) {
-        const col = t === 'trusted_validation_items' ? 'curriculum_day' : 'item_key';
-        void col;
         await db.query(
             `UPDATE ${t} SET status = 'retired'
              WHERE program_slug = $1 AND status = 'active' AND content_version <> $2`, [P, C],

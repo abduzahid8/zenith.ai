@@ -209,29 +209,34 @@ describe('integrity: balanced final + bank pinning', () => {
             db.query('SELECT * FROM start_assessment($1)', [QUAD]).then(r => r.rows[0]),
         );
         const firstIds = (first.questions as { id: string }[]).map(q => q.id).sort();
-        // Deploy a corrected bank (same version, new content) while the
-        // attempt is active: the attempt must NOT be re-sampled.
+        const original = await db.query(
+            `SELECT questions FROM assessment_question_sets WHERE id = '33333333-3333-3333-3333-333333333333'`,
+        );
+        // Simulate a bank typo correction (same ids, fixed text) while the
+        // attempt is active: the attempt must NOT be re-sampled, and serves
+        // its own pinned set (a version mutation would be rejected by the
+        // immutability trigger — asserted in the loader suite).
         await db.query(
-            `UPDATE assessment_question_sets SET questions = questions || '{"id":"qf-new","skill":"qk-a","prompt":"new?","options":["yes","no"]}',
-             content_version = 'quad-v2'
+            `UPDATE assessment_question_sets SET questions = (
+               SELECT jsonb_agg(CASE WHEN (q->>'id') = $1
+                 THEN q || '{"prompt":"CORRECTED?"}' ELSE q END)
+               FROM jsonb_array_elements(questions) q)
              WHERE id = '33333333-3333-3333-3333-333333333333'`,
+            [firstIds[0]],
         );
         try {
             const again = await asRole(db, 'authenticated', uid, () =>
                 db.query('SELECT * FROM start_assessment($1)', [QUAD]).then(r => r.rows[0]),
             );
             expect(again.attempt_id).toBe(first.attempt_id);
-            expect((again.questions as { id: string }[]).map(q => q.id).sort()).toEqual(firstIds);
-            expect((again.questions as { id: string }[]).some(q => q.id === 'qf-new')).toBe(false);
+            const againQs = again.questions as { id: string; prompt: string }[];
+            expect(againQs.map(q => q.id).sort()).toEqual(firstIds);
+            expect(againQs.find(q => q.id === firstIds[0])!.prompt).toBe('CORRECTED?');
         } finally {
             await db.query(
-                `UPDATE assessment_question_sets SET content_version = 'quad-v1'
+                `UPDATE assessment_question_sets SET questions = $1::jsonb
                  WHERE id = '33333333-3333-3333-3333-333333333333'`,
-            );
-            await db.query(
-                `UPDATE assessment_question_sets SET questions = (
-                   SELECT jsonb_agg(q) FROM jsonb_array_elements(questions) q WHERE (q->>'id') <> 'qf-new')
-                 WHERE id = '33333333-3333-3333-3333-333333333333'`,
+                [JSON.stringify(original.rows[0].questions)],
             );
         }
     });
@@ -241,56 +246,153 @@ describe('integrity: compromised banks have zero authority', () => {
     test('compromised skill items fail the gate; retired final set blocks', async () => {
         const uid = newUid();
         await createUser(db, uid);
-        await asRole(db, 'authenticated', uid, () => db.query('SELECT * FROM enroll_in_program($1)', [QUAD]));
-        await passValidations(uid, 4);
-        await passKnowledgePractical(uid);
+        async function buildFullPath(): Promise<void> {
+            await asRole(db, 'authenticated', uid, () => db.query('SELECT * FROM enroll_in_program($1)', [QUAD]));
+            await passValidations(uid, 4);
+            await passKnowledgePractical(uid);
+        // Cooldown elapsed (server-side time travel) so the final can be
+        // re-proven on the restored bank.
+        await db.query("SET app.trusted_server = 'on'");
+        await db.query(
+            `UPDATE assessment_attempts SET submitted_at = NOW() - INTERVAL '25 hours'
+             WHERE user_id = $1 AND status = 'submitted'`, [uid],
+        );
+        await db.query("RESET app.trusted_server");
         await passFinal(uid);
-        await passProject(uid);
+            await passProject(uid);
+        }
+        async function issueExpect(re: RegExp): Promise<void> {
+            await asRole(db, 'authenticated', uid, () =>
+                expectDbDenied(db.query('SELECT * FROM issue_credential($1,$2)', [QUAD, 'H']), re),
+            );
+        }
+        await buildFullPath();
+        // Happy path issues exactly one credential.
+        const first = await asRole(db, 'authenticated', uid, () =>
+            db.query('SELECT * FROM issue_credential($1,$2)', [QUAD, 'H']).then(r => r.rows[0]),
+        );
+        expect(first.created).toBe(true);
+        // Revoke to force gate re-evaluation on subsequent calls.
+        await db.query(`UPDATE issued_credentials SET status = 'revoked' WHERE credential_id = $1`, [
+            first.credential_id,
+        ]);
         // Compromise one skill's items AFTER the evidence was recorded.
+        const stashed = await db.query(
+            `SELECT * FROM trusted_validation_items
+             WHERE program_slug = '${QUAD}' AND skill_key = 'qk-a'`,
+        );
         await db.query(
             `UPDATE trusted_validation_items SET status = 'compromised'
              WHERE program_slug = '${QUAD}' AND skill_key = 'qk-a'`,
         );
-        try {
-            await asRole(db, 'authenticated', uid, () =>
-                expectDbDenied(
-                    db.query('SELECT * FROM issue_credential($1,$2)', [QUAD, 'H']),
-                    /skill_gate_failed:qk-a/,
-                ),
-            );
-        } finally {
-            await db.query(
-                `UPDATE trusted_validation_items SET status = 'active'
-                 WHERE program_slug = '${QUAD}' AND skill_key = 'qk-a'`,
-            );
-        }
-        // Retire the final bank: issuance must refuse the stale component.
+        await issueExpect(/skill_gate_failed:qk-a/);
+        // Restoration honors immutability: clean the user trace, delete and
+        // re-insert the stashed rows, then re-prove the skill with fresh
+        // first-samples (retries of deleted history cannot count).
+        await db.query(`DELETE FROM trusted_item_results WHERE user_id = $1`, [uid]);
+        await db.query(`DELETE FROM trusted_validation_attempts WHERE user_id = $1`, [uid]);
+        await db.query(`DELETE FROM learning_events WHERE user_id = $1`, [uid]);
         await db.query(
-            `UPDATE assessment_question_sets SET status = 'retired'
-             WHERE id = '33333333-3333-3333-3333-333333333333'`,
+            `DELETE FROM trusted_validation_items
+             WHERE program_slug = '${QUAD}' AND skill_key = 'qk-a'`,
         );
-        try {
-            await asRole(db, 'authenticated', uid, () =>
-                expectDbDenied(
-                    db.query('SELECT * FROM issue_credential($1,$2)', [QUAD, 'H']),
-                    /final_assessment bank not active/,
-                ),
-            );
-        } finally {
+        for (const r of stashed.rows) {
             await db.query(
-                `UPDATE assessment_question_sets SET status = 'active'
-                 WHERE id = '33333333-3333-3333-3333-333333333333'`,
+                `INSERT INTO trusted_validation_items
+                    (id, program_slug, program_version, hobby_id, curriculum_day, skill_key,
+                     lesson_id, content_version, status, payload, answer_key)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9,$10)`,
+                [r.id, r.program_slug, r.program_version, r.hobby_id, r.curriculum_day,
+                 r.skill_key, r.lesson_id, r.content_version, r.payload, r.answer_key],
             );
         }
-        // Restored: exactly one credential issues.
-        const a = await asRole(db, 'authenticated', uid, () =>
+        for (const skill of ['qk-a', 'qk-b', 'qk-c', 'qk-d']) {
+            for (let i = 0; i < 4; i++) {
+                const st = await asRole(db, 'authenticated', uid, () =>
+                    db.query('SELECT * FROM start_trusted_validation($1, $2)', [QUAD, skill]).then(r => r.rows[0]),
+                );
+                await asRole(db, 'authenticated', uid, () =>
+                    db.query('SELECT * FROM submit_trusted_validation($1, $2)', [st.attempt_id, { answer: 'yes' }]),
+                );
+            }
+        }
+        // Bank-version pinning: corrupt this user's attempt pin and issuance
+        // must refuse the stale component (shared-safe: no global mutation).
+        await db.query("SET app.trusted_server = 'on'");
+        await db.query(
+            `UPDATE assessment_attempts SET bank_version = 'quad-v0'
+             WHERE user_id = $1 AND status = 'submitted'`, [uid],
+        );
+        await db.query("RESET app.trusted_server");
+        await issueExpect(/final_assessment bank not active/);
+        await db.query("SET app.trusted_server = 'on'");
+        await db.query(
+            `UPDATE assessment_attempts SET bank_version = 'quad-v1'
+             WHERE user_id = $1 AND status = 'submitted'`, [uid],
+        );
+        await db.query("RESET app.trusted_server");
+        // A retired set is equally refused. Proven with an isolated
+        // throwaway set (the shared bank is never mutated): a complete user
+        // whose final component points at a RETIRED set cannot issue.
+        const uidR = newUid();
+        await createUser(db, uidR);
+        await asRole(db, 'authenticated', uidR, () => db.query('SELECT * FROM enroll_in_program($1)', [QUAD]));
+        await passValidations(uidR, 4);
+        await passKnowledgePractical(uidR);
+        await passProject(uidR);
+        const deadSet = '55555555-5555-5555-5555-555555555555';
+        await db.query(
+            `INSERT INTO assessment_question_sets
+                (id, program_slug, version, question_count, time_limit_minutes, pass_score,
+                 questions, content_version, status)
+             VALUES ('${deadSet}', '${QUAD}', '1.0', 2, 30, 80, '[]', 'quad-v1', 'retired')`,
+        );
+        await db.query("SET app.trusted_server = 'on'");
+        const deadAtt = '66666666-6666-6666-6666-666666666666';
+        await db.query(
+            `INSERT INTO assessment_attempts
+                (id, user_id, program_slug, question_set_id, question_set_version,
+                 attempt_number, status, score, passed, submitted_at, assigned_question_ids,
+                 bank_version)
+             VALUES ('${deadAtt}', $1, '${QUAD}',
+                     '${deadSet}', '1.0', 1, 'submitted', 100, TRUE, NOW(), '[]', 'quad-v1')`,
+            [uidR],
+        );
+        await db.query(
+            `INSERT INTO credential_component_results
+                (user_id, program_slug, program_version, component, score, passed,
+                 authority_source, reference_id)
+             VALUES ($1, '${QUAD}', '1.0', 'final_assessment', 100, TRUE,
+                     'server_scored_assessment', '${deadAtt}')`,
+            [uidR],
+        );
+        await db.query("RESET app.trusted_server");
+        await asRole(db, 'authenticated', uidR, () =>
+            expectDbDenied(
+                db.query('SELECT * FROM issue_credential($1,$2)', [QUAD, 'H']),
+                /final_assessment bank not active/,
+            ),
+        );
+        // Cooldown elapsed (server-side time travel) so the final can be
+        // re-proven on the restored bank.
+        await db.query("SET app.trusted_server = 'on'");
+        await db.query(
+            `UPDATE assessment_attempts SET submitted_at = NOW() - INTERVAL '25 hours'
+             WHERE user_id = $1 AND status = 'submitted'`, [uid],
+        );
+        await db.query("RESET app.trusted_server");
+        await passFinal(uid);
+        // Restored: re-issue succeeds (revoked row replaced, never edited).
+        const second = await asRole(db, 'authenticated', uid, () =>
             db.query('SELECT * FROM issue_credential($1,$2)', [QUAD, 'H']).then(r => r.rows[0]),
         );
-        const b = await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM issue_credential($1,$2)', [QUAD, 'H']).then(r => r.rows[0]),
+        expect(second.created).toBe(true);
+        expect(second.credential_id).not.toBe(first.credential_id);
+        const count = await db.query(
+            `SELECT COUNT(*)::int c FROM issued_credentials WHERE user_id = $1 AND program_slug = '${QUAD}'`, [uid],
         );
-        expect(a.credential_id).toBe(b.credential_id);
-    }, 120000);
+        expect(count.rows[0].c).toBe(1);
+    }, 180000);
 });
 
 describe('integrity: project authority', () => {
@@ -700,5 +802,193 @@ describe('integrity: project enrollment + immutable revisions', () => {
         );
         expect(Number(comp3.rows[0].score)).toBe(95);
         expect(comp3.rows[0].passed).toBe(true);
+    });
+});
+
+describe('ops: committed loader + activation (synthetic fixture)', () => {
+    const FIX = 'e2e-loader-fix';
+    const root = process.cwd();
+    const port = process.env.ZENYTH_E2E_PGPORT ?? '55433';
+    const dbUrl = `postgres://postgres@127.0.0.1:${port}/postgres`;
+
+    function runLoader(artifact: string, extraEnv: Record<string, string> = {}): { code: number; out: string } {
+        const { execFileSync } = require('child_process') as typeof import('child_process');
+        try {
+            const out = execFileSync(
+                process.execPath,
+                ['scripts/load-production-bank.mjs'],
+                {
+                    cwd: root,
+                    env: { ...process.env, PRIVATE_BANK_PATH: artifact, SUPABASE_DB_URL: dbUrl, ...extraEnv },
+                    stdio: ['ignore', 'pipe', 'pipe'],
+                },
+            ).toString();
+            return { code: 0, out };
+        } catch (err) {
+            const e = err as { status?: number; stdout?: Buffer; stderr?: Buffer };
+            return {
+                code: e.status ?? 1,
+                out: `${e.stdout?.toString() ?? ''}\n${e.stderr?.toString() ?? ''}`,
+            };
+        }
+    }
+
+    function runActivate(extraEnv: Record<string, string> = {}): { code: number; out: string } {
+        const { execFileSync } = require('child_process') as typeof import('child_process');
+        try {
+            const out = execFileSync(process.execPath, ['scripts/activate-content-release.mjs'], {
+                cwd: root,
+                env: { ...process.env, SUPABASE_DB_URL: dbUrl, ...extraEnv },
+                stdio: ['ignore', 'pipe', 'pipe'],
+            }).toString();
+            return { code: 0, out };
+        } catch (err) {
+            const e = err as { status?: number; stdout?: Buffer; stderr?: Buffer };
+            return {
+                code: e.status ?? 1,
+                out: `${e.stdout?.toString() ?? ''}\n${e.stderr?.toString() ?? ''}`,
+            };
+        }
+    }
+
+    function writeVariant(mut: (b: Record<string, unknown>) => void): string {
+        const fs = require('fs') as typeof import('fs');
+        const os = require('os') as typeof import('os');
+        const path = require('path') as typeof import('path');
+        const base = JSON.parse(fs.readFileSync('db-test/fixtures/synth-bank.json', 'utf8'));
+        mut(base);
+        const tmp = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bank-')), 'bank.json');
+        fs.writeFileSync(tmp, JSON.stringify(base));
+        return tmp;
+    }
+
+    afterAll(async () => {
+        await db.query(`DELETE FROM assessment_answer_keys WHERE question_set_id IN
+            (SELECT id FROM assessment_question_sets WHERE program_slug = '${FIX}')`);
+        await db.query(`DELETE FROM assessment_question_sets WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM trusted_validation_items WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM knowledge_items WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM practical_items WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM credential_content_releases WHERE program_slug = '${FIX}'`);
+        await db.query(`DELETE FROM credential_programs WHERE slug = '${FIX}'`);
+    });
+
+    test('committed loader executes; same release reload is idempotent', async () => {
+        await db.query(
+            `INSERT INTO credential_programs (slug, code, title, level, version, required_score,
+                 requires_assessment, requires_project, skills, status)
+             VALUES ('${FIX}', 'FX', 'Fixture', 'verified-skill', '1.0', 80, TRUE, TRUE, '[]', 'active')
+             ON CONFLICT (slug) DO NOTHING`,
+        );
+        const first = runLoader('db-test/fixtures/synth-bank.json', {
+            HUMAN_APPROVAL: 'approved', REVIEWER: 'fixture-review', REVIEWED_AT: '2026-09-10T00:00:00Z',
+        });
+        expect(first.code).toBe(0);
+        const counts = async () => ({
+            v: (await db.query(`SELECT COUNT(*)::int c FROM trusted_validation_items WHERE program_slug='${FIX}'`)).rows[0].c,
+            k: (await db.query(`SELECT COUNT(*)::int c FROM knowledge_items WHERE program_slug='${FIX}'`)).rows[0].c,
+            p: (await db.query(`SELECT COUNT(*)::int c FROM practical_items WHERE program_slug='${FIX}'`)).rows[0].c,
+            s: (await db.query(`SELECT COUNT(*)::int c FROM assessment_question_sets WHERE program_slug='${FIX}'`)).rows[0].c,
+        });
+        expect(await counts()).toEqual({ v: 1, k: 1, p: 1, s: 1 });
+        const rel = await db.query(
+            `SELECT status, machine_qa_status, human_review_status, reviewer FROM credential_content_releases
+             WHERE program_slug='${FIX}'`,
+        );
+        expect(rel.rows[0]).toMatchObject({
+            status: 'draft', machine_qa_status: 'passed', human_review_status: 'approved', reviewer: 'fixture-review',
+        });
+        // Identical reload: success, zero changes.
+        const second = runLoader('db-test/fixtures/synth-bank.json', {
+            HUMAN_APPROVAL: 'approved', REVIEWER: 'fixture-review', REVIEWED_AT: '2026-09-10T00:00:00Z',
+        });
+        expect(second.code).toBe(0);
+        expect(await counts()).toEqual({ v: 1, k: 1, p: 1, s: 1 });
+    });
+
+    test('same version + changed artifact hard-fails; rows untouched', async () => {
+        const before = await db.query(
+            `SELECT answer_key FROM trusted_validation_items WHERE program_slug='${FIX}'`,
+        );
+        const tampered = writeVariant(b => {
+            (b.validation as { answer: string }[])[0].answer = 'n';
+        });
+        const r = runLoader(tampered);
+        expect(r.code).not.toBe(0);
+        expect(r.out).toMatch(/refusing to rewrite release|sha/i);
+        const after = await db.query(
+            `SELECT answer_key FROM trusted_validation_items WHERE program_slug='${FIX}'`,
+        );
+        expect(after.rows).toEqual(before.rows);
+    });
+
+    test('UUID rebind across versions and bank-id reuse hard-fail', async () => {
+        // Same item UUID under a NEW content_version.
+        const rebind = writeVariant(b => {
+            b.content_version = 'fix-v2';
+            (b.validation as { id: string }[])[0].id = 'aaaaaaaa-0000-4000-8000-000000000001';
+        });
+        const r1 = runLoader(rebind);
+        expect(r1.code).not.toBe(0);
+        expect(r1.out).toMatch(/rebind/i);
+        // Same final_bank_id under a new content_version (fresh UUIDs so
+        // only the bank-id rule can fire).
+        const reuse = writeVariant(b => {
+            b.content_version = 'fix-v3';
+            const { randomUUID } = require('crypto') as typeof import('crypto');
+            for (const v of b.validation as { id: string }[]) v.id = randomUUID();
+            for (const q of [...(b.knowledge as { id: string }[]), ...(b.practical as { id: string }[])] as { id: string }[]) {
+                q.id = (require('crypto') as typeof import('crypto')).randomUUID();
+            }
+        });
+        const r2 = runLoader(reuse);
+        expect(r2.code).not.toBe(0);
+        expect(r2.out).toMatch(/final_bank_id/i);
+    });
+
+    test('activation: wrong SHA, missing approval, then atomic success', async () => {
+        const base = {
+            PROGRAM_SLUG: FIX, PROGRAM_VERSION: '1.0', CONTENT_VERSION: 'fix-v1',
+        };
+        // Wrong SHA fails.
+        expect(runActivate({ ...base, EXPECTED_SHA256: '0'.repeat(64) }).code).not.toBe(0);
+        // Unapproved release fails: reset approval first.
+        await db.query(
+            `UPDATE credential_content_releases SET human_review_status='pending', reviewer=NULL, reviewed_at=NULL
+             WHERE program_slug='${FIX}'`,
+        );
+        const noApproval = runActivate({ ...base, EXPECTED_SHA256: (await realSha()) });
+        expect(noApproval.code).not.toBe(0);
+        expect(noApproval.out).toMatch(/human_review_status|reviewer/i);
+        // Re-approve via the loader path (same hash), then activate.
+        const again = runLoader('db-test/fixtures/synth-bank.json', {
+            HUMAN_APPROVAL: 'approved', REVIEWER: 'fixture-review', REVIEWED_AT: '2026-09-10T00:00:00Z',
+        });
+        expect(again.code).toBe(0);
+        const ok = runActivate({ ...base, EXPECTED_SHA256: await realSha() });
+        expect(ok.code).toBe(0);
+        expect(ok.out).toMatch(/activation checks passed/);
+        const rels = await db.query(
+            `SELECT content_version, status FROM credential_content_releases WHERE program_slug='${FIX}' ORDER BY 1`,
+        );
+        expect(rels.rows).toEqual([{ content_version: 'fix-v1', status: 'active' }]);
+        // Issuance switch untouched by activation.
+        const sw = await db.query(`SELECT issuance_enabled FROM credential_programs WHERE slug='${FIX}'`);
+        expect(sw.rows[0].issuance_enabled).toBe(false);
+
+        async function realSha(): Promise<string> {
+            const { createHash } = require('crypto') as typeof import('crypto');
+            const fs = require('fs') as typeof import('fs');
+            const raw = fs.readFileSync('db-test/fixtures/synth-bank.json', 'utf8');
+            const bank = JSON.parse(raw);
+            const canon = (v: unknown): string => {
+                if (Array.isArray(v)) return `[${v.map(canon).join(',')}]`;
+                if (v && typeof v === 'object') {
+                    return `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${canon((v as Record<string, unknown>)[k])}`).join(',')}}`;
+                }
+                return JSON.stringify(v);
+            };
+            return createHash('sha256').update(canon(bank)).digest('hex');
+        }
     });
 });

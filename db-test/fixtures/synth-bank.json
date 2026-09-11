@@ -1,0 +1,24 @@
+{
+  "_comment": "SYNTHETIC loader fixture (public). Tiny bank exercising the COMMITTED loader end-to-end. Known answers are fine: synthetic programs are never accepted for production credentials.",
+  "program_slug": "e2e-loader-fix",
+  "program_version": "1.0",
+  "content_version": "fix-v1",
+  "min_counts": { "validation": 1, "knowledge": 1, "practical": 1, "final": 2, "finalPerSkill": 1 },
+  "evidence_policy": [
+    {"skill": "fx", "min_items": 1, "min_pass_rate": 0.5, "rationale": "synthetic"}
+  ],
+  "validation": [
+    {"id": "aaaaaaaa-0000-4000-8000-000000000001", "day": 1, "skill": "fx", "lesson": "fix_d1", "prompt": "fix v?", "options": ["y", "n"], "answer": "y"}
+  ],
+  "knowledge": [
+    {"id": "aaaaaaaa-0000-4000-8000-000000000002", "key": "fk-1", "skill": "fx", "prompt": "fix k?", "options": ["y", "n"], "answer": "y"}
+  ],
+  "practical": [
+    {"id": "aaaaaaaa-0000-4000-8000-000000000003", "key": "fp-1", "skill": "fx", "kind": "mate_in_1", "fen": "7k/8/5K2/8/8/8/8/6Q1 w - - 0 1", "prompt": "mate?", "answer": "g1g7"}
+  ],
+  "final_bank_id": "aaaaaaaa-0000-4000-8000-0000000000ff",
+  "final": [
+    {"id": "ff-1", "skill": "fx", "prompt": "final 1?", "options": ["y", "n"], "answer": "y"},
+    {"id": "ff-2", "skill": "fx", "prompt": "final 2?", "options": ["y", "n"], "answer": "n"}
+  ]
+}
