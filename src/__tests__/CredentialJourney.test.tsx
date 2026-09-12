@@ -14,8 +14,7 @@ import { CredentialChallengeRunner } from '../components/credentials/CredentialC
 import {
     ensureEnrollment,
     getCredentialProgress,
-    getKnowledgeAttempts,
-    getKnowledgeComponent,
+    getKnowledgeJourneySnapshot,
     getProgramAvailability,
     getSkillVerification,
     startKnowledgeAttempt,
@@ -25,8 +24,7 @@ import {
 jest.mock('../services/trustApi', () => ({
     ensureEnrollment: jest.fn(),
     getCredentialProgress: jest.fn(),
-    getKnowledgeAttempts: jest.fn(),
-    getKnowledgeComponent: jest.fn(),
+    getKnowledgeJourneySnapshot: jest.fn(),
     getProgramAvailability: jest.fn(),
     getSkillVerification: jest.fn(),
     startKnowledgeAttempt: jest.fn(),
@@ -48,8 +46,7 @@ jest.mock('../theme/useAppTheme', () => ({
 
 const mockEnsure = ensureEnrollment as jest.Mock;
 const mockProgress = getCredentialProgress as jest.Mock;
-const mockAttempts = getKnowledgeAttempts as jest.Mock;
-const mockComponent = getKnowledgeComponent as jest.Mock;
+const mockSnapshot = getKnowledgeJourneySnapshot as jest.Mock;
 const mockAvailability = getProgramAvailability as jest.Mock;
 const mockSkills = getSkillVerification as jest.Mock;
 const mockStart = startKnowledgeAttempt as jest.Mock;
@@ -77,6 +74,8 @@ function mockJourneyServer(opts: {
     version?: string | null;
     skills?: typeof SKILLS_4_OF_4;
     progress?: null | object;
+    /** Live-release snapshot; attempts/component are already live-scoped. */
+    contentAvailable?: boolean;
     attempts?: unknown[];
     component?: null | object;
 } = {}) {
@@ -89,8 +88,11 @@ function mockJourneyServer(opts: {
     ]);
     mockSkills.mockResolvedValue(opts.skills ?? SKILLS_4_OF_4);
     mockProgress.mockResolvedValue(opts.progress ?? null);
-    mockAttempts.mockResolvedValue(opts.attempts ?? []);
-    mockComponent.mockResolvedValue(opts.component ?? null);
+    mockSnapshot.mockResolvedValue({
+        contentAvailable: opts.contentAvailable ?? true,
+        attempts: opts.attempts ?? [],
+        component: opts.component ?? null,
+    });
 }
 
 beforeEach(() => {
@@ -214,8 +216,7 @@ describe('useCredentialJourney read model', () => {
         await waitFor(() => expect(result.current.journey).not.toBeNull());
         expect(result.current.journey!.programVersion).toBe('v2');
         expect(mockProgress).toHaveBeenCalledWith('chess-foundations', 'v2');
-        expect(mockAttempts).toHaveBeenCalledWith('chess-foundations', 'v2');
-        expect(mockComponent).toHaveBeenCalledWith('chess-foundations', 'v2');
+        expect(mockSnapshot).toHaveBeenCalledWith('chess-foundations', 'v2');
     });
 
     test('version. missing server version hides the journey (fail closed)', async () => {
@@ -242,27 +243,28 @@ describe('useCredentialJourney read model', () => {
 
     test('version. v1 rows do not leak into the current v2 journey', async () => {
         // Server answers per requested version: v2 is clean, v1 carries
-        // a live attempt and a passed component. The hook must ask for v2.
+        // a live attempt and a passed component. The hook must ask for v2 —
+        // the snapshot adapter (unit-tested separately) filters by release.
         mockAvailability.mockResolvedValue([{ slug: 'chess-foundations', issuable: true, programVersion: 'v2' }]);
         mockSkills.mockResolvedValue(SKILLS_3_OF_4);
         mockProgress.mockImplementation((slug: string, version: string) =>
             Promise.resolve(version === 'v2' ? null : { programVersion: 'v1' }),
         );
-        mockAttempts.mockImplementation((slug: string, version: string) =>
+        mockSnapshot.mockImplementation((slug: string, version: string) =>
             Promise.resolve(
                 version === 'v2'
-                    ? []
-                    : [{ id: 'v1-live', status: 'started', score: null, passed: null, submittedAt: null }],
+                    ? { contentAvailable: true, attempts: [], component: null }
+                    : {
+                        contentAvailable: true,
+                        attempts: [{ id: 'v1-live', status: 'started', score: null, passed: null, submittedAt: null }],
+                        component: { score: 95, passed: true },
+                    },
             ),
-        );
-        mockComponent.mockImplementation((slug: string, version: string) =>
-            Promise.resolve(version === 'v2' ? null : { score: 95, passed: true }),
         );
         const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
         await waitFor(() => expect(result.current.journey).not.toBeNull());
         const journey = result.current.journey!;
-        expect(mockAttempts).toHaveBeenCalledWith('chess-foundations', 'v2');
-        expect(mockComponent).toHaveBeenCalledWith('chess-foundations', 'v2');
+        expect(mockSnapshot).toHaveBeenCalledWith('chess-foundations', 'v2');
         // v1 started attempt does NOT surface as in_progress…
         expect(journey.knowledge.state).toBe('locked');
         // …v1 passed component does NOT mark v2 passed…
@@ -345,6 +347,104 @@ describe('useCredentialJourney read model', () => {
     });
 });
 
+describe('live-release Knowledge authority (snapshot-scoped)', () => {
+    test('1. live started attempt => in_progress', async () => {
+        mockJourneyServer({
+            skills: SKILLS_4_OF_4,
+            attempts: [{ id: 'live-a', status: 'started', score: null, passed: null, submittedAt: null }],
+        });
+        const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
+        await waitFor(() => expect(result.current.journey).not.toBeNull());
+        expect(result.current.journey!.knowledge).toEqual({
+            state: 'in_progress',
+            score: null,
+            attemptId: 'live-a',
+        });
+    });
+
+    test('2/3. retired-release rows never surface (adapter excludes them)', async () => {
+        // The snapshot adapter drops non-live attempts/components; the hook
+        // therefore sees an empty live set: no in_progress, no stale score.
+        mockJourneyServer({ skills: SKILLS_4_OF_4, attempts: [], component: null });
+        const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
+        await waitFor(() => expect(result.current.journey).not.toBeNull());
+        expect(result.current.journey!.knowledge.state).toBe('ready');
+        expect(result.current.journey!.knowledge.score).toBeNull();
+    });
+
+    test('4/7. live component PASS => passed', async () => {
+        mockJourneyServer({ component: { score: 91, passed: true } });
+        const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
+        await waitFor(() => expect(result.current.journey).not.toBeNull());
+        expect(result.current.journey!.knowledge).toEqual({
+            state: 'passed',
+            score: 91,
+            attemptId: null,
+        });
+    });
+
+    test('5/6. stale component (nulled by adapter) + verified skills => ready', async () => {
+        mockJourneyServer({ skills: SKILLS_4_OF_4, component: null });
+        const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
+        await waitFor(() => expect(result.current.journey).not.toBeNull());
+        expect(result.current.journey!.knowledge.state).toBe('ready');
+        expect(result.current.journey!.nextAction).toEqual({ kind: 'start_knowledge' });
+    });
+
+    test('8. superseded attempt remains ignored', async () => {
+        mockJourneyServer({
+            skills: SKILLS_3_OF_4,
+            attempts: [
+                { id: 'sup', status: 'superseded', score: null, passed: null, submittedAt: null } as never,
+            ],
+        });
+        const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
+        await waitFor(() => expect(result.current.journey).not.toBeNull());
+        expect(result.current.journey!.knowledge.state).toBe('locked');
+    });
+
+    test('9/10. no single live release => temporarily_unavailable, journey stays visible', async () => {
+        mockJourneyServer({ contentAvailable: false });
+        const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
+        await waitFor(() => expect(result.current.journey).not.toBeNull());
+        const journey = result.current.journey!;
+        expect(journey.knowledge.state).toBe('temporarily_unavailable');
+        // The journey is NOT hidden: verified skill state stays visible.
+        expect(journey.available).toBe(true);
+        expect(journey.visible).toBe(true);
+        expect(journey.verifiedSkillCount).toBe(4);
+        expect(journey.totalSkillCount).toBe(4);
+    });
+
+    test('13. internal contentVersion never appears in the journey model', async () => {
+        mockJourneyServer({
+            attempts: [{ id: 'live-a', status: 'started', score: null, passed: null, submittedAt: null }],
+            component: { score: 91, passed: true },
+        });
+        const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
+        await waitFor(() => expect(result.current.journey).not.toBeNull());
+        const keys: string[] = [];
+        const walk = (value: unknown) => {
+            if (Array.isArray(value)) {
+                value.forEach(walk);
+            } else if (value != null && typeof value === 'object') {
+                for (const [k, v] of Object.entries(value)) {
+                    keys.push(k);
+                    walk(v);
+                }
+            }
+        };
+        walk(result.current.journey);
+        const leaked = keys.filter(k =>
+            /content_version|contentversion|reference_id|artifact|bank|release|machine_qa|human_review/i.test(k),
+        );
+        expect(leaked).toEqual([]);
+        expect(JSON.stringify(result.current.journey)).not.toMatch(
+            /content_version|contentVersion|reference_id/i,
+        );
+    });
+});
+
 describe('CredentialJourneySection', () => {
     test('5/6. Start ensures enrollment, then starts the server attempt', async () => {
         mockEnsure.mockResolvedValue({ enrolled: true, alreadyEnrolled: false });
@@ -360,6 +460,24 @@ describe('CredentialJourneySection', () => {
         ).toBeLessThan((mockStart as jest.Mock).mock.invocationCallOrder[0]);
         expect(mockStart).toHaveBeenCalledWith('chess-foundations');
         expect(await screen.findByText('Q1?')).toBeTruthy();
+    });
+
+    test('enrollment. successful ensureEnrollment triggers journey refresh (no local patch)', async () => {
+        mockEnsure.mockResolvedValue({ enrolled: true, alreadyEnrolled: false });
+        mockStart.mockResolvedValue({ attemptId: 'att-k1', programVersion: '1.0', questions: QUESTIONS });
+        const screen = await render(
+            <CredentialJourneySection programSlug="chess-foundations" programTitle="Chess Foundations" recommendation={null} onVerifySkill={() => {}} onContinueLearning={() => {}} />,
+        );
+        await screen.findByText('Start Knowledge Check');
+        const progressReadsBefore = mockProgress.mock.calls.length;
+        const snapshotReadsBefore = mockSnapshot.mock.calls.length;
+        await fireEvent.press(screen.getByText('Start Knowledge Check'));
+        // Canonical refresh re-reads server truth after enrollment…
+        await waitFor(() => expect(mockProgress.mock.calls.length).toBeGreaterThan(progressReadsBefore));
+        expect(mockSnapshot.mock.calls.length).toBeGreaterThan(snapshotReadsBefore);
+        // …and enrolled is still derived from the server progress row
+        // (null here), never optimistically patched to true locally.
+        expect(mockProgress).toHaveBeenCalledWith('chess-foundations', 'v2');
     });
 
     test('16. no Practical interaction appears yet', async () => {
@@ -627,5 +745,18 @@ describe('CredentialChallengeRunner (knowledge only)', () => {
             const content: string = fs.readFileSync(file, 'utf8');
             expect(content).not.toMatch(/useCredentialJourney|CredentialJourney|startKnowledgeAttempt/);
         }
+    });
+
+    test('migrations. no backend changes: nothing beyond 035', () => {
+        const fs = require('fs');
+        const path = require('path');
+        const dir = path.join(process.cwd(), 'supabase', 'migrations');
+        const files: string[] = fs.readdirSync(dir).filter((f: string) => f.endsWith('.sql'));
+        expect(files.length).toBeGreaterThan(0);
+        const beyond = files.filter(f => {
+            const m = /^(\d+)_/.exec(f);
+            return m != null && Number(m[1]) > 35;
+        });
+        expect(beyond).toEqual([]);
     });
 });

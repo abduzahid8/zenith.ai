@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LearningRecommendation } from '../domain/sessions/nextBestAction';
 import {
     getCredentialProgress,
-    getKnowledgeAttempts,
-    getKnowledgeComponent,
+    getKnowledgeJourneySnapshot,
     getProgramAvailability,
     getSkillVerification,
 } from '../services/trustApi';
@@ -13,10 +12,12 @@ import type { KnowledgeAttemptRow, SkillVerification } from '../services/trustAp
  * Slice 2 — canonical credential journey read model.
  *
  * NOT authority: it only composes existing server truth
- * (availability, skill verification, progress, knowledge attempts and
- * component snapshot) into one stable UI model. Every gate below mirrors
- * server policy; the hook performs no grading, no readiness inference
- * beyond the unlocked rule, and never reads local credential stores.
+ * (availability, skill verification, progress, and the Knowledge
+ * live-release snapshot) into one stable UI model. Every gate below
+ * mirrors server policy; the hook performs no grading, no readiness
+ * inference beyond the unlock rule, and never reads local stores.
+ * Knowledge state is pinned to the current live content release via
+ * getKnowledgeJourneySnapshot — retired releases never surface.
  */
 
 export type KnowledgeState =
@@ -200,11 +201,10 @@ export function useCredentialJourney(
                     return;
                 }
                 const version = entry.programVersion;
-                const [skills, progress, attempts, component] = await Promise.all([
+                const [skills, progress, snapshot] = await Promise.all([
                     getSkillVerification(programSlug),
                     getCredentialProgress(programSlug, version),
-                    getKnowledgeAttempts(programSlug, version),
-                    getKnowledgeComponent(programSlug, version),
+                    getKnowledgeJourneySnapshot(programSlug, version),
                 ]);
                 if (cancelled) return;
                 const mapped: JourneySkill[] = skills.map((s: SkillVerification) => ({
@@ -217,11 +217,14 @@ export function useCredentialJourney(
                 }));
                 const verifiedSkillCount = mapped.filter(s => s.verified).length;
                 const allVerified = mapped.length > 0 && verifiedSkillCount === mapped.length;
+                // The snapshot already carries live-release authority; when
+                // no single live release exists the journey stays visible
+                // (skills still shown) with knowledge fail-closed.
                 const knowledge = deriveKnowledgeState({
-                    component,
-                    attempts,
+                    component: snapshot.component,
+                    attempts: snapshot.attempts,
                     allSkillsVerified: allVerified,
-                    unavailable: false,
+                    unavailable: !snapshot.contentAvailable,
                 });
                 if (mounted.current) {
                     setBase({

@@ -375,69 +375,117 @@ export interface KnowledgeAttemptRow {
 }
 
 /**
- * Own knowledge attempts for the CURRENT program version only
- * (server-written rows). Superseded attempts are excluded at the query —
- * they must never render as in-progress — and any other unknown status is
- * dropped defensively. Scoring authority stays server-side.
+ * Pure live-release resolution, mirroring migration 035 authority
+ * (status active + machine QA passed + human approved). Exactly one
+ * matching row is required — zero or several means no live content.
+ * Exported for unit tests; the snapshot adapter is the only caller.
  */
-export const getKnowledgeAttempts = async (
+export function resolveLiveContentVersion(
+    rows: { content_version?: unknown }[],
+): string | null {
+    if (rows.length !== 1) return null;
+    const version = rows[0].content_version;
+    return typeof version === 'string' && version.length > 0 ? version : null;
+}
+
+export interface KnowledgeJourneySnapshot {
+    /** False when no single live release exists: knowledge reads fail closed. */
+    contentAvailable: boolean;
+    /** Own live-release attempts only (started/submitted, current content). */
+    attempts: KnowledgeAttemptRow[];
+    /**
+     * Official current component, or null. A stored PASS counts only when
+     * its reference_id resolves to an own live submitted attempt — retired
+     * content never carries forward. Never trust `passed` alone.
+     */
+    component: KnowledgeComponentRow | null;
+}
+
+/**
+ * One canonical Knowledge read-authority snapshot. Resolves the current
+ * live content version ONCE from public release metadata, then uses that
+ * same identity for attempts and component reads — never inherits state
+ * from a retired release of the same program version. content_version is
+ * an adapter-internal concern and is never returned to components.
+ */
+export const getKnowledgeJourneySnapshot = async (
     programSlug: string,
     programVersion: string,
-): Promise<KnowledgeAttemptRow[]> => {
+): Promise<KnowledgeJourneySnapshot> => {
     const supabase = getSupabase();
-    const { data, error } = await supabase
-        .from('knowledge_attempts')
-        .select('id, status, score, passed, submitted_at')
+    const { data: relData, error: relError } = await supabase
+        .from('credential_content_releases')
+        .select('content_version')
         .eq('program_slug', programSlug)
         .eq('program_version', programVersion)
-        .in('status', ['started', 'submitted'])
-        .order('started_at', { ascending: false });
-    if (error) throw new Error(error.message);
-    const rows = (Array.isArray(data) ? data : []) as unknown as {
-        id: string; status: string; score: number | null; passed: boolean | null; submitted_at: string | null;
+        .eq('status', 'active')
+        .eq('machine_qa_status', 'passed')
+        .eq('human_review_status', 'approved');
+    if (relError) throw new Error(relError.message);
+    const live = resolveLiveContentVersion(
+        (Array.isArray(relData) ? relData : []) as unknown as { content_version: unknown }[],
+    );
+    if (live == null) {
+        return { contentAvailable: false, attempts: [], component: null };
+    }
+    const [{ data: attData, error: attError }, { data: compData, error: compError }] = await Promise.all([
+        supabase
+            .from('knowledge_attempts')
+            .select('id, status, score, passed, submitted_at, content_version')
+            .eq('program_slug', programSlug)
+            .eq('program_version', programVersion)
+            .in('status', ['started', 'submitted'])
+            .order('started_at', { ascending: false }),
+        supabase
+            .from('credential_component_results')
+            .select('score, passed, reference_id')
+            .eq('program_slug', programSlug)
+            .eq('program_version', programVersion)
+            .eq('component', 'knowledge')
+            .order('created_at', { ascending: false })
+            .limit(1),
+    ]);
+    if (attError) throw new Error(attError.message);
+    if (compError) throw new Error(compError.message);
+    const attemptRows = (Array.isArray(attData) ? attData : []) as unknown as {
+        id: unknown; status: unknown; score: number | null; passed: boolean | null;
+        submitted_at: string | null; content_version: unknown;
     }[];
-    return rows
-        .filter(r => r.status === 'started' || r.status === 'submitted')
+    const attempts: KnowledgeAttemptRow[] = attemptRows
+        .filter(
+            r =>
+                typeof r.id === 'string' &&
+                (r.status === 'started' || r.status === 'submitted') &&
+                r.content_version === live,
+        )
         .map(r => ({
-            id: r.id,
+            id: r.id as string,
             status: r.status as 'started' | 'submitted',
             score: r.score == null ? null : Number(r.score),
             passed: r.passed,
             submittedAt: r.submitted_at,
         }));
+    const compRow = (Array.isArray(compData) ? compData[0] : null) as unknown as {
+        score: number; passed: boolean; reference_id: unknown;
+    } | null;
+    // Both reads are RLS-scoped to the current user, so membership in the
+    // live submitted set proves ownership + currency of the reference.
+    const liveSubmittedIds = new Set(
+        attempts.filter(a => a.status === 'submitted').map(a => a.id),
+    );
+    const component =
+        compRow != null &&
+        typeof compRow.reference_id === 'string' &&
+        liveSubmittedIds.has(compRow.reference_id)
+            ? { score: Number(compRow.score), passed: compRow.passed === true }
+            : null;
+    return { contentAvailable: true, attempts, component };
 };
 
 export interface KnowledgeComponentRow {
     score: number;
     passed: boolean;
 }
-
-/**
- * Authoritative knowledge component snapshot for the CURRENT program
- * version (server-written). Null when no submission has produced one yet.
- * Presence of a row never implies a pass — callers must check `passed`.
- * Exact version equality: an older version's PASS never carries forward.
- */
-export const getKnowledgeComponent = async (
-    programSlug: string,
-    programVersion: string,
-): Promise<KnowledgeComponentRow | null> => {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-        .from('credential_component_results')
-        .select('score, passed')
-        .eq('program_slug', programSlug)
-        .eq('program_version', programVersion)
-        .eq('component', 'knowledge')
-        .order('created_at', { ascending: false })
-        .limit(1);
-    if (error) throw new Error(error.message);
-    const row = (Array.isArray(data) ? data[0] : null) as unknown as {
-        score: number; passed: boolean;
-    } | null;
-    if (!row) return null;
-    return { score: Number(row.score), passed: row.passed === true };
-};
 
 export type { PublicCredential, VerificationResult } from './credentialVerification';
 

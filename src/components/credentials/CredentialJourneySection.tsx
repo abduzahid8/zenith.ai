@@ -52,6 +52,9 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
             // Server enrollment first (idempotent); the runner then resumes
             // or creates the one active server attempt — never a client one.
             await ensureEnrollment(programSlug);
+            // Re-read: enrolled must come from the current-version server
+            // row, never a local optimistic patch.
+            refresh();
             setRunnerOpen(true);
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
