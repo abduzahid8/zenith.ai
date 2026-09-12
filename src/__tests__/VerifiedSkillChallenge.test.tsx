@@ -15,6 +15,9 @@ import {
     submitTrustedValidation,
     getProgramAvailability,
     getSkillVerification,
+    getCredentialProgress,
+    getKnowledgeAttempts,
+    getKnowledgeComponent,
 } from '../services/trustApi';
 
 jest.mock('../services/trustApi', () => ({
@@ -23,6 +26,12 @@ jest.mock('../services/trustApi', () => ({
     getProgramAvailability: jest.fn(),
     getTrustedSkillResults: jest.fn(),
     getSkillVerification: jest.fn(),
+    getCredentialProgress: jest.fn(),
+    getKnowledgeAttempts: jest.fn(),
+    getKnowledgeComponent: jest.fn(),
+    ensureEnrollment: jest.fn(),
+    startKnowledgeAttempt: jest.fn(),
+    submitKnowledgeAttempt: jest.fn(),
     // Mirrors the real predicate (unit-tested in trustApi.test.ts).
     isContentUnavailable: jest.fn((m: string) => m.includes('credential_content_unavailable')),
 }));
@@ -65,6 +74,9 @@ const mockStart = startTrustedValidation as jest.Mock;
 const mockSubmit = submitTrustedValidation as jest.Mock;
 const mockAvailability = getProgramAvailability as jest.Mock;
 const mockSkillVerification = getSkillVerification as jest.Mock;
+const mockCredentialProgress = getCredentialProgress as jest.Mock;
+const mockKnowledgeAttempts = getKnowledgeAttempts as jest.Mock;
+const mockKnowledgeComponent = getKnowledgeComponent as jest.Mock;
 
 const RULES_PARTIAL = {
     skillKey: 'rules',
@@ -434,6 +446,15 @@ describe('AICoachTab prove_skill wiring', () => {
 
     const GOAL_ID = 'coach-goal-1';
 
+    // The Coach tab now also mounts the compact credential journey block,
+    // which reads the same server functions. Default them so journey reads
+    // resolve deterministically and never disturb per-test verify queues.
+    beforeEach(() => {
+        mockCredentialProgress.mockResolvedValue(null);
+        mockKnowledgeAttempts.mockResolvedValue([]);
+        mockKnowledgeComponent.mockResolvedValue(null);
+    });
+
     function seedCoachGoal() {
         const { useGoalStore } = require('../store/goalStore');
         const { useUserProfileStore } = require('../store/userProfileStore');
@@ -549,9 +570,13 @@ describe('AICoachTab prove_skill wiring', () => {
         seedCoachGoal();
         mockAvailability.mockResolvedValue([{ slug: 'chess-foundations', issuable: true }]);
         // Initial state is partial (CTA visible); the submit completes the gate.
-        mockSkillVerification
-            .mockResolvedValueOnce([{ ...RULES_PARTIAL }])
-            .mockResolvedValue([{ ...RULES_VERIFIED, skillName: 'Rules' }]);
+        // Both fetchVerifyContext and the journey block read verification on
+        // mount (either order), so serve PARTIAL to the first two callers and
+        // VERIFIED afterwards — never a one-shot queue a sibling can steal.
+        let verificationReads = 0;
+        mockSkillVerification.mockImplementation(() =>
+            Promise.resolve(verificationReads++ < 2 ? [{ ...RULES_PARTIAL }] : [{ ...RULES_VERIFIED, skillName: 'Rules' }]),
+        );
         mockStart.mockResolvedValue({
             attemptId: 'att-tab-1',
             skillKey: 'rules',

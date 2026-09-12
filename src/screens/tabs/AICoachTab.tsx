@@ -17,7 +17,7 @@ import { fonts } from '../../theme';
 import { aiService, ChatMessage } from '../../services/ai';
 import { useUserProfileStore, getGreeting } from '../../store/userProfileStore';
 import { useAuthStore } from '../../store/authStore';
-import { getProgramForHobby } from '../../domain/credentials/catalog';
+import { getProgramForHobby, programShortTitle } from '../../domain/credentials/catalog';
 import { eventsByProgram } from '../../services/learningEventRepository';
 import { projectSkillState } from '../../domain/sessions/skillState';
 import { getNextBestLearningAction } from '../../domain/sessions/nextBestAction';
@@ -29,6 +29,7 @@ import {
     shouldShowVerifyChip,
     VerifyChipContext,
 } from '../../components/session/VerifiedSkillChallenge';
+import { CredentialJourneySection } from '../../components/credentials/CredentialJourneySection';
 import { useGamificationStore } from '../../store/gamificationStore';
 import { useLanguageStore } from '../../store/languageStore';
 import { useGoalStore } from '../../store/goalStore';
@@ -497,6 +498,17 @@ const AICoachTab: React.FC = () => {
                     skillName={challenge.skillName}
                     onClose={() => setChallenge(null)}
                     onComplete={handleVerifyComplete}
+                />
+            )}
+
+            {/* Compact credential journey (server truth only, knowledge slice). */}
+            {proveProgram && (
+                <CredentialJourneySection
+                    programSlug={proveProgram.slug}
+                    programTitle={programShortTitle(proveProgram.title)}
+                    recommendation={proveRec}
+                    onVerifySkill={target => setChallenge({ programSlug: proveProgram.slug, ...target })}
+                    onContinueLearning={startNextTaskSession}
                 />
             )}
         </KeyboardAvoidingView>

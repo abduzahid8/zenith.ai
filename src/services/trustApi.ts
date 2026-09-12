@@ -335,6 +335,86 @@ export const issueCredential = (programSlug: string, holderName: string) =>
         return { credentialId: row.credential_id, created: row.created };
     });
 
+export interface EnrollmentResult {
+    enrolled: boolean;
+    alreadyEnrolled: boolean;
+}
+
+/**
+ * Server-backed enrollment (idempotent by unique constraint). Returns
+ * whether this call created the row. Local flags may cache success but
+ * are never authority — callers re-read progress for truth.
+ */
+export const ensureEnrollment = async (programSlug: string): Promise<EnrollmentResult> => {
+    const supabase = getSupabase();
+    const { data, error } = await supabase.rpc('enroll_in_program', {
+        p_program_slug: programSlug,
+    });
+    if (error) throw new Error(error.message);
+    const row = (Array.isArray(data) ? data[0] : data) as unknown as { enrolled?: boolean } | boolean | null;
+    const enrolled = typeof row === 'boolean' ? row : row?.enrolled === true;
+    return { enrolled, alreadyEnrolled: !enrolled };
+};
+
+export interface KnowledgeAttemptRow {
+    id: string;
+    status: 'started' | 'submitted';
+    score: number | null;
+    passed: boolean | null;
+    submittedAt: string | null;
+}
+
+/**
+ * Own knowledge attempts (server-written rows only). Used to derive
+ * resume/passed display state — scoring authority stays server-side.
+ */
+export const getKnowledgeAttempts = async (programSlug: string): Promise<KnowledgeAttemptRow[]> => {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+        .from('knowledge_attempts')
+        .select('id, status, score, passed, submitted_at')
+        .eq('program_slug', programSlug)
+        .order('started_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    const rows = (Array.isArray(data) ? data : []) as unknown as {
+        id: string; status: string; score: number | null; passed: boolean | null; submitted_at: string | null;
+    }[];
+    return rows.map(r => ({
+        id: r.id,
+        status: r.status === 'submitted' ? 'submitted' : 'started',
+        score: r.score == null ? null : Number(r.score),
+        passed: r.passed,
+        submittedAt: r.submitted_at,
+    }));
+};
+
+export interface KnowledgeComponentRow {
+    score: number;
+    passed: boolean;
+}
+
+/**
+ * Authoritative knowledge component snapshot (server-written). Null when
+ * no submission has produced one yet. Presence of a row never implies a
+ * pass — callers must check `passed`.
+ */
+export const getKnowledgeComponent = async (programSlug: string): Promise<KnowledgeComponentRow | null> => {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+        .from('credential_component_results')
+        .select('score, passed')
+        .eq('program_slug', programSlug)
+        .eq('component', 'knowledge')
+        .order('created_at', { ascending: false })
+        .limit(1);
+    if (error) throw new Error(error.message);
+    const row = (Array.isArray(data) ? data[0] : null) as unknown as {
+        score: number; passed: boolean;
+    } | null;
+    if (!row) return null;
+    return { score: Number(row.score), passed: row.passed === true };
+};
+
 export type { PublicCredential, VerificationResult } from './credentialVerification';
 
 /**
