@@ -20,6 +20,11 @@ export interface CredentialJourneySectionProps {
     recommendation: LearningRecommendation | null;
     onVerifySkill: (target: { skillKey: string; skillName: string }) => void;
     onContinueLearning: () => void;
+    /**
+     * Parent-owned refresh signal. Bumped after trusted verification
+     * completes (pass or fail) so the journey re-reads server truth.
+     */
+    refreshToken?: number;
 }
 
 export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> = ({
@@ -28,11 +33,13 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
     recommendation,
     onVerifySkill,
     onContinueLearning,
+    refreshToken,
 }) => {
-    const { journey, refresh } = useCredentialJourney(programSlug, { recommendation });
+    const { journey, refresh } = useCredentialJourney(programSlug, { recommendation, refreshToken });
     const [runnerOpen, setRunnerOpen] = useState(false);
     const [starting, setStarting] = useState(false);
     const [unavailable, setUnavailable] = useState(false);
+    const [prepareError, setPrepareError] = useState<null | 'network'>(null);
 
     if (!journey || !journey.visible) return null;
 
@@ -40,6 +47,7 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
         if (!programSlug || starting) return;
         setStarting(true);
         setUnavailable(false);
+        setPrepareError(null);
         try {
             // Server enrollment first (idempotent); the runner then resumes
             // or creates the one active server attempt — never a client one.
@@ -49,6 +57,9 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
             const message = err instanceof Error ? err.message : String(err);
             if (isContentUnavailable(message)) {
                 setUnavailable(true);
+            } else {
+                // Never silent, never internal strings: safe connectivity copy.
+                setPrepareError('network');
             }
         } finally {
             setStarting(false);
@@ -62,6 +73,9 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
     };
 
     const primary = (() => {
+        if (prepareError === 'network') {
+            return { label: 'Try again', onPress: () => void startKnowledge() };
+        }
         const action = journey.nextAction;
         if (action.kind === 'verify_skill') {
             return {
@@ -88,6 +102,7 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
                 title={programTitle}
                 primary={starting ? null : primary}
                 showPracticalTeaser={journey.knowledge.state === 'passed'}
+                alert={prepareError === 'network' ? 'Knowledge check needs an internet connection.' : null}
             />
             <CredentialChallengeRunner
                 visible={runnerOpen}

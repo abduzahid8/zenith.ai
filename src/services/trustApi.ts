@@ -45,6 +45,9 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
 export interface ProgramAvailability {
     slug: string;
     issuable: boolean;
+    /** Current server program version (credential_programs.version). Official
+     *  component reads pin to exactly this — never inherit older versions. */
+    programVersion: string | null;
 }
 
 /**
@@ -57,12 +60,16 @@ export const getProgramAvailability = async (): Promise<ProgramAvailability[]> =
     const supabase = getSupabase();
     const { data, error } = await supabase
         .from('credential_programs')
-        .select('slug, issuance_enabled');
+        .select('slug, issuance_enabled, version');
     if (error) throw new Error(error.message);
     const rows = (Array.isArray(data) ? data : []) as unknown as {
-        slug: string; issuance_enabled: boolean;
+        slug: string; issuance_enabled: boolean; version?: unknown;
     }[];
-    return rows.map(r => ({ slug: r.slug, issuable: r.issuance_enabled === true }));
+    return rows.map(r => ({
+        slug: r.slug,
+        issuable: r.issuance_enabled === true,
+        programVersion: typeof r.version === 'string' ? r.version : null,
+    }));
 };
 
 export interface TrustedSkillResult {
@@ -257,13 +264,16 @@ export interface CredentialProgress {
     updatedAt: string;
 }
 
-export const getCredentialProgress = async (programSlug: string): Promise<CredentialProgress | null> => {
+export const getCredentialProgress = async (
+    programSlug: string,
+    programVersion: string,
+): Promise<CredentialProgress | null> => {
     const supabase = getSupabase();
     const { data, error } = await supabase
         .from('user_credential_progress')
         .select('user_id, program_slug, program_version, readiness_score, status, updated_at')
         .eq('program_slug', programSlug)
-        .order('program_version', { ascending: false })
+        .eq('program_version', programVersion)
         .limit(1);
     if (error) throw new Error(error.message);
     const row = (Array.isArray(data) ? data[0] : null) as unknown as {
@@ -365,27 +375,36 @@ export interface KnowledgeAttemptRow {
 }
 
 /**
- * Own knowledge attempts (server-written rows only). Used to derive
- * resume/passed display state — scoring authority stays server-side.
+ * Own knowledge attempts for the CURRENT program version only
+ * (server-written rows). Superseded attempts are excluded at the query —
+ * they must never render as in-progress — and any other unknown status is
+ * dropped defensively. Scoring authority stays server-side.
  */
-export const getKnowledgeAttempts = async (programSlug: string): Promise<KnowledgeAttemptRow[]> => {
+export const getKnowledgeAttempts = async (
+    programSlug: string,
+    programVersion: string,
+): Promise<KnowledgeAttemptRow[]> => {
     const supabase = getSupabase();
     const { data, error } = await supabase
         .from('knowledge_attempts')
         .select('id, status, score, passed, submitted_at')
         .eq('program_slug', programSlug)
+        .eq('program_version', programVersion)
+        .in('status', ['started', 'submitted'])
         .order('started_at', { ascending: false });
     if (error) throw new Error(error.message);
     const rows = (Array.isArray(data) ? data : []) as unknown as {
         id: string; status: string; score: number | null; passed: boolean | null; submitted_at: string | null;
     }[];
-    return rows.map(r => ({
-        id: r.id,
-        status: r.status === 'submitted' ? 'submitted' : 'started',
-        score: r.score == null ? null : Number(r.score),
-        passed: r.passed,
-        submittedAt: r.submitted_at,
-    }));
+    return rows
+        .filter(r => r.status === 'started' || r.status === 'submitted')
+        .map(r => ({
+            id: r.id,
+            status: r.status as 'started' | 'submitted',
+            score: r.score == null ? null : Number(r.score),
+            passed: r.passed,
+            submittedAt: r.submitted_at,
+        }));
 };
 
 export interface KnowledgeComponentRow {
@@ -394,16 +413,21 @@ export interface KnowledgeComponentRow {
 }
 
 /**
- * Authoritative knowledge component snapshot (server-written). Null when
- * no submission has produced one yet. Presence of a row never implies a
- * pass — callers must check `passed`.
+ * Authoritative knowledge component snapshot for the CURRENT program
+ * version (server-written). Null when no submission has produced one yet.
+ * Presence of a row never implies a pass — callers must check `passed`.
+ * Exact version equality: an older version's PASS never carries forward.
  */
-export const getKnowledgeComponent = async (programSlug: string): Promise<KnowledgeComponentRow | null> => {
+export const getKnowledgeComponent = async (
+    programSlug: string,
+    programVersion: string,
+): Promise<KnowledgeComponentRow | null> => {
     const supabase = getSupabase();
     const { data, error } = await supabase
         .from('credential_component_results')
         .select('score, passed')
         .eq('program_slug', programSlug)
+        .eq('program_version', programVersion)
         .eq('component', 'knowledge')
         .order('created_at', { ascending: false })
         .limit(1);

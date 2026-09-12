@@ -53,6 +53,8 @@ export interface CredentialJourney {
     available: boolean;
     enrolled: boolean;
     programTitle: string | null;
+    /** Current server program version — the identity all official reads pin to. */
+    programVersion: string | null;
     skills: JourneySkill[];
     verifiedSkillCount: number;
     totalSkillCount: number;
@@ -72,7 +74,9 @@ export interface KnowledgeInputs {
 /**
  * Pure knowledge-state derivation from server facts. Unlock rule: READY
  * only when every skill is server-verified and no passed component
- * exists. Learning progress is never an input.
+ * exists. Learning progress is never an input. Only live `started` /
+ * `submitted` rows participate — superseded or unknown statuses are
+ * ignored and can never render as in-progress.
  */
 export function deriveKnowledgeState(input: KnowledgeInputs): JourneyKnowledge {
     if (input.unavailable) {
@@ -81,11 +85,12 @@ export function deriveKnowledgeState(input: KnowledgeInputs): JourneyKnowledge {
     if (input.component && input.component.passed) {
         return { state: 'passed', score: input.component.score, attemptId: null };
     }
-    const active = input.attempts.find(a => a.status === 'started') ?? null;
+    const live = input.attempts.filter(a => a.status === 'started' || a.status === 'submitted');
+    const active = live.find(a => a.status === 'started') ?? null;
     if (active) {
         return { state: 'in_progress', score: null, attemptId: active.id };
     }
-    const submitted = input.attempts.filter(a => a.status === 'submitted');
+    const submitted = live.filter(a => a.status === 'submitted');
     if (submitted.length > 0) {
         const latest = submitted
             .slice()
@@ -126,6 +131,12 @@ export function deriveNextAction(
 
 export interface JourneyInput {
     recommendation?: LearningRecommendation | null;
+    /**
+     * Parent-owned refresh signal (e.g. bumped after a trusted
+     * verification completes). Changing it re-reads server truth.
+     * No global event bus — one nonce passed down the tree.
+     */
+    refreshToken?: number;
 }
 
 export interface JourneyResult {
@@ -137,6 +148,7 @@ export interface JourneyResult {
 const HIDDEN_BASE: JourneyBase = {
     available: false,
     enrolled: false,
+    programVersion: null,
     skills: [],
     verifiedSkillCount: 0,
     totalSkillCount: 0,
@@ -146,6 +158,7 @@ const HIDDEN_BASE: JourneyBase = {
 interface JourneyBase {
     available: boolean;
     enrolled: boolean;
+    programVersion: string | null;
     skills: JourneySkill[];
     verifiedSkillCount: number;
     totalSkillCount: number;
@@ -177,19 +190,23 @@ export function useCredentialJourney(
         setBase(null);
         (async () => {
             try {
-                const [programs, skills, progress, attempts, component] = await Promise.all([
-                    getProgramAvailability(),
-                    getSkillVerification(programSlug),
-                    getCredentialProgress(programSlug),
-                    getKnowledgeAttempts(programSlug),
-                    getKnowledgeComponent(programSlug),
-                ]);
+                const programs = await getProgramAvailability();
                 if (cancelled) return;
                 const entry = programs.find(p => p.slug === programSlug);
-                if (!entry || !entry.issuable) {
+                // Fail closed: without an issuable entry AND a concrete
+                // current version there is no identity to pin reads to.
+                if (!entry || !entry.issuable || entry.programVersion == null) {
                     if (mounted.current) setBase(HIDDEN_BASE);
                     return;
                 }
+                const version = entry.programVersion;
+                const [skills, progress, attempts, component] = await Promise.all([
+                    getSkillVerification(programSlug),
+                    getCredentialProgress(programSlug, version),
+                    getKnowledgeAttempts(programSlug, version),
+                    getKnowledgeComponent(programSlug, version),
+                ]);
+                if (cancelled) return;
                 const mapped: JourneySkill[] = skills.map((s: SkillVerification) => ({
                     key: s.skillKey,
                     name: s.skillName,
@@ -209,7 +226,10 @@ export function useCredentialJourney(
                 if (mounted.current) {
                     setBase({
                         available: true,
+                        // Version-pinned: an old-version progress row is NOT
+                        // enrollment in the current journey.
                         enrolled: progress !== null,
+                        programVersion: version,
                         skills: mapped,
                         verifiedSkillCount,
                         totalSkillCount: mapped.length,
@@ -225,7 +245,7 @@ export function useCredentialJourney(
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [programSlug, nonce]);
+    }, [programSlug, nonce, input?.refreshToken]);
 
     // nextAction derives at render from fetched base + live canonical
     // recommendation: no refetch when the recommendation object changes.

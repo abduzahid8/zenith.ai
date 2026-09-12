@@ -58,6 +58,8 @@ export interface CredentialJourneyBlockProps {
     title: string;
     primary: JourneyPrimary | null;
     showPracticalTeaser: boolean;
+    /** Safe user-visible notice (e.g. connectivity). Never internal strings. */
+    alert?: string | null;
 }
 
 export const CredentialJourneyBlock: React.FC<CredentialJourneyBlockProps> = ({
@@ -65,6 +67,7 @@ export const CredentialJourneyBlock: React.FC<CredentialJourneyBlockProps> = ({
     title,
     primary,
     showPracticalTeaser,
+    alert,
 }) => {
     const { colors } = useAppTheme();
     return (
@@ -98,6 +101,11 @@ export const CredentialJourneyBlock: React.FC<CredentialJourneyBlockProps> = ({
             {showPracticalTeaser && (
                 <Text style={[styles.teaser, { color: colors.textSecondary }]}>
                     Practical{'\n'}Next step coming next
+                </Text>
+            )}
+            {alert && (
+                <Text style={[styles.alert, { color: colors.text }]}>
+                    {alert}
                 </Text>
             )}
             {primary && (
@@ -149,6 +157,11 @@ const styles = StyleSheet.create({
         fontSize: scale(14),
     },
     teaser: {
+        fontFamily: fonts.heading.regular,
+        fontSize: scale(13),
+        marginTop: scale(8),
+    },
+    alert: {
         fontFamily: fonts.heading.regular,
         fontSize: scale(13),
         marginTop: scale(8),

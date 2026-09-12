@@ -24,9 +24,7 @@ import { getNextBestLearningAction } from '../../domain/sessions/nextBestAction'
 import { useLearningIntelligence } from '../../hooks/useLearningIntelligence';
 import {
     VerifiedSkillChallenge,
-    VerifySkillCta,
     fetchVerifyContext,
-    shouldShowVerifyChip,
     VerifyChipContext,
 } from '../../components/session/VerifiedSkillChallenge';
 import { CredentialJourneySection } from '../../components/credentials/CredentialJourneySection';
@@ -267,6 +265,12 @@ const AICoachTab: React.FC = () => {
     // Verify action. The UI never infers readiness itself.
     const { recommendation: proveRec, program: proveProgram } = useLearningIntelligence({ minutes: 30 });
 
+    // Canonical journey refresh: bumped after every completed trusted
+    // verification (pass OR fail — even a failed sample can move
+    // samplesCompleted/passRate). The journey section re-reads server
+    // truth on change; nothing is ever patched manually.
+    const [journeyRefreshToken, setJourneyRefreshToken] = useState(0);
+
     // Server verify context: issuance flag + server-verified skills.
     // Fail-closed: any error hides (never invents) the official action.
     useEffect(() => {
@@ -286,11 +290,9 @@ const AICoachTab: React.FC = () => {
         };
     }, [proveRec?.type, proveRec?.skillKey, proveProgram?.slug]);
 
-    const verifyTarget = useMemo(
-        () => (proveProgram ? shouldShowVerifyChip(proveRec, verifyCtx) : null),
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [proveRec, verifyCtx, proveProgram?.slug],
-    );
+    // Server verify context feeds factual LLM context only (never a
+    // decision). The journey section below is the single official Verify
+    // CTA surface — no standalone VerifySkillCta is rendered anywhere.
 
     const handleVerifyComplete = (passed: boolean, verification: {
         verified: boolean;
@@ -318,6 +320,9 @@ const AICoachTab: React.FC = () => {
         // Re-read the truth (server + canonical recommendation). Nothing is
         // patched manually: the chip visibility recomputes from fresh state.
         fetchVerifyContext(done.programSlug).then(setVerifyCtx).catch(() => {});
+        // Refresh the canonical journey reads too (pass or fail): a
+        // completed sample can move counts even without a pass.
+        setJourneyRefreshToken(t => t + 1);
     };
     /** Next real DailyPlan task -> shared swipe session (same task object). */
     const startNextTaskSession = () => {
@@ -441,16 +446,6 @@ const AICoachTab: React.FC = () => {
                         </View>
                     ) : messages.length > 0 && !showInput ? (
                         <View>
-                            {verifyTarget && proveProgram && (
-                                <VerifySkillCta
-                                    skillName={verifyTarget.skillName}
-                                    onPress={() => setChallenge({
-                                        programSlug: proveProgram.slug,
-                                        skillKey: verifyTarget.skillKey,
-                                        skillName: verifyTarget.skillName,
-                                    })}
-                                />
-                            )}
                             <View style={styles.chipRow}>
                                 {actionChips.map((chip, i) => (
                                     <TouchableOpacity key={i} style={styles.chip} onPress={chip.action} activeOpacity={0.7}>
@@ -509,6 +504,7 @@ const AICoachTab: React.FC = () => {
                     recommendation={proveRec}
                     onVerifySkill={target => setChallenge({ programSlug: proveProgram.slug, ...target })}
                     onContinueLearning={startNextTaskSession}
+                    refreshToken={journeyRefreshToken}
                 />
             )}
         </KeyboardAvoidingView>

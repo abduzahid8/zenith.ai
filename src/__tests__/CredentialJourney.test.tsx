@@ -74,13 +74,18 @@ const QUESTIONS = [
 
 function mockJourneyServer(opts: {
     issuable?: boolean;
+    version?: string | null;
     skills?: typeof SKILLS_4_OF_4;
     progress?: null | object;
     attempts?: unknown[];
     component?: null | object;
 } = {}) {
     mockAvailability.mockResolvedValue([
-        { slug: 'chess-foundations', issuable: opts.issuable ?? true },
+        {
+            slug: 'chess-foundations',
+            issuable: opts.issuable ?? true,
+            programVersion: 'version' in opts ? opts.version : 'v2',
+        },
     ]);
     mockSkills.mockResolvedValue(opts.skills ?? SKILLS_4_OF_4);
     mockProgress.mockResolvedValue(opts.progress ?? null);
@@ -202,6 +207,142 @@ describe('useCredentialJourney read model', () => {
         });
         await waitFor(() => expect((mockSkills as jest.Mock).mock.calls.length).toBeGreaterThan(callsBefore));
     });
+
+    test('version. journey exposes programVersion and pins reads to it', async () => {
+        mockJourneyServer();
+        const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
+        await waitFor(() => expect(result.current.journey).not.toBeNull());
+        expect(result.current.journey!.programVersion).toBe('v2');
+        expect(mockProgress).toHaveBeenCalledWith('chess-foundations', 'v2');
+        expect(mockAttempts).toHaveBeenCalledWith('chess-foundations', 'v2');
+        expect(mockComponent).toHaveBeenCalledWith('chess-foundations', 'v2');
+    });
+
+    test('version. missing server version hides the journey (fail closed)', async () => {
+        mockJourneyServer({ version: null });
+        const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
+        await waitFor(() => expect(result.current.journey).not.toBeNull());
+        expect(result.current.journey!.available).toBe(false);
+        expect(result.current.journey!.visible).toBe(false);
+    });
+
+    test('version. superseded attempts never render in_progress', () => {
+        expect(
+            deriveKnowledgeState({
+                component: null,
+                attempts: [
+                    { id: 'old', status: 'superseded', score: null, passed: null, submittedAt: null } as never,
+                    { id: 'weird', status: 'archived', score: null, passed: null, submittedAt: null } as never,
+                ],
+                allSkillsVerified: false,
+                unavailable: false,
+            }).state,
+        ).toBe('locked');
+    });
+
+    test('version. v1 rows do not leak into the current v2 journey', async () => {
+        // Server answers per requested version: v2 is clean, v1 carries
+        // a live attempt and a passed component. The hook must ask for v2.
+        mockAvailability.mockResolvedValue([{ slug: 'chess-foundations', issuable: true, programVersion: 'v2' }]);
+        mockSkills.mockResolvedValue(SKILLS_3_OF_4);
+        mockProgress.mockImplementation((slug: string, version: string) =>
+            Promise.resolve(version === 'v2' ? null : { programVersion: 'v1' }),
+        );
+        mockAttempts.mockImplementation((slug: string, version: string) =>
+            Promise.resolve(
+                version === 'v2'
+                    ? []
+                    : [{ id: 'v1-live', status: 'started', score: null, passed: null, submittedAt: null }],
+            ),
+        );
+        mockComponent.mockImplementation((slug: string, version: string) =>
+            Promise.resolve(version === 'v2' ? null : { score: 95, passed: true }),
+        );
+        const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
+        await waitFor(() => expect(result.current.journey).not.toBeNull());
+        const journey = result.current.journey!;
+        expect(mockAttempts).toHaveBeenCalledWith('chess-foundations', 'v2');
+        expect(mockComponent).toHaveBeenCalledWith('chess-foundations', 'v2');
+        // v1 started attempt does NOT surface as in_progress…
+        expect(journey.knowledge.state).toBe('locked');
+        // …v1 passed component does NOT mark v2 passed…
+        expect(journey.knowledge.state).not.toBe('passed');
+        // …and the old-version progress row is NOT current enrollment.
+        expect(journey.enrolled).toBe(false);
+    });
+
+    test('version. v2 live attempt renders in_progress; v2 pass renders passed', async () => {
+        mockJourneyServer({
+            skills: SKILLS_4_OF_4,
+            attempts: [{ id: 'v2-live', status: 'started', score: null, passed: null, submittedAt: null }],
+        });
+        const live = await renderHook(() => useCredentialJourney('chess-foundations', {}));
+        await waitFor(() => expect(live.result.current.journey).not.toBeNull());
+        expect(live.result.current.journey!.knowledge.state).toBe('in_progress');
+
+        mockJourneyServer({ component: { score: 91, passed: true } });
+        const passed = await renderHook(() => useCredentialJourney('chess-foundations', {}));
+        await waitFor(() => expect(passed.result.current.journey).not.toBeNull());
+        expect(passed.result.current.journey!.knowledge.state).toBe('passed');
+    });
+
+    test('version. current-version progress row means enrolled', async () => {
+        mockJourneyServer({ progress: { programVersion: 'v2' } });
+        const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
+        await waitFor(() => expect(result.current.journey).not.toBeNull());
+        expect(result.current.journey!.enrolled).toBe(true);
+    });
+
+    test('refresh. 3/4 → final skill verified → refresh yields 4/4 Ready', async () => {
+        mockJourneyServer({ skills: SKILLS_3_OF_4 });
+        const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
+        await waitFor(() => expect(result.current.journey).not.toBeNull());
+        expect(result.current.journey!.verifiedSkillCount).toBe(3);
+        expect(result.current.journey!.knowledge.state).toBe('locked');
+        // Server completes the final gate; the UI re-reads (no local patch).
+        mockJourneyServer({ skills: SKILLS_4_OF_4 });
+        await act(async () => {
+            result.current.refresh();
+        });
+        await waitFor(() => expect(result.current.journey!.verifiedSkillCount).toBe(4));
+        expect(result.current.journey!.knowledge.state).toBe('ready');
+        expect(result.current.journey!.nextAction).toEqual({ kind: 'start_knowledge' });
+    });
+
+    test('refresh. parent refreshToken re-reads server truth', async () => {
+        mockJourneyServer({ skills: SKILLS_3_OF_4 });
+        const { result, rerender } = await renderHook(
+            ({ token }: { token: number }) => useCredentialJourney('chess-foundations', { refreshToken: token }),
+            { initialProps: { token: 0 } },
+        );
+        await waitFor(() => expect(result.current.journey).not.toBeNull());
+        const callsBefore = mockSkills.mock.calls.length;
+        mockJourneyServer();
+        await rerender({ token: 1 });
+        await waitFor(() => expect(mockSkills.mock.calls.length).toBeGreaterThan(callsBefore));
+    });
+
+    test('refresh. failed verification still refreshes sample state', async () => {
+        const before = [...SKILLS_3_OF_4];
+        mockJourneyServer({ skills: before });
+        const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
+        await waitFor(() => expect(result.current.journey).not.toBeNull());
+        const tacticsBefore = result.current.journey!.skills.find(s => s.key === 'tactics')!;
+        expect(tacticsBefore.samplesCompleted).toBe(2);
+        // A failed sample still moves samplesCompleted server-side.
+        mockJourneyServer({
+            skills: SKILLS_3_OF_4.map(s =>
+                s.skillKey === 'tactics' ? { ...s, samplesCompleted: 3 } : s,
+            ),
+        });
+        await act(async () => {
+            result.current.refresh();
+        });
+        await waitFor(() =>
+            expect(result.current.journey!.skills.find(s => s.key === 'tactics')!.samplesCompleted).toBe(3),
+        );
+        expect(result.current.journey!.knowledge.state).toBe('locked');
+    });
 });
 
 describe('CredentialJourneySection', () => {
@@ -282,6 +423,61 @@ describe('CredentialJourneySection', () => {
             // Teaser text node must not be inside a pressable with a practical action.
             expect(node).toBeTruthy();
         }
+    });
+
+    test('enrollment. generic failure shows safe connectivity copy with retry', async () => {
+        mockEnsure.mockRejectedValueOnce(new Error('Network request failed'));
+        const screen = await render(
+            <CredentialJourneySection programSlug="chess-foundations" programTitle="Chess Foundations" recommendation={null} onVerifySkill={() => {}} onContinueLearning={() => {}} />,
+        );
+        await screen.findByText('Start Knowledge Check');
+        await fireEvent.press(screen.getByText('Start Knowledge Check'));
+        // User-visible, safe — never the raw RPC string, never silent.
+        expect(await screen.findByText('Knowledge check needs an internet connection.')).toBeTruthy();
+        expect(screen.queryByText(/Network request failed/)).toBeNull();
+        // Retry re-attempts the canonical flow.
+        mockEnsure.mockResolvedValue({ enrolled: true, alreadyEnrolled: true });
+        mockStart.mockResolvedValue({ attemptId: 'att-retry', programVersion: 'v2', questions: QUESTIONS });
+        await fireEvent.press(screen.getByText('Try again'));
+        expect(await screen.findByText('Q1?')).toBeTruthy();
+    });
+
+    test('enrollment. content-unavailable uses the temporary copy', async () => {
+        mockEnsure.mockRejectedValueOnce(new Error('enroll: credential_content_unavailable'));
+        const screen = await render(
+            <CredentialJourneySection programSlug="chess-foundations" programTitle="Chess Foundations" recommendation={null} onVerifySkill={() => {}} onContinueLearning={() => {}} />,
+        );
+        await screen.findByText('Start Knowledge Check');
+        await fireEvent.press(screen.getByText('Start Knowledge Check'));
+        expect(await screen.findByText(/temporarily unavailable/)).toBeTruthy();
+        expect(screen.queryByText('Knowledge check needs an internet connection.')).toBeNull();
+    });
+
+    test('refresh. refreshToken prop re-reads the journey', async () => {
+        const screen = await render(
+            <CredentialJourneySection
+                programSlug="chess-foundations"
+                programTitle="Chess Foundations"
+                recommendation={null}
+                onVerifySkill={() => {}}
+                onContinueLearning={() => {}}
+                refreshToken={0}
+            />,
+        );
+        await screen.findByText('Start Knowledge Check');
+        const callsBefore = mockSkills.mock.calls.length;
+        mockJourneyServer();
+        await screen.rerender(
+            <CredentialJourneySection
+                programSlug="chess-foundations"
+                programTitle="Chess Foundations"
+                recommendation={null}
+                onVerifySkill={() => {}}
+                onContinueLearning={() => {}}
+                refreshToken={1}
+            />,
+        );
+        await waitFor(() => expect(mockSkills.mock.calls.length).toBeGreaterThan(callsBefore));
     });
 });
 

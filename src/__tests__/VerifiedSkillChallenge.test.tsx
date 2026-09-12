@@ -4,7 +4,7 @@
  */
 import '@testing-library/jest-native/extend-expect';
 import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
+import { render, fireEvent, act, waitFor } from '@testing-library/react-native';
 import {
     VerifiedSkillChallenge,
     VerifySkillCta,
@@ -557,9 +557,11 @@ describe('AICoachTab prove_skill wiring', () => {
         expect(footerTextPresent(footer, 'Done for today')).toBe(true);
         expect(footerTextPresent(footer, 'Ask me')).toBe(true);
         expect(footerHasVerifyCard(footer)).toBe(false);
+        // No Verify CTA anywhere when no verification is due.
+        expect(screen.queryByText(/Verify/)).toBeNull();
     });
 
-    test('1/3/5. prove_skill surfaces a Verify CTA that starts the server challenge', async () => {
+    test('1/3/5. journey Verify CTA is the single CTA and starts the server challenge', async () => {
         const { getProgram } = require('../domain/credentials/catalog');
         mockUseIntelligence.mockReturnValue({
             hobbyId: 'chess',
@@ -568,7 +570,9 @@ describe('AICoachTab prove_skill wiring', () => {
             recommendation: { ...proveRec },
         });
         seedCoachGoal();
-        mockAvailability.mockResolvedValue([{ slug: 'chess-foundations', issuable: true }]);
+        mockAvailability.mockResolvedValue([
+            { slug: 'chess-foundations', issuable: true, programVersion: '1.0' },
+        ]);
         // Initial state is partial (CTA visible); the submit completes the gate.
         // Both fetchVerifyContext and the journey block read verification on
         // mount (either order), so serve PARTIAL to the first two callers and
@@ -586,24 +590,14 @@ describe('AICoachTab prove_skill wiring', () => {
         mockSubmit.mockResolvedValue({ passed: true, submitted: true, trustedEventId: 'srv:tab' });
         const { default: AICoachTab } = require('../screens/tabs/AICoachTab');
         const screen = await render(<AICoachTab />);
-        // The CTA uses the recommendation skill name, rendered in-conversation.
-        // Poll the live footer until the async verify context lands.
-        let pressVerify: (() => void) | null = null;
-        const ctaDeadline = Date.now() + 8000;
-        for (;;) {
-            const footer = await liveFooter(screen);
-            if (footerHasVerifyCard(footer)) {
-                pressVerify = footerActionOnPress(footer, /Verify Rules/);
-            }
-            if (pressVerify) break;
-            if (Date.now() > ctaDeadline) {
-                throw new Error('Verify CTA never appeared');
-            }
-            await new Promise(r => setTimeout(r, 50));
-        }
-        await act(async () => {
-            pressVerify!();
-        });
+        // Single official CTA: the journey block owns Verify; the footer
+        // carries no duplicate VerifySkillCta.
+        await screen.findByText('Verify Rules');
+        expect(screen.queryAllByText('Verify Rules').length).toBe(1);
+        const footer = await liveFooter(screen);
+        expect(footerHasVerifyCard(footer)).toBe(false);
+        const journeyReadsBefore = mockKnowledgeAttempts.mock.calls.length;
+        await fireEvent.press(screen.getByText('Verify Rules'));
         expect(mockStart).toHaveBeenCalledWith('chess-foundations', 'rules');
         // The server challenge opens inside the Coach experience...
         expect(await screen.findByText('Tab Q?')).toBeTruthy();
@@ -612,8 +606,13 @@ describe('AICoachTab prove_skill wiring', () => {
         expect(await screen.findByText('✓ Verified')).toBeTruthy();
         await fireEvent.press(screen.getByText('Continue'));
         expect(await screen.findByText(/Rules.*verified/i)).toBeTruthy();
-        // ...and the truth is re-read (availability + verification refreshed).
+        // ...the verify truth is re-read (availability + verification)…
         expect(mockSkillVerification.mock.calls.length).toBeGreaterThanOrEqual(2);
+        // …and the canonical journey refreshed to the completed gate:
+        // the block now shows the unlocked Knowledge step, not Verify.
+        await waitFor(() => expect(mockKnowledgeAttempts.mock.calls.length).toBeGreaterThan(journeyReadsBefore));
+        expect(await screen.findByText('Start Knowledge Check')).toBeTruthy();
+        expect(screen.queryByText('Verify Rules')).toBeNull();
     }, 30000);
 
     test('2/11. PASS without a full gate keeps the CTA and reports progress', async () => {
@@ -625,7 +624,9 @@ describe('AICoachTab prove_skill wiring', () => {
             recommendation: { ...proveRec },
         });
         seedCoachGoal();
-        mockAvailability.mockResolvedValue([{ slug: 'chess-foundations', issuable: true }]);
+        mockAvailability.mockResolvedValue([
+            { slug: 'chess-foundations', issuable: true, programVersion: '1.0' },
+        ]);
         mockSkillVerification.mockResolvedValue([{ ...RULES_PARTIAL }]);
         mockStart.mockResolvedValue({
             attemptId: 'att-tab-2',
@@ -636,20 +637,11 @@ describe('AICoachTab prove_skill wiring', () => {
         mockSubmit.mockResolvedValue({ passed: true, submitted: true, trustedEventId: 'srv:tab2' });
         const { default: AICoachTab } = require('../screens/tabs/AICoachTab');
         const screen = await render(<AICoachTab />);
-        let pressVerify: (() => void) | null = null;
-        const ctaDeadline = Date.now() + 8000;
-        for (;;) {
-            const footer = await liveFooter(screen);
-            if (footerHasVerifyCard(footer)) {
-                pressVerify = footerActionOnPress(footer, /Verify Rules/);
-            }
-            if (pressVerify) break;
-            if (Date.now() > ctaDeadline) throw new Error('Verify CTA never appeared');
-            await new Promise(r => setTimeout(r, 50));
-        }
-        await act(async () => {
-            pressVerify!();
-        });
+        // Single CTA lives in the journey block; the footer has no duplicate.
+        await screen.findByText('Verify Rules');
+        expect(screen.queryAllByText('Verify Rules').length).toBe(1);
+        expect(footerHasVerifyCard(await liveFooter(screen))).toBe(false);
+        await fireEvent.press(screen.getByText('Verify Rules'));
         expect(await screen.findByText('Tab Q2?')).toBeTruthy();
         await fireEvent.press(screen.getByText('Go'));
         // Partial proof: progress copy, never the verified claim.
