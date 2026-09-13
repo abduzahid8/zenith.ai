@@ -4,21 +4,23 @@ import {
     getCredentialProgress,
     getCredentialStageSnapshot,
     getProgramAvailability,
+    getProjectJourneySnapshot,
     getSkillVerification,
 } from '../services/trustApi';
 import type { FinalAttemptRow, KnowledgeAttemptRow, PracticalAttemptRow, SkillVerification } from '../services/trustApi';
 
 /**
- * Slice 4 — canonical credential journey read model.
+ * Slice 5 — canonical credential journey read model.
  *
  * NOT authority: it only composes existing server truth
- * (availability, skill verification, progress, and the shared
- * credential-stage live-release snapshot) into one stable UI model. Every
- * gate below mirrors server policy; the hook performs no grading, no
- * readiness inference beyond the unlock rules, and never reads local
- * stores. Knowledge + Practical + Final states are pinned to the SAME
- * current live content release via getCredentialStageSnapshot — retired
- * releases never surface.
+ * (availability, skill verification, progress, the shared
+ * credential-stage live-release snapshot, and the isolated project
+ * snapshot) into one stable UI model. Every gate below mirrors server
+ * policy; the hook performs no grading, no readiness inference beyond
+ * the unlock rules, and never reads local stores. Knowledge + Practical
+ * + Final states are pinned to the SAME current live content release via
+ * getCredentialStageSnapshot — retired releases never surface. A Project
+ * read failure isolates to the Project stage; frozen stages stay visible.
  */
 
 export type KnowledgeState =
@@ -32,6 +34,14 @@ export type KnowledgeState =
 export type PracticalState = KnowledgeState;
 
 export type FinalAssessmentState = KnowledgeState;
+
+export type ProjectState =
+    | 'locked'
+    | 'ready'
+    | 'under_review'
+    | 'needs_revision'
+    | 'passed'
+    | 'temporarily_unavailable';
 
 export interface JourneySkill {
     key: string;
@@ -62,6 +72,14 @@ export interface JourneyFinalAssessment {
     deadline: string | null;
 }
 
+export interface JourneyProject {
+    state: ProjectState;
+    submissionId: string | null;
+    score: number | null;
+    submittedAt: string | null;
+    reviewedAt: string | null;
+}
+
 export type JourneyNextAction =
     | { kind: 'verify_skill'; skillKey: string; skillName: string }
     | { kind: 'start_knowledge' }
@@ -70,6 +88,8 @@ export type JourneyNextAction =
     | { kind: 'continue_practical' }
     | { kind: 'start_final' }
     | { kind: 'continue_final' }
+    | { kind: 'submit_project' }
+    | { kind: 'revise_project' }
     | { kind: 'continue_learning' };
 
 export interface CredentialJourney {
@@ -85,6 +105,7 @@ export interface CredentialJourney {
     knowledge: JourneyKnowledge;
     practical: JourneyPractical;
     finalAssessment: JourneyFinalAssessment;
+    project: JourneyProject;
     nextAction: JourneyNextAction;
     /** True when the block carries anything worth showing. */
     visible: boolean;
@@ -113,6 +134,14 @@ export interface FinalAssessmentInputs {
     knowledgePassed: boolean;
     practicalPassed: boolean;
     allSkillsVerified: boolean;
+    unavailable: boolean;
+}
+
+export interface ProjectInputs {
+    submission: { id: string; createdAt: string | null } | null;
+    review: { submissionId: string; score: number | null; passed: boolean; reviewedAt: string | null } | null;
+    /** Project unlocks only behind a CURRENT Final Assessment PASS. */
+    finalPassed: boolean;
     unavailable: boolean;
 }
 
@@ -155,10 +184,12 @@ export function deriveKnowledgeState(input: KnowledgeInputs): JourneyKnowledge {
 
 /**
  * Pure next-action mapping. Verification/learning actions reuse the
- * existing canonical recommendation; knowledge actions follow state, then
- * practical behind a Knowledge PASS, then final behind a Practical PASS.
- * One primary CTA only — never competing stage buttons. The optional
- * trailing states keep older callers behaving exactly as before.
+ * existing canonical recommendation; stage actions follow state in
+ * upstream order (knowledge, practical behind Knowledge PASS, final
+ * behind Practical PASS, project behind Final PASS), so a stale upstream
+ * after rotation always wins over a submitted Project. One primary CTA
+ * only. The optional trailing states keep older callers behaving exactly
+ * as before.
  */
 export function deriveNextAction(
     recommendation: LearningRecommendation | null,
@@ -166,6 +197,7 @@ export function deriveNextAction(
     knowledgeState: KnowledgeState,
     practicalState?: PracticalState,
     finalState?: FinalAssessmentState,
+    projectState?: ProjectState,
 ): JourneyNextAction {
     if (knowledgeState === 'ready' || knowledgeState === 'failed') {
         return { kind: 'start_knowledge' };
@@ -186,6 +218,14 @@ export function deriveNextAction(
             }
             if (finalState === 'in_progress') {
                 return { kind: 'continue_final' };
+            }
+            if (finalState === 'passed' && projectState != null) {
+                if (projectState === 'ready') {
+                    return { kind: 'submit_project' };
+                }
+                if (projectState === 'needs_revision') {
+                    return { kind: 'revise_project' };
+                }
             }
         }
     }
@@ -276,6 +316,37 @@ export function deriveFinalAssessmentState(input: FinalAssessmentInputs): Journe
     return { state: 'ready', score: null, ...idle };
 }
 
+/**
+ * Pure project-state derivation from server facts. A result counts only
+ * when stamped for the LATEST submission id — older results never carry
+ * forward, so a newer pending revision stays under review and never
+ * inherits pass/fail. An already-submitted Project keeps its display
+ * even if upstream stages go stale later (rotation never hides it); the
+ * next-action mapping separately prioritizes the upstream step.
+ */
+export function deriveProjectState(input: ProjectInputs): JourneyProject {
+    if (input.unavailable) {
+        return { state: 'temporarily_unavailable', submissionId: null, score: null, submittedAt: null, reviewedAt: null };
+    }
+    if (!input.submission) {
+        if (input.finalPassed) {
+            return { state: 'ready', submissionId: null, score: null, submittedAt: null, reviewedAt: null };
+        }
+        return { state: 'locked', submissionId: null, score: null, submittedAt: null, reviewedAt: null };
+    }
+    const base = {
+        submissionId: input.submission.id,
+        submittedAt: input.submission.createdAt,
+    };
+    if (input.review && input.review.submissionId === input.submission.id) {
+        if (input.review.passed) {
+            return { state: 'passed', score: input.review.score, reviewedAt: input.review.reviewedAt, ...base };
+        }
+        return { state: 'needs_revision', score: input.review.score, reviewedAt: input.review.reviewedAt, ...base };
+    }
+    return { state: 'under_review', score: null, reviewedAt: null, ...base };
+}
+
 export interface JourneyInput {
     recommendation?: LearningRecommendation | null;
     /**
@@ -302,6 +373,7 @@ const HIDDEN_BASE: JourneyBase = {
     knowledge: { state: 'locked', score: null, attemptId: null },
     practical: { state: 'locked', score: null, attemptId: null },
     finalAssessment: { state: 'locked', score: null, attemptId: null, attemptNumber: null, deadline: null },
+    project: { state: 'locked', submissionId: null, score: null, submittedAt: null, reviewedAt: null },
 };
 
 interface JourneyBase {
@@ -314,6 +386,7 @@ interface JourneyBase {
     knowledge: JourneyKnowledge;
     practical: JourneyPractical;
     finalAssessment: JourneyFinalAssessment;
+    project: JourneyProject;
 }
 
 export function useCredentialJourney(
@@ -365,6 +438,21 @@ export function useCredentialJourney(
                     getCredentialStageSnapshot(programSlug, version),
                 ]);
                 if (cancelled) return;
+                // Isolated project read: its failure must never hide the
+                // frozen upstream stages.
+                let projectSubmission: { id: string; createdAt: string | null } | null = null;
+                let projectReview: {
+                    submissionId: string; score: number | null; passed: boolean; reviewedAt: string | null;
+                } | null = null;
+                let projectFailed = false;
+                try {
+                    const projectSnap = await getProjectJourneySnapshot(programSlug, version);
+                    projectSubmission = projectSnap.submission;
+                    projectReview = projectSnap.review;
+                } catch {
+                    projectFailed = true;
+                }
+                if (cancelled) return;
                 const mapped: JourneySkill[] = skills.map((s: SkillVerification) => ({
                     key: s.skillKey,
                     name: s.skillName,
@@ -400,6 +488,12 @@ export function useCredentialJourney(
                     allSkillsVerified: allVerified,
                     unavailable: !snapshot.contentAvailable,
                 });
+                const project = deriveProjectState({
+                    submission: projectSubmission,
+                    review: projectReview,
+                    finalPassed: finalAssessment.state === 'passed',
+                    unavailable: !snapshot.contentAvailable || projectFailed,
+                });
                 if (mounted.current) {
                     setBase({
                         available: true,
@@ -413,6 +507,7 @@ export function useCredentialJourney(
                         knowledge,
                         practical,
                         finalAssessment,
+                        project,
                     });
                 }
             } catch {
@@ -440,6 +535,7 @@ export function useCredentialJourney(
                 base.knowledge.state,
                 base.practical.state,
                 base.finalAssessment.state,
+                base.project.state,
             ),
             visible: base.available,
         };

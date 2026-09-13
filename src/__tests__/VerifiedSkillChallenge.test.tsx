@@ -17,6 +17,7 @@ import {
     getSkillVerification,
     getCredentialProgress,
     getCredentialStageSnapshot,
+    getProjectJourneySnapshot,
     getKnowledgeJourneySnapshot,
 } from '../services/trustApi';
 
@@ -28,6 +29,7 @@ jest.mock('../services/trustApi', () => ({
     getSkillVerification: jest.fn(),
     getCredentialProgress: jest.fn(),
     getCredentialStageSnapshot: jest.fn(),
+    getProjectJourneySnapshot: jest.fn(),
     getKnowledgeJourneySnapshot: jest.fn(),
     ensureEnrollment: jest.fn(),
     startKnowledgeAttempt: jest.fn(),
@@ -79,6 +81,7 @@ const mockSkillVerification = getSkillVerification as jest.Mock;
 const mockCredentialProgress = getCredentialProgress as jest.Mock;
 const mockKnowledgeSnapshot = getKnowledgeJourneySnapshot as jest.Mock;
 const mockStageSnapshot = getCredentialStageSnapshot as jest.Mock;
+const mockProjectSnapshot = getProjectJourneySnapshot as jest.Mock;
 
 const RULES_PARTIAL = {
     skillKey: 'rules',
@@ -460,6 +463,7 @@ describe('AICoachTab prove_skill wiring', () => {
             practical: { attempts: [], component: null },
             finalAssessment: { attempts: [], component: null },
         });
+        mockProjectSnapshot.mockResolvedValue({ submission: null, review: null });
     });
 
     function seedCoachGoal() {

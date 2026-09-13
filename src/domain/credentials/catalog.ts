@@ -165,6 +165,18 @@ export const CREDENTIAL_PROGRAMS: CredentialProgram[] = [
 export const getProgram = (slug: string) =>
     CREDENTIAL_PROGRAMS.find(p => p.slug === slug);
 
+/**
+ * Slice 5 — project display metadata only (label + description for the
+ * submission sheet). Server state remains authority; this never decides
+ * readiness, scoring, or review outcomes.
+ */
+export const getProjectRequirement = (slug: string): { label: string; description: string } | null => {
+    const program = getProgram(slug);
+    const entry = program?.requirements.find(r => r.key === 'project');
+    if (!entry) return null;
+    return { label: entry.label, description: entry.description };
+};
+
 /** Program whose evidence comes from this hobby's daily tasks, if any. */
 export const getProgramForHobby = (hobbyId: string) =>
     CREDENTIAL_PROGRAMS.find(p => p.evidenceHobbyIds.includes(hobbyId));

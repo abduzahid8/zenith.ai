@@ -15,6 +15,7 @@ import {
     ensureEnrollment,
     getCredentialProgress,
     getCredentialStageSnapshot,
+    getProjectJourneySnapshot,
     getKnowledgeJourneySnapshot,
     getProgramAvailability,
     getSkillVerification,
@@ -26,6 +27,7 @@ jest.mock('../services/trustApi', () => ({
     ensureEnrollment: jest.fn(),
     getCredentialProgress: jest.fn(),
     getCredentialStageSnapshot: jest.fn(),
+    getProjectJourneySnapshot: jest.fn(),
     getKnowledgeJourneySnapshot: jest.fn(),
     getProgramAvailability: jest.fn(),
     getSkillVerification: jest.fn(),
@@ -52,6 +54,7 @@ const mockEnsure = ensureEnrollment as jest.Mock;
 const mockProgress = getCredentialProgress as jest.Mock;
 const mockSnapshot = getKnowledgeJourneySnapshot as jest.Mock;
 const mockStage = getCredentialStageSnapshot as jest.Mock;
+const mockProject = getProjectJourneySnapshot as jest.Mock;
 const mockAvailability = getProgramAvailability as jest.Mock;
 const mockSkills = getSkillVerification as jest.Mock;
 const mockStart = startKnowledgeAttempt as jest.Mock;
@@ -87,6 +90,9 @@ function mockJourneyServer(opts: {
     practicalComponent?: null | object;
     finalAttempts?: unknown[];
     finalComponent?: null | object;
+    projectSubmission?: null | object;
+    projectReview?: null | object;
+    projectFails?: boolean;
 } = {}) {
     mockAvailability.mockResolvedValue([
         {
@@ -105,7 +111,7 @@ function mockJourneyServer(opts: {
     });
     // Shared live snapshot: ONE release identity for every stage. The
     // knowledge slice mirrors the legacy snapshot so Slice 2 assertions
-    // keep passing; practical/final default to locked.
+    // keep passing; practical/final/project default to locked.
     mockStage.mockResolvedValue({
         contentAvailable,
         knowledge: {
@@ -121,6 +127,14 @@ function mockJourneyServer(opts: {
             component: opts.finalComponent ?? null,
         },
     });
+    if (opts.projectFails) {
+        mockProject.mockRejectedValue(new Error('offline'));
+    } else {
+        mockProject.mockResolvedValue({
+            submission: opts.projectSubmission ?? null,
+            review: opts.projectReview ?? null,
+        });
+    }
 }
 
 beforeEach(() => {

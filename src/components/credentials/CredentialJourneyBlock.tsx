@@ -3,13 +3,14 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { scale } from '../../constants';
 import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
-import type { CredentialJourney, FinalAssessmentState, JourneyNextAction, KnowledgeState, PracticalState } from '../../hooks/useCredentialJourney';
+import type { CredentialJourney, FinalAssessmentState, JourneyNextAction, KnowledgeState, PracticalState, ProjectState } from '../../hooks/useCredentialJourney';
 
 /**
- * Slice 4 — compact credential journey block. Presentational only: every
+ * Slice 5 — compact credential journey block. Presentational only: every
  * value comes from useCredentialJourney (server truth). No percentages,
  * no dashboards, no local-store reads. One primary CTA. Project is a
- * non-interactive teaser after the Final pass — never an action.
+ * real stage once unlocked; Credential is a non-interactive teaser after
+ * the Project pass — never an action.
  */
 
 export interface JourneyPrimary {
@@ -36,6 +37,10 @@ export function primaryForAction(
             return { label: 'Start Final Assessment', kind: nextAction.kind };
         case 'continue_final':
             return { label: 'Continue Final Assessment', kind: nextAction.kind };
+        case 'submit_project':
+            return { label: 'Submit Project', kind: nextAction.kind };
+        case 'revise_project':
+            return { label: 'Revise Project', kind: nextAction.kind };
         case 'continue_learning':
             return { label: 'Continue learning', kind: nextAction.kind };
         default:
@@ -100,6 +105,25 @@ function finalStatusLine(state: FinalAssessmentState): string {
     }
 }
 
+function projectStatusLine(state: ProjectState): string {
+    switch (state) {
+        case 'locked':
+            return 'Locked until Final Assessment is passed';
+        case 'ready':
+            return 'Ready';
+        case 'under_review':
+            return 'Under review';
+        case 'needs_revision':
+            return 'Needs revision';
+        case 'passed':
+            return 'Passed';
+        case 'temporarily_unavailable':
+            return 'Temporarily unavailable';
+        default:
+            return '';
+    }
+}
+
 export interface CredentialJourneyBlockProps {
     journey: CredentialJourney;
     title: string;
@@ -118,7 +142,11 @@ export const CredentialJourneyBlock: React.FC<CredentialJourneyBlockProps> = ({
     alert,
 }) => {
     const { colors } = useAppTheme();
-    const showProjectTeaser = journey.finalAssessment.state === 'passed';
+    // Real Project stage once the Final is passed or a submission exists;
+    // Credential teaser only after the Project pass. Neither is ever a CTA.
+    const showProject =
+        journey.finalAssessment.state === 'passed' || journey.project.submissionId != null;
+    const showCredentialTeaser = journey.project.state === 'passed';
     const showLegacyPracticalTeaser =
         showPracticalTeaser === true && journey.knowledge.state === 'passed' && journey.practical.state !== 'passed';
     return (
@@ -184,9 +212,27 @@ export const CredentialJourneyBlock: React.FC<CredentialJourneyBlockProps> = ({
                         : ''}
                 </Text>
             )}
-            {showProjectTeaser && (
+            {showProject && (
+                <View>
+                    <Text style={[styles.section, { color: colors.textSecondary }]}>Project</Text>
+                    {journey.project.state === 'temporarily_unavailable' ? (
+                        <Text style={[styles.status, { color: colors.text }]}>
+                            Project status is temporarily unavailable.
+                        </Text>
+                    ) : (
+                        <Text style={[styles.status, { color: colors.text }]}>
+                            {journey.project.state === 'passed' ? '✓ Passed' : projectStatusLine(journey.project.state)}
+                            {journey.project.score != null &&
+                            (journey.project.state === 'passed' || journey.project.state === 'needs_revision')
+                                ? ` · Score: ${Math.round(journey.project.score)}%`
+                                : ''}
+                        </Text>
+                    )}
+                </View>
+            )}
+            {showCredentialTeaser && (
                 <Text style={[styles.teaser, { color: colors.textSecondary }]}>
-                    Project{'\n'}Next step
+                    Credential{'\n'}Next step
                 </Text>
             )}
             {alert && (

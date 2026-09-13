@@ -26,6 +26,7 @@ import {
     ensureEnrollment,
     getCredentialProgress,
     getCredentialStageSnapshot,
+    getProjectJourneySnapshot,
     getProgramAvailability,
     getSkillVerification,
     startPracticalAttempt,
@@ -38,6 +39,7 @@ jest.mock('../services/trustApi', () => ({
     ensureEnrollment: jest.fn(),
     getCredentialProgress: jest.fn(),
     getCredentialStageSnapshot: jest.fn(),
+    getProjectJourneySnapshot: jest.fn(),
     getKnowledgeJourneySnapshot: jest.fn(),
     getProgramAvailability: jest.fn(),
     getSkillVerification: jest.fn(),
@@ -63,6 +65,7 @@ jest.mock('../theme/useAppTheme', () => ({
 const mockEnsure = ensureEnrollment as jest.Mock;
 const mockProgress = getCredentialProgress as jest.Mock;
 const mockStage = getCredentialStageSnapshot as jest.Mock;
+const mockProject = getProjectJourneySnapshot as jest.Mock;
 const mockAvailability = getProgramAvailability as jest.Mock;
 const mockSkills = getSkillVerification as jest.Mock;
 const mockStartPractical = startPracticalAttempt as jest.Mock;
@@ -107,6 +110,9 @@ function mockJourneyServer(opts: {
     practicalComponent?: null | object;
     finalAttempts?: unknown[];
     finalComponent?: null | object;
+    projectSubmission?: null | object;
+    projectReview?: null | object;
+    projectFails?: boolean;
 } = {}) {
     mockAvailability.mockResolvedValue([
         {
@@ -133,6 +139,14 @@ function mockJourneyServer(opts: {
             component: opts.finalComponent ?? null,
         },
     });
+    if (opts.projectFails) {
+        mockProject.mockRejectedValue(new Error('offline'));
+    } else {
+        mockProject.mockResolvedValue({
+            submission: opts.projectSubmission ?? null,
+            review: opts.projectReview ?? null,
+        });
+    }
 }
 
 beforeEach(() => {
@@ -562,7 +576,7 @@ describe('journey UX: refresh, Final teaser, single CTA', () => {
         expect(screen.getAllByText(/Final Assessment/).length).toBeGreaterThanOrEqual(2);
     });
 
-    test('25. Project teaser appears only after Final PASS, stays non-interactive', async () => {
+    test('25. Final PASS unlocks Project Ready; Credential waits for Project PASS', async () => {
         mockJourneyServer({
             knowledgeComponent: { score: 91, passed: true },
             practicalAttempts: [{ id: 'p1', status: 'submitted', score: 100, passed: true, submittedAt: '2026-02-03' }],
@@ -573,14 +587,11 @@ describe('journey UX: refresh, Final teaser, single CTA', () => {
         const screen = await render(
             <CredentialJourneySection programSlug="chess-foundations" programTitle="Chess Foundations" recommendation={null} onVerifySkill={() => {}} onContinueLearning={() => {}} />,
         );
-        expect(await screen.findByText(/Project/)).toBeTruthy();
-        expect(await screen.findByText(/Next step/)).toBeTruthy();
-        expect(await screen.findByText('Continue learning')).toBeTruthy();
-        expect(screen.queryByText('Start Project')).toBeNull();
-        expect(screen.queryByText('Open Project')).toBeNull();
-        expect(screen.queryByText('Submit Project')).toBeNull();
-        expect(screen.queryByText('Start Final Assessment')).toBeNull();
-        expect(screen.queryByText('Continue Final Assessment')).toBeNull();
+        // Slice 5: real Project stage with a single Submit CTA.
+        expect(await screen.findByText('Project')).toBeTruthy();
+        expect(await screen.findByText('Submit Project')).toBeTruthy();
+        expect(screen.queryByText('Credential')).toBeNull();
+        expect(screen.queryByText('Claim Credential')).toBeNull();
     });
 
     test('26. one primary official CTA remains', async () => {

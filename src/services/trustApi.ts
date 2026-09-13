@@ -634,6 +634,90 @@ export interface KnowledgeComponentRow {
     passed: boolean;
 }
 
+export interface ProjectSubmissionSummary {
+    id: string;
+    artifactRef: string | null;
+    notes: string | null;
+    createdAt: string | null;
+}
+
+export interface ProjectReviewSummary {
+    submissionId: string;
+    score: number | null;
+    passed: boolean;
+    reviewedAt: string | null;
+}
+
+export interface ProjectJourneySnapshot {
+    /** Latest own submission for the exact program/version, or null. */
+    submission: ProjectSubmissionSummary | null;
+    /**
+     * Certification result bound to THAT exact submission id, or null.
+     * Results for older revisions never carry forward (revision binding).
+     */
+    review: ProjectReviewSummary | null;
+}
+
+/**
+ * Slice 5 — project read-authority snapshot over existing RLS only.
+ * Reads the latest own project_submissions row (created_at DESC, id
+ * DESC), then resolves project_certification_results for that exact
+ * submission_id. Never reads project_reviews directly; never exposes
+ * rubric or reviewer authority fields. Throws on read errors so the
+ * journey can isolate the failure to the Project stage.
+ */
+export const getProjectJourneySnapshot = async (
+    programSlug: string,
+    programVersion: string,
+): Promise<ProjectJourneySnapshot> => {
+    const supabase = getSupabase();
+    const { data: subData, error: subError } = await supabase
+        .from('project_submissions')
+        .select('id, artifact_ref, notes, created_at')
+        .eq('program_slug', programSlug)
+        .eq('version', programVersion)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(1);
+    if (subError) throw new Error(subError.message);
+    const subRow = (Array.isArray(subData) ? subData[0] : null) as unknown as {
+        id: unknown; artifact_ref: unknown; notes: unknown; created_at: unknown;
+    } | null;
+    if (subRow == null || typeof subRow.id !== 'string') {
+        return { submission: null, review: null };
+    }
+    const submission: ProjectSubmissionSummary = {
+        id: subRow.id,
+        artifactRef: typeof subRow.artifact_ref === 'string' ? subRow.artifact_ref : null,
+        notes: typeof subRow.notes === 'string' ? subRow.notes : null,
+        createdAt: typeof subRow.created_at === 'string' ? subRow.created_at : null,
+    };
+    const { data: certData, error: certError } = await supabase
+        .from('project_certification_results')
+        .select('submission_id, authoritative_score, passed, evaluated_at')
+        .eq('submission_id', submission.id)
+        .limit(1);
+    if (certError) throw new Error(certError.message);
+    const certRow = (Array.isArray(certData) ? certData[0] : null) as unknown as {
+        submission_id: unknown; authoritative_score: number | null; passed: unknown; evaluated_at: unknown;
+    } | null;
+    // Strict revision binding: only a result stamped for the latest
+    // submission id counts. Anything else (older revision, foreign row)
+    // is ignored — the submission stays under review.
+    if (certRow == null || certRow.submission_id !== submission.id) {
+        return { submission, review: null };
+    }
+    return {
+        submission,
+        review: {
+            submissionId: submission.id,
+            score: certRow.authoritative_score == null ? null : Number(certRow.authoritative_score),
+            passed: certRow.passed === true,
+            reviewedAt: typeof certRow.evaluated_at === 'string' ? certRow.evaluated_at : null,
+        },
+    };
+};
+
 export interface KnowledgeJourneySnapshot {
     /** False when no single live release exists: knowledge reads fail closed. */
     contentAvailable: boolean;
