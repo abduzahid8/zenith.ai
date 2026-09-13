@@ -10,7 +10,6 @@ import {
     Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { scale } from '../constants';
 import { fonts } from '../theme';
 import { useUserProfileStore, getGreeting } from '../store/userProfileStore';
@@ -29,7 +28,6 @@ export const HomeScreen: React.FC = () => {
     const { streakDays } = useUserProfileStore();
     const [menuVisible, setMenuVisible] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const router = useRouter();
 
     const { colors } = useAppTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
@@ -61,15 +59,6 @@ export const HomeScreen: React.FC = () => {
                         <Text style={styles.streakNumber}>{streakDays}</Text>
                         <FireIcon />
                     </View>
-                    {/* 🛠 DEBUG: временная кнопка для тестирования геймификации (скрыта)
-                    <TouchableOpacity
-                        style={styles.debugButton}
-                        onPress={() => router.push('/gamification-debug')}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={styles.debugButtonText}>🛠</Text>
-                    </TouchableOpacity>
-                    */}
                     <TouchableOpacity style={styles.menuButton} onPress={() => {
                         console.log('[HomeScreen] Menu button pressed - opening menu');
                         setMenuVisible(true);
@@ -125,18 +114,6 @@ const createStyles = (colors: any) => StyleSheet.create({
     },
     menuButton: {
         padding: scale(4),
-    },
-    // 🛠 DEBUG кнопка
-    debugButton: {
-        backgroundColor: '#FF6B35',
-        width: scale(32),
-        height: scale(32),
-        borderRadius: scale(16),
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    debugButtonText: {
-        fontSize: scale(16),
     },
     content: {
         flex: 1,

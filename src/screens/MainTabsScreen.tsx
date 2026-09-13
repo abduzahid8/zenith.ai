@@ -19,7 +19,7 @@ if (Platform.OS === 'android') {
     }
 }
 
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import PagerView from '../components/ui/PagerView';
 import { fonts } from '../theme';
 import { MenuDrawer } from '../components/NavigationSidebar';
@@ -39,7 +39,6 @@ import ScreenTimeTab from './tabs/ScreenTimeTab';
 const FireIcon = () => <Image source={require('../../icons/fire.png')} style={{ width: scale(24), height: scale(24), marginTop: -scale(2) }} resizeMode="contain" />;
 
 export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab = 2 }) => {
-    const router = useRouter();
     const pagerRef = useRef<typeof PagerView>(null);
     const [activeTab, setActiveTab] = useState(initialTab);
 
@@ -139,23 +138,6 @@ export const MainTabsScreen: React.FC<{ initialTab?: number }> = ({ initialTab =
                         <Text style={styles.streakNumber}>{completedTasksCount}</Text>
                         <FireIcon />
                     </View>
-                    {/* Временная кнопка дебага геймификации */}
-                    <TouchableOpacity 
-                        style={{
-                            backgroundColor: '#FF5722',
-                            padding: scale(6),
-                            borderRadius: scale(8),
-                            marginRight: scale(4)
-                        }} 
-                        onPress={() => {
-                            console.log('Navigating to gamification debug');
-                            router.push('/gamification-debug');
-                        }}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={{ color: '#FFF', fontSize: scale(14), fontWeight: 'bold' }}>🛠</Text>
-                    </TouchableOpacity>
-
                     <TouchableOpacity style={styles.menuButton} onPress={() => {
                         console.log('[MainTabsScreen] Menu button pressed - opening menu');
                         setMenuVisible(true);
