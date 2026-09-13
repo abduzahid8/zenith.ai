@@ -13,7 +13,7 @@ import {
     Image,
     AppState,
 } from 'react-native';
-import PagerView from 'react-native-pager-view';
+import PagerView from '../../components/ui/PagerView';
 import { WeeklyBarChart } from '../../components/WeeklyBarChart';
 import { HobbyTimeBarChart } from '../../components/HobbyTimeBarChart';
 import { useDeviceScreenTimeStore } from '../../store/deviceScreenTimeStore';
@@ -28,7 +28,7 @@ const WEEK_DAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEK_DAYS_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
 export const ScreenTimeTab: React.FC = () => {
-    const pagerRef = useRef<PagerView>(null);
+    const pagerRef = useRef<typeof PagerView>(null);
     const t = useT();
     const language = useLanguageStore((s) => s.language);
     const weekDays = language === 'ru' ? WEEK_DAYS_RU : WEEK_DAYS_EN;
