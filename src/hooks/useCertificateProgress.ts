@@ -32,6 +32,11 @@ import type { EngineTaskInput, SessionInput } from '../services/credentialServic
  * Displayed % is ALWAYS progress.certificationProgress (skillGraph.overall),
  * never learningCompletion. Scoring, weights, gates and completion rules
  * are untouched — this hook only unifies WHICH dataset every surface reads.
+ *
+ * Consumer rule: Hub cards display `overall`. The Detail "Learning journey"
+ * hero displays `learning` (curriculum consumed) — the only surface that
+ * does. Neither is verified skill: verified numbers come only from the
+ * server journey/claim reads.
  */
 export interface CertificateProgressResult {
     programSlug: string | null;

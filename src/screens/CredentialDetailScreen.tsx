@@ -153,7 +153,12 @@ export const CredentialDetailScreen: React.FC = () => {
     const serverState = slug ? (serverStatus[slug] ?? 'unknown') : 'unknown';
     const enrolled = resolveAuthoritativeEnrolled(serverState) === true;
     const enrollmentUnknown = resolveAuthoritativeEnrolled(serverState) === null;
-    const pct = Math.round(cert.overall);
+    // Learning-journey hero = curriculum-consumed projection (concept B),
+    // NOT certification (concept E) and NOT verified skill (concept D).
+    // The section is titled "Learning journey", so it must show `learning`;
+    // `overall` already has its surface (Hub cards) and verified numbers
+    // live only in the server credential card above.
+    const pct = Math.round(cert.learning);
     const failingCount = cert.skills.filter(s => !s.passed).length;
     const actionTitle =
         recommendation?.skillName ??
@@ -270,7 +275,10 @@ export const CredentialDetailScreen: React.FC = () => {
                     <>
                         <Text style={styles.sectionTitle}>{t('Learning journey')}</Text>
                         <View style={styles.heroCard}>
-                            <Text style={styles.heroKicker}>{t('Подтверждённый навык')}</Text>
+                            {/* Local curriculum progress — never labeled
+                                verified: verified numbers live only in the
+                                server credential card above. */}
+                            <Text style={styles.heroKicker}>{t('Прогресс обучения')}</Text>
                             <Text style={styles.heroPct}>{pct}%</Text>
                             <ProgressBar value={pct} />
                         </View>
