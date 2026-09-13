@@ -11,6 +11,15 @@
  * are `get_credential_status`; public verification is
  * `verifyCredentialPublic`. No function here may manufacture an object
  * that looks like a server-issued credential.
+ *
+ * ENROLLMENT TRUTH (unification): programs[slug].enrolled/enrolledAt is a
+ * HISTORICAL/LOCAL CACHE ONLY — never enrollment authority. Authoritative
+ * enrollment is the server user_credential_progress row for slug + current
+ * server version (see domain/credentials/enrollmentTruth +
+ * hooks/useServerEnrollment, the same source the credential journey
+ * uses). UI must NOT gate enrolled/locked/ready/issued on this flag.
+ * Writers may mirror a server-confirmed enrollment into this cache, but
+ * must never treat the mirror as truth (no optimistic enrollment).
  */
 
 import { create } from 'zustand';

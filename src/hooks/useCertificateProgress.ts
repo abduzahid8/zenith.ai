@@ -14,12 +14,20 @@ import type { EngineTaskInput, SessionInput } from '../services/credentialServic
 /**
  * A — one canonical certificate-progress selector.
  *
+ * SCOPE: LOCAL LEARNING/evidence projection ONLY. This hook computes what
+ * the user has already learned (engine tasks/sessions + local per-program
+ * cache) — it is NOT enrollment authority. Its `enrolled`/`eligible`
+ * fields mirror the local credentialStore cache and must NEVER gate
+ * enrolled/locked/ready/issued UI claims. Authoritative enrollment comes
+ * from the server-backed read (useServerEnrollment / useCredentialJourney:
+ * user_credential_progress row for slug + current server version).
+ *
  * Dependency direction:
  *   raw stores / Supabase
  *     -> useCredentialEngine (full 28-day history + sessions)
  *     -> existing credential domain (getEvidence / getProgress / skillGraph)
  *     -> useCertificateProgress(slug)
- *     -> all UI surfaces
+ *     -> local progress display ONLY (bars/scores), never CTA gating
  *
  * Displayed % is ALWAYS progress.certificationProgress (skillGraph.overall),
  * never learningCompletion. Scoring, weights, gates and completion rules

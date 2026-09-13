@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { ActivityIndicator, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,9 +10,13 @@ import { useT } from '../store/languageStore';
 import { CREDENTIAL_PROGRAMS, programShortTitle } from '../domain/credentials/catalog';
 import { useCredentialStore } from '../store/credentialStore';
 import { useAllCertificateProgress } from '../hooks/useCertificateProgress';
+import { resolveAuthoritativeEnrolled } from '../domain/credentials/enrollmentTruth';
+import { useServerEnrollment } from '../hooks/useServerEnrollment';
 import { ProgressBar } from '../components/credentials/SkillBar';
-import { getCredentialStatus, getProgramAvailability } from '../services/trustApi';
+import { ensureEnrollment, getCredentialStatus, getProgramAvailability } from '../services/trustApi';
 import type { CredentialClaimStatus } from '../services/trustApi';
+
+const HUB_PROGRAM_SLUGS = CREDENTIAL_PROGRAMS.map(p => p.slug);
 
 /**
  * Skills hub — what can I already prove?
@@ -21,6 +25,11 @@ import type { CredentialClaimStatus } from '../services/trustApi';
  * Slice 6: program availability (issuance_enabled) and the server
  * claim status decide what each card promises. Programs whose issuance
  * is disabled never show claim/verification actions — only learning.
+ *
+ * Enrollment truth (unification): enrolled/locked gating comes ONLY from
+ * the server-backed read (useServerEnrollment — same version-pinned
+ * source the credential journey treats as enrollment). The local
+ * credentialStore flag is a historical cache and is never authority here.
  */
 export const CredentialsScreen: React.FC = () => {
     const router = useRouter();
@@ -28,7 +37,10 @@ export const CredentialsScreen: React.FC = () => {
     const styles = useMemo(() => createStyles(colors), [colors]);
     const t = useT();
     const allCert = useAllCertificateProgress();
-    const enroll = useCredentialStore(s => s.enroll);
+    // Local projection (percent bars) only — never enrollment authority.
+    const { status: serverStatus, refresh: refreshServerEnrollment } =
+        useServerEnrollment(HUB_PROGRAM_SLUGS);
+    const [enrolling, setEnrolling] = useState<Record<string, boolean>>({});
     // Server availability + claim status. Unknown while loading: cards
     // fall back to the learning view, never to claim affordances.
     const [issuable, setIssuable] = useState<Record<string, boolean> | null>(null);
@@ -67,6 +79,27 @@ export const CredentialsScreen: React.FC = () => {
         router.push(`/credential/${slug}` as any);
     };
 
+    // Server enrollment first (idempotent). Only after the server confirms
+    // do we mirror into the local cache (cache only, never authority) and
+    // re-read server truth — no optimistic enrollment, ever. On failure we
+    // stay put with the CTA re-enabled; nothing is faked.
+    const enrollProgram = (slug: string) => {
+        if (enrolling[slug]) return;
+        setEnrolling(prev => ({ ...prev, [slug]: true }));
+        void (async () => {
+            try {
+                await ensureEnrollment(slug);
+                useCredentialStore.getState().enroll(slug);
+                refreshServerEnrollment();
+                openDetail(slug);
+            } catch {
+                // Network/server failure: no state change, user can retry.
+            } finally {
+                setEnrolling(prev => ({ ...prev, [slug]: false }));
+            }
+        })();
+    };
+
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
@@ -87,7 +120,14 @@ export const CredentialsScreen: React.FC = () => {
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
                 {CREDENTIAL_PROGRAMS.map(program => {
                     const cert = allCert[program.slug];
-                    const enrolled = cert?.enrolled ?? false;
+                    // Authoritative enrollment: server only. A stale local
+                    // flag can neither enroll nor unenroll this card.
+                    const serverState = serverStatus[program.slug] ?? 'unknown';
+                    const enrolled = resolveAuthoritativeEnrolled(serverState) === true;
+                    // Disabled issuance can never enroll: those cards keep
+                    // the learning-only fallback regardless of server state.
+                    const enrollmentUnknown =
+                        resolveAuthoritativeEnrolled(serverState) === null;
                     const pct = cert ? Math.round(cert.overall) : 0;
                     // Disabled issuance must never look issuable. Unknown
                     // (loading/offline) defaults to the learning view.
@@ -120,6 +160,13 @@ export const CredentialsScreen: React.FC = () => {
                                         <Text style={styles.secondaryText}>{t('Подробнее')}</Text>
                                     </TouchableOpacity>
                                 </>
+                            ) : !disabled && (enrollmentUnknown || enrolling[program.slug]) ? (
+                                // Server state not yet known (or enroll call
+                                // in flight): neutral loading, never a claim
+                                // in either direction.
+                                <View style={styles.primaryButton}>
+                                    <ActivityIndicator color="#FFFFFF" />
+                                </View>
                             ) : (
                                 <TouchableOpacity
                                     style={styles.primaryButton}
@@ -132,8 +179,7 @@ export const CredentialsScreen: React.FC = () => {
                                             return;
                                         }
                                         console.log('[Credentials] Enroll pressed:', program.slug);
-                                        enroll(program.slug);
-                                        openDetail(program.slug);
+                                        enrollProgram(program.slug);
                                     }}
                                 >
                                     <Text style={styles.primaryText}>

@@ -10,12 +10,14 @@ import { useT, useLanguageStore } from '../store/languageStore';
 import { getProgram, programShortTitle } from '../domain/credentials/catalog';
 import { useCredentialStore } from '../store/credentialStore';
 import { useCertificateProgress } from '../hooks/useCertificateProgress';
+import { resolveAuthoritativeEnrolled } from '../domain/credentials/enrollmentTruth';
+import { useServerEnrollment } from '../hooks/useServerEnrollment';
 import { useLearningIntelligence } from '../hooks/useLearningIntelligence';
 import { useTaskStore } from '../store/taskStore';
 import { ProgressBar, SkillBar } from '../components/credentials/SkillBar';
 import { routeForRecommendation } from '../domain/sessions/sessionRouting';
 import { reasonCopy } from '../utils/learningCopy';
-import { getCredentialStatus } from '../services/trustApi';
+import { ensureEnrollment, getCredentialStatus } from '../services/trustApi';
 import type { CredentialClaimStatus } from '../services/trustApi';
 import { verifyCredentialPublic } from '../services/credentialVerification';
 import type { PublicCredential } from '../services/credentialVerification';
@@ -42,7 +44,10 @@ export const CredentialDetailScreen: React.FC = () => {
     const styles = useMemo(() => createStyles(colors), [colors]);
     const t = useT();
     const cert = useCertificateProgress(slug || null);
-    const enroll = useCredentialStore(s => s.enroll);
+    // Local learning projection only (bars/scores) — never enrollment authority.
+    const { status: serverStatus, refresh: refreshServerEnrollment } =
+        useServerEnrollment(slug ? [slug] : []);
+    const [enrolling, setEnrolling] = useState(false);
     const getReadiness = useCredentialStore(s => s.getReadiness);
     const snapshot = useTaskStore(s => s.snapshot);
     const dailyTasks = useTaskStore(s => s.dailyTasks);
@@ -100,6 +105,27 @@ export const CredentialDetailScreen: React.FC = () => {
         router.push(`/verify/${status.credentialId}` as any);
     }, [router, status?.credentialId]);
 
+    // Server enrollment first (idempotent). Only after the server confirms
+    // do we mirror into the local cache (cache only, never authority), then
+    // re-read: server state → refresh → UI reflects enrollment. No
+    // optimistic credential progression; on failure we stay put.
+    const enrollProgram = useCallback(() => {
+        if (!slug || enrolling) return;
+        setEnrolling(true);
+        void (async () => {
+            try {
+                await ensureEnrollment(slug);
+                useCredentialStore.getState().enroll(slug);
+                refreshServerEnrollment();
+                await loadCredential();
+            } catch {
+                // Network/server failure: no state change, user can retry.
+            } finally {
+                setEnrolling(false);
+            }
+        })();
+    }, [slug, enrolling, refreshServerEnrollment, loadCredential]);
+
     const readiness = useMemo(() => {
         if (!program || !cert.eligible) return null;
         try {
@@ -121,7 +147,12 @@ export const CredentialDetailScreen: React.FC = () => {
         );
     }
 
-    const enrolled = cert.enrolled;
+    // Authoritative enrollment: server only. A stale local flag can
+    // neither enroll nor unenroll this screen. `cert` below remains the
+    // local historical learning projection (bars/scores), not authority.
+    const serverState = slug ? (serverStatus[slug] ?? 'unknown') : 'unknown';
+    const enrolled = resolveAuthoritativeEnrolled(serverState) === true;
+    const enrollmentUnknown = resolveAuthoritativeEnrolled(serverState) === null;
     const pct = Math.round(cert.overall);
     const failingCount = cert.skills.filter(s => !s.passed).length;
     const actionTitle =
@@ -235,23 +266,7 @@ export const CredentialDetailScreen: React.FC = () => {
 
                 {renderCredentialCard()}
 
-                {!enrolled ? (
-                    <View style={styles.card}>
-                        <Text style={styles.body}>
-                            {t('Учись как обычно — Zenyth сам проверит навыки по твоим занятиям.')}
-                        </Text>
-                        <TouchableOpacity
-                            style={styles.primaryButton}
-                            activeOpacity={0.85}
-                            onPress={() => {
-                                console.log('[CredentialDetail] Enroll pressed:', slug);
-                                enroll(slug);
-                            }}
-                        >
-                            <Text style={styles.primaryText}>{t('Начать проверку')}</Text>
-                        </TouchableOpacity>
-                    </View>
-                ) : (
+                {enrolled ? (
                     <>
                         <Text style={styles.sectionTitle}>{t('Learning journey')}</Text>
                         <View style={styles.heroCard}>
@@ -301,6 +316,28 @@ export const CredentialDetailScreen: React.FC = () => {
                             </View>
                         )}
                     </>
+                ) : enrollmentUnknown || enrolling ? (
+                    // Server state not yet known (or enroll call in flight):
+                    // neutral loading, never a claim in either direction.
+                    <View style={styles.card}>
+                        <ActivityIndicator size="small" />
+                    </View>
+                ) : (
+                    <View style={styles.card}>
+                        <Text style={styles.body}>
+                            {t('Учись как обычно — Zenyth сам проверит навыки по твоим занятиям.')}
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.primaryButton}
+                            activeOpacity={0.85}
+                            onPress={() => {
+                                console.log('[CredentialDetail] Enroll pressed:', slug);
+                                enrollProgram();
+                            }}
+                        >
+                            <Text style={styles.primaryText}>{t('Начать проверку')}</Text>
+                        </TouchableOpacity>
+                    </View>
                 )}
             </ScrollView>
         </SafeAreaView>
