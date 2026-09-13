@@ -453,6 +453,33 @@ describe('final runner: server-deadline timer', () => {
         expect(formatCountdown(5)).toBe('0:05');
         expect(formatCountdown(3700)).toBe('1:01:40');
     });
+
+    test('timer skew: same-identity resume reconciles once across ticks; submit stays server-owned', async () => {
+        // Client clock already past the deadline, but the server still sees
+        // the attempt as active and resumes the SAME id + deadline.
+        const skewedDeadline = new Date(Date.now() - 5000).toISOString();
+        mockStartFinal.mockResolvedValue(finalStart({ deadline: skewedDeadline, retakeReason: 'active_attempt' }));
+        mockSubmitFinal.mockResolvedValue({ score: 92, passed: true, submitted: true, contentStale: false });
+        const screen = await render(<CredentialChallengeRunner {...baseProps} />);
+        // Initial start + exactly one auto-reconcile.
+        await waitFor(() => expect(mockStartFinal.mock.calls.length).toBe(2));
+        // Several client timer ticks pass: no further automatic calls.
+        await new Promise(resolve => setTimeout(resolve, 2600));
+        expect(mockStartFinal.mock.calls.length).toBe(2);
+        // No local failure invented; the attempt keeps rendering.
+        expect(await screen.findByText('Final Q1?')).toBeTruthy();
+        expect(screen.queryByText('Time expired')).toBeNull();
+        expect(screen.queryByText('Final Assessment not passed')).toBeNull();
+        expect(screen.queryByText(/Score/)).toBeNull();
+        expect(mockSubmitFinal).not.toHaveBeenCalled();
+        // Manual submit remains available and server-owned.
+        await fireEvent.press(screen.getByText('A1'));
+        await fireEvent.press(screen.getByText('Continue'));
+        await fireEvent.press(screen.getByText('A2'));
+        await fireEvent.press(screen.getByText('Submit Final Assessment'));
+        expect(mockSubmitFinal).toHaveBeenCalledWith('att-f1', { fq1: 'A1', fq2: 'A2' });
+        expect(await screen.findByText('Final Assessment passed')).toBeTruthy();
+    });
 });
 
 describe('final runner: expiry, pass/fail, rotation, errors', () => {
@@ -806,7 +833,7 @@ describe('final journey UX: refresh, Project teaser, single CTA', () => {
         expect(files.length).toBeGreaterThan(0);
         const beyond = files.filter(f => {
             const m = /^(\d+)_/.exec(f);
-            return m != null && Number(m[1]) > 36;
+            return m != null && Number(m[1]) > 37;
         });
         expect(beyond).toEqual([]);
         const api: string = fs.readFileSync(path.join(process.cwd(), 'src/services/trustApi.ts'), 'utf8');

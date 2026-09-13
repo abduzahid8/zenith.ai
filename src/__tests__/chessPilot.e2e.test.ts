@@ -359,6 +359,7 @@ describe('integrity: compromised banks have zero authority', () => {
         await asRole(db, 'authenticated', uidR, () => db.query('SELECT * FROM enroll_in_program($1)', [QUAD]));
         await passValidations(uidR, 4);
         await passKnowledgePractical(uidR);
+        await passFinal(uidR);
         await passProject(uidR);
         const deadSet = '55555555-5555-5555-5555-555555555555';
         await db.query(
@@ -375,7 +376,15 @@ describe('integrity: compromised banks have zero authority', () => {
                  attempt_number, status, score, passed, submitted_at, assigned_question_ids,
                  bank_version)
              VALUES ('${deadAtt}', $1, '${QUAD}',
-                     '${deadSet}', '1.0', 1, 'submitted', 100, TRUE, NOW(), '[]', 'quad-v1')`,
+                     '${deadSet}', '1.0', 2, 'submitted', 100, TRUE, NOW(), '[]', 'quad-v1')`,
+            [uidR],
+        );
+        // Point the component at the retired set (clear the live pass first;
+        // best-wins would otherwise keep the authoritative live reference).
+        await db.query(
+            `DELETE FROM credential_component_results
+             WHERE user_id = $1 AND program_slug = '${QUAD}' AND program_version = '1.0'
+               AND component = 'final_assessment'`,
             [uidR],
         );
         await db.query(
@@ -429,6 +438,10 @@ describe('integrity: project authority', () => {
         await asRole(db, 'authenticated', uid, () =>
             db.query('SELECT * FROM enroll_in_program($1)', [QUAD]),
         );
+        // Migration 037 readiness: verified skills + live K/P + live Final.
+        await passValidations(uid, 4);
+        await passKnowledgePractical(uid);
+        await passFinal(uid);
         const sub = await asRole(db, 'authenticated', uid, () =>
             db.query('SELECT * FROM submit_project($1, $2, $3)', [QUAD, 'artifact://x', 'my notes']).then(r => r.rows[0].submission_id as string),
         );
@@ -454,8 +467,12 @@ describe('integrity: project authority', () => {
         await asRole(db, 'authenticated', uid, () =>
             db.query('SELECT * FROM enroll_in_program($1)', [QUAD]),
         );
+        // Migration 037: non-empty payload + Final readiness precede submit.
+        await passValidations(uid, 4);
+        await passKnowledgePractical(uid);
+        await passFinal(uid);
         const sub = await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM submit_project($1, $2, $3)', [QUAD, null, null]).then(r => r.rows[0].submission_id as string),
+            db.query('SELECT * FROM submit_project($1, $2, $3)', [QUAD, 'artifact://r', 'review notes']).then(r => r.rows[0].submission_id as string),
         );
         await asRole(db, 'authenticated', uid, () =>
             expectDbDenied(
@@ -779,6 +796,10 @@ describe('integrity: project enrollment + immutable revisions', () => {
         await asRole(db, 'authenticated', uid, () =>
             db.query('SELECT * FROM enroll_in_program($1)', ['e2e-quad-integrity']),
         );
+        // Migration 037 readiness precedes the post-enrollment submit.
+        await passValidations(uid, 4);
+        await passKnowledgePractical(uid);
+        await passFinal(uid);
         const sub = await asRole(db, 'authenticated', uid, () =>
             db.query('SELECT * FROM submit_project($1, $2, $3)', ['e2e-quad-integrity', 'artifact://e', 'n']).then(r => r.rows[0].submission_id as string),
         );
@@ -793,8 +814,13 @@ describe('integrity: project enrollment + immutable revisions', () => {
         await asRole(db, 'authenticated', uid, () =>
             db.query('SELECT * FROM enroll_in_program($1)', ['e2e-quad-integrity']),
         );
+        // Migration 037: empty payloads never create rows; Final readiness
+        // precedes the submit.
+        await passValidations(uid, 4);
+        await passKnowledgePractical(uid);
+        await passFinal(uid);
         const sub = await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM submit_project($1, $2, $3)', ['e2e-quad-integrity', null, null]).then(r => r.rows[0].submission_id as string),
+            db.query('SELECT * FROM submit_project($1, $2, $3)', ['e2e-quad-integrity', 'artifact://rev', 'rev']).then(r => r.rows[0].submission_id as string),
         );
         await db.query(
             `INSERT INTO project_reviews (submission_id, revision, rubric, authoritative_score, passed, reviewer)
