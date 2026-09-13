@@ -161,7 +161,9 @@ export default function GoalDetailScreen() {
   const progress = snapshot.progress;
   const currentVal = (goal.category === 'skill' ? (progress.currentDifficulty ?? goal.difficultyScore ?? 500) : progress.currentValue);
   const targetVal = (goal.category === 'skill' ? (goal.targetDifficulty ?? goal.target) : goal.target);
-  const barPct = Math.min(100, Math.max(0, (currentVal / Math.max(1, targetVal)) * 100));
+  // ONE Goal Progress authority: canonical snapshot percent (handler math
+  // with the starting-value offset). Clamped for display only.
+  const barPct = Math.min(100, Math.max(0, snapshot.percentComplete));
   const isSkill = goal.category === 'skill';
   const unit = goal.unitLabel || (isSkill ? 'pts' : 'units');
   const daysIn = progress.history.length;

@@ -32,7 +32,11 @@ export const GoalProgressBar: React.FC<GoalProgressBarProps> = ({ snapshot, onEd
   const currentVal = isSkill ? (liveProgress.currentDifficulty ?? definition.difficultyScore ?? 500) : liveProgress.currentValue;
   const targetVal = isSkill ? (definition.targetDifficulty ?? definition.target) : definition.target;
   const remaining = Math.max(0, targetVal - currentVal);
-  const barPercent = Math.min(100, Math.max(0, (currentVal / Math.max(1, targetVal)) * 100));
+  // ONE Goal Progress authority: the canonical snapshot percent (handler
+  // math with the starting-value offset). Never recompute current/target
+  // here — that duplicate disagrees with Weekly Plan whenever
+  // startingValue != 0. Clamped for display only.
+  const barPercent = Math.min(100, Math.max(0, snapshot.percentComplete));
 
   const card = (
     <View style={[styles.card, { borderLeftColor: accent }]}>
