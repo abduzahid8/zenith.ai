@@ -69,20 +69,20 @@ export const DailyGoalCard: React.FC<DailyGoalCardProps> = ({ snapshot, colors, 
   };
 
   const doRecordDone = useCallback(() => {
+    // Containment (Phase 1 follow-up — same model as GoalDetail did_it):
+    // a tap is acknowledgement, not validated learning. No
+    // recordDailyAction/recordCheckin, no completeDailyContent, no
+    // difficulty signal. Validated progress is written exclusively by the
+    // swipe-session finalizer. The 'helpful' preference signal stays: it
+    // only tunes future content, never progress. The local completedAt
+    // stamp only acknowledges this card instance (dismiss + rating flow);
+    // it is never persisted as validated completion.
     const store = useGoalStore.getState();
-    const goal = snapshot.definition;
-
-    if (isSkill) {
-      store.recordDailyAction(goal.hobby, 1, `coach: ${content!.doNow.title}`);
-    } else {
-      store.recordCheckin(liveProgress.currentValue, `coach: ${content!.doNow.title}`, undefined, goal.hobby);
-    }
-    store.completeDailyContent(goalId);
     store.recordCoachFeedback(goalId, 'helpful');
     setContent(c => c ? { ...c, completedAt: new Date().toISOString() } : c);
     setActionInFlight(false);
     animatePhase('rating');
-  }, [content, goalId, snapshot, isSkill, liveProgress.currentValue]);
+  }, [goalId]);
 
   const handleMarkDone = useCallback(() => {
     if (!content || content.completedAt || actionInFlight) return;
@@ -93,8 +93,11 @@ export const DailyGoalCard: React.FC<DailyGoalCardProps> = ({ snapshot, colors, 
   const handleSkip = useCallback(() => {
     if (!content || content.completedAt || actionInFlight) return;
     setActionInFlight(true);
+    // Dismissal, not completion: skipped work must never read as completed
+    // learning, so completeDailyContent is never stamped here. The local
+    // stamp only dismisses this card instance; the 'skipped' preference
+    // signal stays (tunes future content, never progress).
     const store = useGoalStore.getState();
-    store.completeDailyContent(goalId);
     store.recordCoachFeedback(goalId, 'skipped');
     setContent(c => c ? { ...c, completedAt: new Date().toISOString() } : c);
     setActionInFlight(false);
@@ -104,15 +107,15 @@ export const DailyGoalCard: React.FC<DailyGoalCardProps> = ({ snapshot, colors, 
 
   const handleRating = useCallback((result: 'completed_easy' | 'completed_struggled' | 'skipped') => {
     const store = useGoalStore.getState();
-    if (isSkill && result !== 'skipped') {
-      store.adjustDifficulty(snapshot.definition.hobby, result);
-    }
+    // Rating is an input signal only — never a difficulty/progress write.
+    // Skill difficulty adapts exclusively from validated sessions, so
+    // adjustDifficulty is never called from this tap path.
     if (result === 'skipped') {
       store.recordCoachFeedback(goalId, 'not_helpful');
     }
     animatePhase('done');
     onRefresh?.(store.getSnapshotById(goalId));
-  }, [isSkill, goalId, snapshot, onRefresh]);
+  }, [goalId, onRefresh]);
 
   // ── Loading ──
   if (loading) {

@@ -843,8 +843,12 @@ export default function GoalJourneyScreen() {
                 index={index} total={PAGES.length}
                 onStartSession={() => setSessionActive(true)}
                 onCompleteDay={() => {
-                  useGoalStore.getState().recordDailyAction(goal.hobby, 1, 'completed');
-                  useGoalStore.getState().completeDailyContent(goal.id);
+                  // Containment (Phase 1 follow-up — same model as GoalDetail
+                  // did_it): a tap acknowledges UI state only. No
+                  // recordDailyAction, no completeDailyContent. Validated
+                  // progress is written exclusively by the swipe-session
+                  // finalizer, so the celebration below reflects only real
+                  // sessions.
                   setFinished(true);
                   setSessionActive(false);
                 }}
@@ -873,8 +877,8 @@ export default function GoalJourneyScreen() {
           onClose={() => setSessionActive(false)}
           onOpenAsset={(a) => setViewingAsset(a)}
           onCompleteAll={() => {
-            useGoalStore.getState().recordDailyAction(goal.hobby, 1, 'completed');
-            useGoalStore.getState().completeDailyContent(goal.id);
+            // Containment (Phase 1 follow-up): local step checklist is
+            // acknowledgement only — same rule as onCompleteDay above.
             setFinished(true);
             setSessionActive(false);
           }}
