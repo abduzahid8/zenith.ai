@@ -2,22 +2,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LearningRecommendation } from '../domain/sessions/nextBestAction';
 import {
     getCredentialProgress,
-    getKnowledgeJourneySnapshot,
+    getCredentialStageSnapshot,
     getProgramAvailability,
     getSkillVerification,
 } from '../services/trustApi';
-import type { KnowledgeAttemptRow, SkillVerification } from '../services/trustApi';
+import type { KnowledgeAttemptRow, PracticalAttemptRow, SkillVerification } from '../services/trustApi';
 
 /**
- * Slice 2 — canonical credential journey read model.
+ * Slice 3 — canonical credential journey read model.
  *
  * NOT authority: it only composes existing server truth
- * (availability, skill verification, progress, and the Knowledge
- * live-release snapshot) into one stable UI model. Every gate below
- * mirrors server policy; the hook performs no grading, no readiness
- * inference beyond the unlock rule, and never reads local stores.
- * Knowledge state is pinned to the current live content release via
- * getKnowledgeJourneySnapshot — retired releases never surface.
+ * (availability, skill verification, progress, and the shared
+ * credential-stage live-release snapshot) into one stable UI model. Every
+ * gate below mirrors server policy; the hook performs no grading, no
+ * readiness inference beyond the unlock rules, and never reads local
+ * stores. Knowledge + Practical states are pinned to the SAME current
+ * live content release via getCredentialStageSnapshot — retired releases
+ * never surface.
  */
 
 export type KnowledgeState =
@@ -27,6 +28,8 @@ export type KnowledgeState =
     | 'passed'
     | 'failed'
     | 'temporarily_unavailable';
+
+export type PracticalState = KnowledgeState;
 
 export interface JourneySkill {
     key: string;
@@ -43,10 +46,18 @@ export interface JourneyKnowledge {
     attemptId: string | null;
 }
 
+export interface JourneyPractical {
+    state: PracticalState;
+    score: number | null;
+    attemptId: string | null;
+}
+
 export type JourneyNextAction =
     | { kind: 'verify_skill'; skillKey: string; skillName: string }
     | { kind: 'start_knowledge' }
     | { kind: 'continue_knowledge' }
+    | { kind: 'start_practical' }
+    | { kind: 'continue_practical' }
     | { kind: 'continue_learning' };
 
 export interface CredentialJourney {
@@ -60,6 +71,7 @@ export interface CredentialJourney {
     verifiedSkillCount: number;
     totalSkillCount: number;
     knowledge: JourneyKnowledge;
+    practical: JourneyPractical;
     nextAction: JourneyNextAction;
     /** True when the block carries anything worth showing. */
     visible: boolean;
@@ -68,6 +80,15 @@ export interface CredentialJourney {
 export interface KnowledgeInputs {
     component: { score: number; passed: boolean } | null;
     attempts: KnowledgeAttemptRow[];
+    allSkillsVerified: boolean;
+    unavailable: boolean;
+}
+
+export interface PracticalInputs {
+    component: { score: number; passed: boolean } | null;
+    attempts: PracticalAttemptRow[];
+    /** Practical unlocks only behind a CURRENT live Knowledge PASS. */
+    knowledgePassed: boolean;
     allSkillsVerified: boolean;
     unavailable: boolean;
 }
@@ -111,12 +132,16 @@ export function deriveKnowledgeState(input: KnowledgeInputs): JourneyKnowledge {
 
 /**
  * Pure next-action mapping. Verification/learning actions reuse the
- * existing canonical recommendation; knowledge actions follow state.
+ * existing canonical recommendation; knowledge actions follow state, then
+ * practical actions behind a Knowledge PASS. One primary CTA only — never
+ * competing Knowledge + Practical buttons. The optional practicalState
+ * keeps Slice 2 callers (3 args) behaving exactly as before.
  */
 export function deriveNextAction(
     recommendation: LearningRecommendation | null,
     allSkillsVerified: boolean,
     knowledgeState: KnowledgeState,
+    practicalState?: PracticalState,
 ): JourneyNextAction {
     if (knowledgeState === 'ready' || knowledgeState === 'failed') {
         return { kind: 'start_knowledge' };
@@ -124,10 +149,54 @@ export function deriveNextAction(
     if (knowledgeState === 'in_progress') {
         return { kind: 'continue_knowledge' };
     }
+    if (knowledgeState === 'passed' && practicalState != null) {
+        if (practicalState === 'ready' || practicalState === 'failed') {
+            return { kind: 'start_practical' };
+        }
+        if (practicalState === 'in_progress') {
+            return { kind: 'continue_practical' };
+        }
+    }
     if (!allSkillsVerified && recommendation?.type === 'prove_skill' && recommendation.skillKey && recommendation.skillName) {
         return { kind: 'verify_skill', skillKey: recommendation.skillKey, skillName: recommendation.skillName };
     }
     return { kind: 'continue_learning' };
+}
+
+/**
+ * Pure practical-state derivation from server facts. Unlock rule: READY
+ * only when every skill stays server-verified AND the CURRENT live
+ * Knowledge component is passed AND no passed practical component exists.
+ * Learning progress is never an input. Only live `started` / `submitted`
+ * rows participate — superseded or unknown statuses are ignored.
+ */
+export function derivePracticalState(input: PracticalInputs): JourneyPractical {
+    if (input.unavailable) {
+        return { state: 'temporarily_unavailable', score: null, attemptId: null };
+    }
+    if (!input.allSkillsVerified || !input.knowledgePassed) {
+        return { state: 'locked', score: null, attemptId: null };
+    }
+    if (input.component && input.component.passed) {
+        return { state: 'passed', score: input.component.score, attemptId: null };
+    }
+    const live = input.attempts.filter(a => a.status === 'started' || a.status === 'submitted');
+    const active = live.find(a => a.status === 'started') ?? null;
+    if (active) {
+        return { state: 'in_progress', score: null, attemptId: active.id };
+    }
+    const submitted = live.filter(a => a.status === 'submitted');
+    if (submitted.length > 0) {
+        const latest = submitted
+            .slice()
+            .sort((a, b) => String(b.submittedAt ?? '').localeCompare(String(a.submittedAt ?? '')))[0];
+        if (latest.passed === true) {
+            // Defensive: a passed attempt without a component row yet.
+            return { state: 'ready', score: latest.score, attemptId: null };
+        }
+        return { state: 'failed', score: latest.score, attemptId: null };
+    }
+    return { state: 'ready', score: null, attemptId: null };
 }
 
 export interface JourneyInput {
@@ -154,6 +223,7 @@ const HIDDEN_BASE: JourneyBase = {
     verifiedSkillCount: 0,
     totalSkillCount: 0,
     knowledge: { state: 'locked', score: null, attemptId: null },
+    practical: { state: 'locked', score: null, attemptId: null },
 };
 
 interface JourneyBase {
@@ -164,6 +234,7 @@ interface JourneyBase {
     verifiedSkillCount: number;
     totalSkillCount: number;
     knowledge: JourneyKnowledge;
+    practical: JourneyPractical;
 }
 
 export function useCredentialJourney(
@@ -181,14 +252,22 @@ export function useCredentialJourney(
     }, []);
 
     const refresh = useCallback(() => setNonce(n => n + 1), []);
+    const prevSlug = useRef<string | null>(null);
 
     useEffect(() => {
         let cancelled = false;
         if (!programSlug) {
+            prevSlug.current = null;
             setBase(null);
             return;
         }
-        setBase(null);
+        // Keep the last good base visible across refreshes so an open
+        // runner sheet never unmounts mid-submit; null only when the
+        // program identity itself changes (or first load).
+        if (prevSlug.current !== programSlug) {
+            prevSlug.current = programSlug;
+            setBase(null);
+        }
         (async () => {
             try {
                 const programs = await getProgramAvailability();
@@ -204,7 +283,7 @@ export function useCredentialJourney(
                 const [skills, progress, snapshot] = await Promise.all([
                     getSkillVerification(programSlug),
                     getCredentialProgress(programSlug, version),
-                    getKnowledgeJourneySnapshot(programSlug, version),
+                    getCredentialStageSnapshot(programSlug, version),
                 ]);
                 if (cancelled) return;
                 const mapped: JourneySkill[] = skills.map((s: SkillVerification) => ({
@@ -217,12 +296,20 @@ export function useCredentialJourney(
                 }));
                 const verifiedSkillCount = mapped.filter(s => s.verified).length;
                 const allVerified = mapped.length > 0 && verifiedSkillCount === mapped.length;
-                // The snapshot already carries live-release authority; when
-                // no single live release exists the journey stays visible
-                // (skills still shown) with knowledge fail-closed.
+                // The shared snapshot carries ONE live-release authority for
+                // both stages; when no single live release exists the journey
+                // stays visible (skills still shown) with both stages
+                // fail-closed.
                 const knowledge = deriveKnowledgeState({
-                    component: snapshot.component,
-                    attempts: snapshot.attempts,
+                    component: snapshot.knowledge.component,
+                    attempts: snapshot.knowledge.attempts,
+                    allSkillsVerified: allVerified,
+                    unavailable: !snapshot.contentAvailable,
+                });
+                const practical = derivePracticalState({
+                    component: snapshot.practical.component,
+                    attempts: snapshot.practical.attempts,
+                    knowledgePassed: knowledge.state === 'passed',
                     allSkillsVerified: allVerified,
                     unavailable: !snapshot.contentAvailable,
                 });
@@ -237,6 +324,7 @@ export function useCredentialJourney(
                         verifiedSkillCount,
                         totalSkillCount: mapped.length,
                         knowledge,
+                        practical,
                     });
                 }
             } catch {
@@ -258,7 +346,12 @@ export function useCredentialJourney(
         return {
             ...base,
             programTitle: null,
-            nextAction: deriveNextAction(input?.recommendation ?? null, allVerified, base.knowledge.state),
+            nextAction: deriveNextAction(
+                input?.recommendation ?? null,
+                allVerified,
+                base.knowledge.state,
+                base.practical.state,
+            ),
             visible: base.available,
         };
     }, [base, input?.recommendation, programSlug]);

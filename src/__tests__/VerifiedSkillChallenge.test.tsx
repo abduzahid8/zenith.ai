@@ -16,6 +16,7 @@ import {
     getProgramAvailability,
     getSkillVerification,
     getCredentialProgress,
+    getCredentialStageSnapshot,
     getKnowledgeJourneySnapshot,
 } from '../services/trustApi';
 
@@ -26,10 +27,13 @@ jest.mock('../services/trustApi', () => ({
     getTrustedSkillResults: jest.fn(),
     getSkillVerification: jest.fn(),
     getCredentialProgress: jest.fn(),
+    getCredentialStageSnapshot: jest.fn(),
     getKnowledgeJourneySnapshot: jest.fn(),
     ensureEnrollment: jest.fn(),
     startKnowledgeAttempt: jest.fn(),
+    startPracticalAttempt: jest.fn(),
     submitKnowledgeAttempt: jest.fn(),
+    submitPracticalAttempt: jest.fn(),
     // Mirrors the real predicate (unit-tested in trustApi.test.ts).
     isContentUnavailable: jest.fn((m: string) => m.includes('credential_content_unavailable')),
 }));
@@ -74,6 +78,7 @@ const mockAvailability = getProgramAvailability as jest.Mock;
 const mockSkillVerification = getSkillVerification as jest.Mock;
 const mockCredentialProgress = getCredentialProgress as jest.Mock;
 const mockKnowledgeSnapshot = getKnowledgeJourneySnapshot as jest.Mock;
+const mockStageSnapshot = getCredentialStageSnapshot as jest.Mock;
 
 const RULES_PARTIAL = {
     skillKey: 'rules',
@@ -449,6 +454,11 @@ describe('AICoachTab prove_skill wiring', () => {
     beforeEach(() => {
         mockCredentialProgress.mockResolvedValue(null);
         mockKnowledgeSnapshot.mockResolvedValue({ contentAvailable: true, attempts: [], component: null });
+        mockStageSnapshot.mockResolvedValue({
+            contentAvailable: true,
+            knowledge: { attempts: [], component: null },
+            practical: { attempts: [], component: null },
+        });
     });
 
     function seedCoachGoal() {
@@ -592,7 +602,7 @@ describe('AICoachTab prove_skill wiring', () => {
         expect(screen.queryAllByText('Verify Rules').length).toBe(1);
         const footer = await liveFooter(screen);
         expect(footerHasVerifyCard(footer)).toBe(false);
-        const journeyReadsBefore = mockKnowledgeSnapshot.mock.calls.length;
+        const journeyReadsBefore = mockStageSnapshot.mock.calls.length;
         await fireEvent.press(screen.getByText('Verify Rules'));
         expect(mockStart).toHaveBeenCalledWith('chess-foundations', 'rules');
         // The server challenge opens inside the Coach experience...
@@ -606,7 +616,7 @@ describe('AICoachTab prove_skill wiring', () => {
         expect(mockSkillVerification.mock.calls.length).toBeGreaterThanOrEqual(2);
         // …and the canonical journey refreshed to the completed gate:
         // the block now shows the unlocked Knowledge step, not Verify.
-        await waitFor(() => expect(mockKnowledgeSnapshot.mock.calls.length).toBeGreaterThan(journeyReadsBefore));
+        await waitFor(() => expect(mockStageSnapshot.mock.calls.length).toBeGreaterThan(journeyReadsBefore));
         expect(await screen.findByText('Start Knowledge Check')).toBeTruthy();
         expect(screen.queryByText('Verify Rules')).toBeNull();
     }, 30000);

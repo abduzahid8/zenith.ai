@@ -3,12 +3,13 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { scale } from '../../constants';
 import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
-import type { CredentialJourney, JourneyNextAction, KnowledgeState } from '../../hooks/useCredentialJourney';
+import type { CredentialJourney, JourneyNextAction, KnowledgeState, PracticalState } from '../../hooks/useCredentialJourney';
 
 /**
- * Slice 2 — compact credential journey block. Presentational only: every
+ * Slice 3 — compact credential journey block. Presentational only: every
  * value comes from useCredentialJourney (server truth). No percentages,
- * no dashboards, no local-store reads.
+ * no dashboards, no local-store reads. One primary CTA. Final Assessment
+ * is a non-interactive teaser only.
  */
 
 export interface JourneyPrimary {
@@ -27,6 +28,10 @@ export function primaryForAction(
             return { label: 'Start Knowledge Check', kind: nextAction.kind };
         case 'continue_knowledge':
             return { label: 'Continue Knowledge Check', kind: nextAction.kind };
+        case 'start_practical':
+            return { label: 'Start Practical Check', kind: nextAction.kind };
+        case 'continue_practical':
+            return { label: 'Continue Practical Check', kind: nextAction.kind };
         case 'continue_learning':
             return { label: 'Continue learning', kind: nextAction.kind };
         default:
@@ -53,11 +58,31 @@ function knowledgeStatusLine(state: KnowledgeState): string {
     }
 }
 
+function practicalStatusLine(state: PracticalState): string {
+    switch (state) {
+        case 'locked':
+            return 'Locked until Knowledge is passed';
+        case 'ready':
+            return 'Ready';
+        case 'in_progress':
+            return 'In progress';
+        case 'passed':
+            return 'Passed';
+        case 'failed':
+            return 'Not passed yet';
+        case 'temporarily_unavailable':
+            return 'Temporarily unavailable';
+        default:
+            return '';
+    }
+}
+
 export interface CredentialJourneyBlockProps {
     journey: CredentialJourney;
     title: string;
     primary: JourneyPrimary | null;
-    showPracticalTeaser: boolean;
+    /** Slice 2 compat: when true and practical is not yet runnable, show the legacy teaser. */
+    showPracticalTeaser?: boolean;
     /** Safe user-visible notice (e.g. connectivity). Never internal strings. */
     alert?: string | null;
 }
@@ -70,6 +95,9 @@ export const CredentialJourneyBlock: React.FC<CredentialJourneyBlockProps> = ({
     alert,
 }) => {
     const { colors } = useAppTheme();
+    const showFinalTeaser = journey.practical.state === 'passed';
+    const showLegacyPracticalTeaser =
+        showPracticalTeaser === true && journey.knowledge.state === 'passed' && journey.practical.state !== 'passed';
     return (
         <View style={[styles.card, { backgroundColor: colors.surfaceLight }]}>
             <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
@@ -98,9 +126,30 @@ export const CredentialJourneyBlock: React.FC<CredentialJourneyBlockProps> = ({
                         : ''}
                 </Text>
             )}
-            {showPracticalTeaser && (
+            <Text style={[styles.section, { color: colors.textSecondary }]}>Practical</Text>
+            {journey.practical.state === 'temporarily_unavailable' ? (
+                <Text style={[styles.status, { color: colors.text }]}>
+                    Practical check is temporarily unavailable. Try again later.
+                </Text>
+            ) : (
+                <Text style={[styles.status, { color: colors.text }]}>
+                    {journey.practical.state === 'passed' ? '✓' : practicalStatusLine(journey.practical.state)}
+                    {journey.practical.state === 'passed' && journey.practical.score != null
+                        ? ` · Score: ${Math.round(journey.practical.score)}%`
+                        : ''}
+                    {journey.practical.state === 'failed' && journey.practical.score != null
+                        ? ` · Score: ${Math.round(journey.practical.score)}%`
+                        : ''}
+                </Text>
+            )}
+            {showLegacyPracticalTeaser && (
                 <Text style={[styles.teaser, { color: colors.textSecondary }]}>
                     Practical{'\n'}Next step coming next
+                </Text>
+            )}
+            {showFinalTeaser && (
+                <Text style={[styles.teaser, { color: colors.textSecondary }]}>
+                    Final Assessment{'\n'}Next step
                 </Text>
             )}
             {alert && (

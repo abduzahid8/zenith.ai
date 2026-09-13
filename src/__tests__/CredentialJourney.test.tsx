@@ -14,6 +14,7 @@ import { CredentialChallengeRunner } from '../components/credentials/CredentialC
 import {
     ensureEnrollment,
     getCredentialProgress,
+    getCredentialStageSnapshot,
     getKnowledgeJourneySnapshot,
     getProgramAvailability,
     getSkillVerification,
@@ -24,11 +25,14 @@ import {
 jest.mock('../services/trustApi', () => ({
     ensureEnrollment: jest.fn(),
     getCredentialProgress: jest.fn(),
+    getCredentialStageSnapshot: jest.fn(),
     getKnowledgeJourneySnapshot: jest.fn(),
     getProgramAvailability: jest.fn(),
     getSkillVerification: jest.fn(),
     startKnowledgeAttempt: jest.fn(),
+    startPracticalAttempt: jest.fn(),
     submitKnowledgeAttempt: jest.fn(),
+    submitPracticalAttempt: jest.fn(),
     isContentUnavailable: jest.fn((m: string) => String(m).includes('credential_content_unavailable')),
 }));
 jest.mock('../theme/useAppTheme', () => ({
@@ -47,6 +51,7 @@ jest.mock('../theme/useAppTheme', () => ({
 const mockEnsure = ensureEnrollment as jest.Mock;
 const mockProgress = getCredentialProgress as jest.Mock;
 const mockSnapshot = getKnowledgeJourneySnapshot as jest.Mock;
+const mockStage = getCredentialStageSnapshot as jest.Mock;
 const mockAvailability = getProgramAvailability as jest.Mock;
 const mockSkills = getSkillVerification as jest.Mock;
 const mockStart = startKnowledgeAttempt as jest.Mock;
@@ -78,6 +83,8 @@ function mockJourneyServer(opts: {
     contentAvailable?: boolean;
     attempts?: unknown[];
     component?: null | object;
+    practicalAttempts?: unknown[];
+    practicalComponent?: null | object;
 } = {}) {
     mockAvailability.mockResolvedValue([
         {
@@ -88,10 +95,25 @@ function mockJourneyServer(opts: {
     ]);
     mockSkills.mockResolvedValue(opts.skills ?? SKILLS_4_OF_4);
     mockProgress.mockResolvedValue(opts.progress ?? null);
+    const contentAvailable = opts.contentAvailable ?? true;
     mockSnapshot.mockResolvedValue({
-        contentAvailable: opts.contentAvailable ?? true,
+        contentAvailable,
         attempts: opts.attempts ?? [],
         component: opts.component ?? null,
+    });
+    // Shared live snapshot: ONE release identity for both stages. The
+    // knowledge slice mirrors the legacy snapshot so Slice 2 assertions
+    // keep passing; practical defaults to locked (no Knowledge PASS).
+    mockStage.mockResolvedValue({
+        contentAvailable,
+        knowledge: {
+            attempts: opts.attempts ?? [],
+            component: opts.component ?? null,
+        },
+        practical: {
+            attempts: opts.practicalAttempts ?? [],
+            component: opts.practicalComponent ?? null,
+        },
     });
 }
 
@@ -216,7 +238,7 @@ describe('useCredentialJourney read model', () => {
         await waitFor(() => expect(result.current.journey).not.toBeNull());
         expect(result.current.journey!.programVersion).toBe('v2');
         expect(mockProgress).toHaveBeenCalledWith('chess-foundations', 'v2');
-        expect(mockSnapshot).toHaveBeenCalledWith('chess-foundations', 'v2');
+        expect(mockStage).toHaveBeenCalledWith('chess-foundations', 'v2');
     });
 
     test('version. missing server version hides the journey (fail closed)', async () => {
@@ -250,6 +272,22 @@ describe('useCredentialJourney read model', () => {
         mockProgress.mockImplementation((slug: string, version: string) =>
             Promise.resolve(version === 'v2' ? null : { programVersion: 'v1' }),
         );
+        const stageFor = (version: string) =>
+            version === 'v2'
+                ? {
+                    contentAvailable: true,
+                    knowledge: { attempts: [], component: null },
+                    practical: { attempts: [], component: null },
+                }
+                : {
+                    contentAvailable: true,
+                    knowledge: {
+                        attempts: [{ id: 'v1-live', status: 'started', score: null, passed: null, submittedAt: null }],
+                        component: { score: 95, passed: true },
+                    },
+                    practical: { attempts: [], component: null },
+                };
+        mockStage.mockImplementation((slug: string, version: string) => Promise.resolve(stageFor(version)));
         mockSnapshot.mockImplementation((slug: string, version: string) =>
             Promise.resolve(
                 version === 'v2'
@@ -264,7 +302,7 @@ describe('useCredentialJourney read model', () => {
         const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
         await waitFor(() => expect(result.current.journey).not.toBeNull());
         const journey = result.current.journey!;
-        expect(mockSnapshot).toHaveBeenCalledWith('chess-foundations', 'v2');
+        expect(mockStage).toHaveBeenCalledWith('chess-foundations', 'v2');
         // v1 started attempt does NOT surface as in_progress…
         expect(journey.knowledge.state).toBe('locked');
         // …v1 passed component does NOT mark v2 passed…
@@ -470,25 +508,25 @@ describe('CredentialJourneySection', () => {
         );
         await screen.findByText('Start Knowledge Check');
         const progressReadsBefore = mockProgress.mock.calls.length;
-        const snapshotReadsBefore = mockSnapshot.mock.calls.length;
+        const snapshotReadsBefore = mockStage.mock.calls.length;
         await fireEvent.press(screen.getByText('Start Knowledge Check'));
         // Canonical refresh re-reads server truth after enrollment…
         await waitFor(() => expect(mockProgress.mock.calls.length).toBeGreaterThan(progressReadsBefore));
-        expect(mockSnapshot.mock.calls.length).toBeGreaterThan(snapshotReadsBefore);
+        expect(mockStage.mock.calls.length).toBeGreaterThan(snapshotReadsBefore);
         // …and enrolled is still derived from the server progress row
         // (null here), never optimistically patched to true locally.
         expect(mockProgress).toHaveBeenCalledWith('chess-foundations', 'v2');
     });
 
-    test('16. no Practical interaction appears yet', async () => {
+    test('16. Knowledge PASS unlocks Practical (Slice 3: practical CTA replaces teaser)', async () => {
         mockJourneyServer({
             component: { score: 91, passed: true },
         });
         const screen = await render(
             <CredentialJourneySection programSlug="chess-foundations" programTitle="Chess Foundations" recommendation={null} onVerifySkill={() => {}} onContinueLearning={() => {}} />,
         );
-        expect(await screen.findByText(/Next step coming next/)).toBeTruthy();
-        expect(screen.queryByText('Start Practical')).toBeNull();
+        // Slice 3: Knowledge PASS makes Practical ready — one primary CTA.
+        expect(await screen.findByText('Start Practical Check')).toBeTruthy();
         expect(screen.queryByText('Start Final')).toBeNull();
         expect(screen.queryByText('Start Project')).toBeNull();
     });
@@ -526,19 +564,23 @@ describe('CredentialJourneySection', () => {
         expect(result.current.journey!.knowledge.score).toBe(90);
     });
 
-    test('19. Practical teaser is plain text, never a CTA', async () => {
-        mockJourneyServer({ component: { score: 91, passed: true } });
+    test('19. Final teaser is plain text, never a CTA (Slice 3)', async () => {
+        mockJourneyServer({
+            component: { score: 91, passed: true },
+            practicalComponent: { score: 88, passed: true },
+            practicalAttempts: [{ id: 'p1', status: 'submitted', score: 88, passed: true, submittedAt: '2026-02-01' }],
+        });
         const screen = await render(
             <CredentialJourneySection programSlug="chess-foundations" programTitle="Chess Foundations" recommendation={null} onVerifySkill={() => {}} onContinueLearning={() => {}} />,
         );
-        await screen.findByText(/Next step coming next/);
-        // No pressable Practical/Final/Project actions exist anywhere.
-        expect(screen.queryByText('Start Practical')).toBeNull();
-        expect(screen.queryByText('Open Practical')).toBeNull();
-        const practicalNodes = screen.queryAllByText(/Practical/);
-        expect(practicalNodes.length).toBeGreaterThan(0);
-        for (const node of practicalNodes) {
-            // Teaser text node must not be inside a pressable with a practical action.
+        await screen.findByText(/Final Assessment/);
+        // No pressable Final/Project actions exist anywhere.
+        expect(screen.queryByText('Start Final')).toBeNull();
+        expect(screen.queryByText('Open Final')).toBeNull();
+        expect(screen.queryByText('Start Project')).toBeNull();
+        const finalNodes = screen.queryAllByText(/Final Assessment/);
+        expect(finalNodes.length).toBeGreaterThan(0);
+        for (const node of finalNodes) {
             expect(node).toBeTruthy();
         }
     });
@@ -567,7 +609,8 @@ describe('CredentialJourneySection', () => {
         );
         await screen.findByText('Start Knowledge Check');
         await fireEvent.press(screen.getByText('Start Knowledge Check'));
-        expect(await screen.findByText(/temporarily unavailable/)).toBeTruthy();
+        // Both stages fail closed to the temporary copy (shared snapshot).
+        expect(await screen.findByText('Knowledge check is temporarily unavailable. Try again later.')).toBeTruthy();
         expect(screen.queryByText('Knowledge check needs an internet connection.')).toBeNull();
     });
 

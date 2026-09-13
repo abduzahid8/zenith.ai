@@ -388,30 +388,52 @@ export function resolveLiveContentVersion(
     return typeof version === 'string' && version.length > 0 ? version : null;
 }
 
-export interface KnowledgeJourneySnapshot {
-    /** False when no single live release exists: knowledge reads fail closed. */
+export interface PracticalAttemptRow {
+    id: string;
+    status: 'started' | 'submitted';
+    score: number | null;
+    passed: boolean | null;
+    submittedAt: string | null;
+}
+
+export interface PracticalComponentRow {
+    score: number;
+    passed: boolean;
+}
+
+export interface CredentialStageSnapshot {
+    /** False when no single live release exists: stage reads fail closed. */
     contentAvailable: boolean;
-    /** Own live-release attempts only (started/submitted, current content). */
-    attempts: KnowledgeAttemptRow[];
-    /**
-     * Official current component, or null. A stored PASS counts only when
-     * its reference_id resolves to an own live submitted attempt — retired
-     * content never carries forward. Never trust `passed` alone.
-     */
-    component: KnowledgeComponentRow | null;
+    knowledge: {
+        /** Own live-release attempts only (started/submitted, current content). */
+        attempts: KnowledgeAttemptRow[];
+        /**
+         * Official current component, or null. A stored PASS counts only
+         * when its reference_id resolves to an own live submitted attempt.
+         */
+        component: KnowledgeComponentRow | null;
+    };
+    practical: {
+        /** Own live-release attempts only (started/submitted, current content). */
+        attempts: PracticalAttemptRow[];
+        /** Same reference-resolution rule as knowledge, for practical. */
+        component: PracticalComponentRow | null;
+    };
 }
 
 /**
- * One canonical Knowledge read-authority snapshot. Resolves the current
- * live content version ONCE from public release metadata, then uses that
- * same identity for attempts and component reads — never inherits state
- * from a retired release of the same program version. content_version is
- * an adapter-internal concern and is never returned to components.
+ * One canonical credential-stage read-authority snapshot. Resolves the
+ * current live content release ONCE from public release metadata
+ * (Slice 2 rules: active + QA passed + human approved, exactly one row),
+ * then uses that SAME internal live contentVersion for both Knowledge and
+ * Practical reads — never inherits state from a retired release and never
+ * resolves two independent releases. contentVersion never leaves the
+ * adapter.
  */
-export const getKnowledgeJourneySnapshot = async (
+export const getCredentialStageSnapshot = async (
     programSlug: string,
     programVersion: string,
-): Promise<KnowledgeJourneySnapshot> => {
+): Promise<CredentialStageSnapshot> => {
     const supabase = getSupabase();
     const { data: relData, error: relError } = await supabase
         .from('credential_content_releases')
@@ -426,11 +448,27 @@ export const getKnowledgeJourneySnapshot = async (
         (Array.isArray(relData) ? relData : []) as unknown as { content_version: unknown }[],
     );
     if (live == null) {
-        return { contentAvailable: false, attempts: [], component: null };
+        return {
+            contentAvailable: false,
+            knowledge: { attempts: [], component: null },
+            practical: { attempts: [], component: null },
+        };
     }
-    const [{ data: attData, error: attError }, { data: compData, error: compError }] = await Promise.all([
+    const [
+        { data: knowAttData, error: knowAttError },
+        { data: pracAttData, error: pracAttError },
+        { data: knowCompData, error: knowCompError },
+        { data: pracCompData, error: pracCompError },
+    ] = await Promise.all([
         supabase
             .from('knowledge_attempts')
+            .select('id, status, score, passed, submitted_at, content_version')
+            .eq('program_slug', programSlug)
+            .eq('program_version', programVersion)
+            .in('status', ['started', 'submitted'])
+            .order('started_at', { ascending: false }),
+        supabase
+            .from('practical_attempts')
             .select('id, status, score, passed, submitted_at, content_version')
             .eq('program_slug', programSlug)
             .eq('program_version', programVersion)
@@ -444,48 +482,118 @@ export const getKnowledgeJourneySnapshot = async (
             .eq('component', 'knowledge')
             .order('created_at', { ascending: false })
             .limit(1),
+        supabase
+            .from('credential_component_results')
+            .select('score, passed, reference_id')
+            .eq('program_slug', programSlug)
+            .eq('program_version', programVersion)
+            .eq('component', 'practical')
+            .order('created_at', { ascending: false })
+            .limit(1),
     ]);
-    if (attError) throw new Error(attError.message);
-    if (compError) throw new Error(compError.message);
-    const attemptRows = (Array.isArray(attData) ? attData : []) as unknown as {
-        id: unknown; status: unknown; score: number | null; passed: boolean | null;
-        submitted_at: string | null; content_version: unknown;
-    }[];
-    const attempts: KnowledgeAttemptRow[] = attemptRows
-        .filter(
+    if (knowAttError) throw new Error(knowAttError.message);
+    if (pracAttError) throw new Error(pracAttError.message);
+    if (knowCompError) throw new Error(knowCompError.message);
+    if (pracCompError) throw new Error(pracCompError.message);
+    const filterLive = <T extends { id: unknown; status: unknown; content_version: unknown }>(
+        rows: T[],
+    ): T[] =>
+        rows.filter(
             r =>
                 typeof r.id === 'string' &&
                 (r.status === 'started' || r.status === 'submitted') &&
                 r.content_version === live,
-        )
-        .map(r => ({
-            id: r.id as string,
-            status: r.status as 'started' | 'submitted',
-            score: r.score == null ? null : Number(r.score),
-            passed: r.passed,
-            submittedAt: r.submitted_at,
-        }));
-    const compRow = (Array.isArray(compData) ? compData[0] : null) as unknown as {
-        score: number; passed: boolean; reference_id: unknown;
-    } | null;
-    // Both reads are RLS-scoped to the current user, so membership in the
-    // live submitted set proves ownership + currency of the reference.
-    const liveSubmittedIds = new Set(
-        attempts.filter(a => a.status === 'submitted').map(a => a.id),
+        );
+    const knowRows = (Array.isArray(knowAttData) ? knowAttData : []) as unknown as {
+        id: unknown; status: unknown; score: number | null; passed: boolean | null;
+        submitted_at: string | null; content_version: unknown;
+    }[];
+    const pracRows = (Array.isArray(pracAttData) ? pracAttData : []) as unknown as {
+        id: unknown; status: unknown; score: number | null; passed: boolean | null;
+        submitted_at: string | null; content_version: unknown;
+    }[];
+    const knowledgeAttempts: KnowledgeAttemptRow[] = filterLive(knowRows).map(r => ({
+        id: r.id as string,
+        status: r.status as 'started' | 'submitted',
+        score: r.score == null ? null : Number(r.score),
+        passed: r.passed,
+        submittedAt: r.submitted_at,
+    }));
+    const practicalAttempts: PracticalAttemptRow[] = filterLive(pracRows).map(r => ({
+        id: r.id as string,
+        status: r.status as 'started' | 'submitted',
+        score: r.score == null ? null : Number(r.score),
+        passed: r.passed,
+        submittedAt: r.submitted_at,
+    }));
+    const resolveComponent = (
+        compData: unknown,
+        liveSubmittedIds: Set<string>,
+    ): { score: number; passed: boolean } | null => {
+        const compRow = (Array.isArray(compData) ? compData[0] : null) as unknown as {
+            score: number; passed: boolean; reference_id: unknown;
+        } | null;
+        // Both reads are RLS-scoped to the current user, so membership in
+        // the live submitted set proves ownership + currency.
+        if (
+            compRow != null &&
+            typeof compRow.reference_id === 'string' &&
+            liveSubmittedIds.has(compRow.reference_id)
+        ) {
+            return { score: Number(compRow.score), passed: compRow.passed === true };
+        }
+        return null;
+    };
+    const knowledgeComponent = resolveComponent(
+        knowCompData,
+        new Set(knowledgeAttempts.filter(a => a.status === 'submitted').map(a => a.id)),
     );
-    const component =
-        compRow != null &&
-        typeof compRow.reference_id === 'string' &&
-        liveSubmittedIds.has(compRow.reference_id)
-            ? { score: Number(compRow.score), passed: compRow.passed === true }
-            : null;
-    return { contentAvailable: true, attempts, component };
+    const practicalComponent = resolveComponent(
+        pracCompData,
+        new Set(practicalAttempts.filter(a => a.status === 'submitted').map(a => a.id)),
+    );
+    return {
+        contentAvailable: true,
+        knowledge: { attempts: knowledgeAttempts, component: knowledgeComponent },
+        practical: { attempts: practicalAttempts, component: practicalComponent },
+    };
 };
 
 export interface KnowledgeComponentRow {
     score: number;
     passed: boolean;
 }
+
+export interface KnowledgeJourneySnapshot {
+    /** False when no single live release exists: knowledge reads fail closed. */
+    contentAvailable: boolean;
+    /** Own live-release attempts only (started/submitted, current content). */
+    attempts: KnowledgeAttemptRow[];
+    /**
+     * Official current component, or null. A stored PASS counts only when
+     * its reference_id resolves to an own live submitted attempt — retired
+     * content never carries forward. Never trust `passed` alone.
+     */
+    component: KnowledgeComponentRow | null;
+}
+
+/**
+ * Slice 2 compatibility projection over the shared credential-stage
+ * snapshot. Resolves the live release ONCE (via
+ * getCredentialStageSnapshot) and returns the knowledge slice — never an
+ * independent knowledge-only release resolution.
+ */
+export const getKnowledgeJourneySnapshot = async (
+    programSlug: string,
+    programVersion: string,
+): Promise<KnowledgeJourneySnapshot> => {
+    const stage = await getCredentialStageSnapshot(programSlug, programVersion);
+    return {
+        contentAvailable: stage.contentAvailable,
+        attempts: stage.knowledge.attempts,
+        component: stage.knowledge.component,
+    };
+};
 
 export type { PublicCredential, VerificationResult } from './credentialVerification';
 
