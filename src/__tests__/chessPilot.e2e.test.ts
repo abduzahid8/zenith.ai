@@ -187,42 +187,60 @@ describe('integrity: balanced final + bank pinning', () => {
     test('server assigns exactly 5/5/5/5 of 20 and pins the bank', async () => {
         const uid = newUid();
         await createUser(db, uid);
-        const exam = await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM start_assessment($1)', [QUAD]).then(r => r.rows[0]),
-        );
-        const counts: Record<string, number> = {};
-        for (const q of exam.questions as { id: string; skill: string }[]) {
-            counts[q.skill] = (counts[q.skill] ?? 0) + 1;
+        // Migration 036 readiness: verified skills + live K/P precede Finals.
+        await passValidations(uid, 4);
+        await passKnowledgePractical(uid);
+        try {
+            const exam = await asRole(db, 'authenticated', uid, () =>
+                db.query('SELECT * FROM start_assessment($1)', [QUAD]).then(r => r.rows[0]),
+            );
+            const counts: Record<string, number> = {};
+            for (const q of exam.questions as { id: string; skill: string }[]) {
+                counts[q.skill] = (counts[q.skill] ?? 0) + 1;
+            }
+            expect(exam.questions).toHaveLength(20);
+            expect(counts).toEqual({ 'qk-a': 5, 'qk-b': 5, 'qk-c': 5, 'qk-d': 5 });
+            const row = await db.query(
+                `SELECT bank_version, question_set_id FROM assessment_attempts WHERE id = $1`, [exam.attempt_id],
+            );
+            expect(row.rows[0].bank_version).toBe('quad-v1');
+        } finally {
+            // Shared QUAD banks: leave no user trace behind (later tests
+            // delete/restore bank rows; FK guards forbid orphans).
+            await db.query(`DELETE FROM trusted_item_results WHERE user_id = $1`, [uid]);
+            await db.query(`DELETE FROM trusted_validation_attempts WHERE user_id = $1`, [uid]);
+            await db.query(`DELETE FROM learning_events WHERE user_id = $1`, [uid]);
+            await db.query(`DELETE FROM knowledge_attempts WHERE user_id = $1`, [uid]);
+            await db.query(`DELETE FROM practical_attempts WHERE user_id = $1`, [uid]);
+            await db.query(`DELETE FROM assessment_attempts WHERE user_id = $1`, [uid]);
+            await db.query(`DELETE FROM credential_component_results WHERE user_id = $1`, [uid]);
+            await db.query(`DELETE FROM user_credential_progress WHERE user_id = $1`, [uid]);
         }
-        expect(exam.questions).toHaveLength(20);
-        expect(counts).toEqual({ 'qk-a': 5, 'qk-b': 5, 'qk-c': 5, 'qk-d': 5 });
-        const row = await db.query(
-            `SELECT bank_version, question_set_id FROM assessment_attempts WHERE id = $1`, [exam.attempt_id],
-        );
-        expect(row.rows[0].bank_version).toBe('quad-v1');
     });
 
     test('active attempt survives bank rotation with its own pinned set', async () => {
         const uid = newUid();
         await createUser(db, uid);
-        const first = await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM start_assessment($1)', [QUAD]).then(r => r.rows[0]),
-        );
-        const firstIds = (first.questions as { id: string }[]).map(q => q.id).sort();
-        // A newer bank generation lands (retired staging row — only one
-        // ACTIVE set may exist) while the attempt is active: the attempt
-        // must NOT be re-sampled and must keep serving exactly its own
-        // pinned set — never the newcomer.
+        await passValidations(uid, 4);
+        await passKnowledgePractical(uid);
         const draftId = '77777777-7777-7777-7777-777777777777';
-        await db.query(
-            `INSERT INTO assessment_question_sets
-                (id, program_slug, version, question_count, time_limit_minutes, pass_score,
-                 questions, content_version, status)
-             VALUES ('${draftId}', '${QUAD}', '1.0', 20, 30, 80,
-                     '[{"id":"qf-draft","skill":"qk-a","prompt":"draft?","options":["y","n"]}]',
-                     'quad-v2', 'retired')`,
-        );
         try {
+            const first = await asRole(db, 'authenticated', uid, () =>
+                db.query('SELECT * FROM start_assessment($1)', [QUAD]).then(r => r.rows[0]),
+            );
+            const firstIds = (first.questions as { id: string }[]).map(q => q.id).sort();
+            // A newer bank generation lands (retired staging row — only one
+            // ACTIVE set may exist) while the attempt is active: the attempt
+            // must NOT be re-sampled and must keep serving exactly its own
+            // pinned set — never the newcomer.
+            await db.query(
+                `INSERT INTO assessment_question_sets
+                    (id, program_slug, version, question_count, time_limit_minutes, pass_score,
+                     questions, content_version, status)
+                 VALUES ('${draftId}', '${QUAD}', '1.0', 20, 30, 80,
+                         '[{"id":"qf-draft","skill":"qk-a","prompt":"draft?","options":["y","n"]}]',
+                         'quad-v2', 'retired')`,
+            );
             const again = await asRole(db, 'authenticated', uid, () =>
                 db.query('SELECT * FROM start_assessment($1)', [QUAD]).then(r => r.rows[0]),
             );
@@ -232,6 +250,14 @@ describe('integrity: balanced final + bank pinning', () => {
             expect(againQs.some(q => q.id === 'qf-draft')).toBe(false);
         } finally {
             await db.query(`DELETE FROM assessment_question_sets WHERE id = '${draftId}'`);
+            await db.query(`DELETE FROM trusted_item_results WHERE user_id = $1`, [uid]);
+            await db.query(`DELETE FROM trusted_validation_attempts WHERE user_id = $1`, [uid]);
+            await db.query(`DELETE FROM learning_events WHERE user_id = $1`, [uid]);
+            await db.query(`DELETE FROM knowledge_attempts WHERE user_id = $1`, [uid]);
+            await db.query(`DELETE FROM practical_attempts WHERE user_id = $1`, [uid]);
+            await db.query(`DELETE FROM assessment_attempts WHERE user_id = $1`, [uid]);
+            await db.query(`DELETE FROM credential_component_results WHERE user_id = $1`, [uid]);
+            await db.query(`DELETE FROM user_credential_progress WHERE user_id = $1`, [uid]);
         }
     });
 });
@@ -367,15 +393,22 @@ describe('integrity: compromised banks have zero authority', () => {
                 /final_assessment bank not active/,
             ),
         );
-        // Cooldown elapsed (server-side time travel) so the final can be
-        // re-proven on the restored bank.
+        // Cooldown elapsed (server-side time travel). Under migration 036 the
+        // restored live pass is already authoritative, so re-issuance needs
+        // no second exam: minting another Final with a current live pass is
+        // refused (final_already_passed).
         await db.query("SET app.trusted_server = 'on'");
         await db.query(
             `UPDATE assessment_attempts SET submitted_at = NOW() - INTERVAL '25 hours'
              WHERE user_id = $1 AND status = 'submitted'`, [uid],
         );
         await db.query("RESET app.trusted_server");
-        await passFinal(uid);
+        await asRole(db, 'authenticated', uid, () =>
+            expectDbDenied(
+                db.query('SELECT * FROM start_assessment($1)', [QUAD]),
+                /final_already_passed/,
+            ),
+        );
         // Restored: re-issue succeeds (revoked row replaced, never edited).
         const second = await asRole(db, 'authenticated', uid, () =>
             db.query('SELECT * FROM issue_credential($1,$2)', [QUAD, 'H']).then(r => r.rows[0]),

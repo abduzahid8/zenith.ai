@@ -141,6 +141,33 @@ function startTrusted(uid: string, slug: string, dbc: Client = db) {
     );
 }
 
+/**
+ * Migration 036 readiness: new Finals require a verified skill plus live
+ * Knowledge/Practical passes. Real passes over live bank rows.
+ */
+async function readyFinalLive(uid: string, slug: string): Promise<void> {
+    const t = await asRole(db, 'authenticated', uid, () =>
+        db.query('SELECT * FROM start_trusted_validation($1, $2)', [slug, 'alpha']).then(r => r.rows[0]),
+    );
+    await asRole(db, 'authenticated', uid, () =>
+        db.query('SELECT * FROM submit_trusted_validation($1, $2)', [t.attempt_id, { answer: 'ok' }]),
+    );
+    for (const [fn, sub, field] of [
+        ['start_knowledge_attempt', 'submit_knowledge_attempt', 'questions'],
+        ['start_practical_attempt', 'submit_practical_attempt', 'tasks'],
+    ] as const) {
+        const st = await asRole(db, 'authenticated', uid, () =>
+            db.query(`SELECT * FROM ${fn}($1)`, [slug]).then(r => r.rows[0]),
+        );
+        const items = st[field] as { item_key: string }[];
+        const answers: Record<string, string> = {};
+        for (const it of items) answers[it.item_key] = 'ok';
+        await asRole(db, 'authenticated', uid, () =>
+            db.query(`SELECT * FROM ${sub}($1, $2)`, [st.attempt_id, answers]),
+        );
+    }
+}
+
 beforeAll(async () => {
     db = adminClient();
     await db.connect();
@@ -301,16 +328,24 @@ describe('real DB: rotation supersedes in-flight attempts', () => {
         const slug = 'e2e-life-sup-f';
         await makeProgram(slug);
         await addRelease(slug, 'live-v1', 'active');
+        await addTrustedItem(slug, 'live-v1', 'lesson-a', 90);
+        await addKnowledgeItem(slug, 'live-v1', 'k1');
+        await addPracticalItem(slug, 'live-v1', 'p1');
         await addQuestionSet(slug, '11111111-2222-4333-8444-555555555555', 'live-v1');
         const uid = newUid();
         await createUser(db, uid);
         try {
+            await readyFinalLive(uid, slug);
             const old = await asRole(db, 'authenticated', uid, () =>
                 db.query('SELECT * FROM start_assessment($1)', [slug]).then(r => r.rows[0]),
             );
             await retireVersion(slug, 'live-v1');
             await addRelease(slug, 'live-v2', 'active');
+            await addTrustedItem(slug, 'live-v2', 'lesson-b', 90);
+            await addKnowledgeItem(slug, 'live-v2', 'k1');
+            await addPracticalItem(slug, 'live-v2', 'p1');
             await addQuestionSet(slug, '22222222-3333-4444-8555-666666666666', 'live-v2');
+            await readyFinalLive(uid, slug);
             const fresh = await asRole(db, 'authenticated', uid, () =>
                 db.query('SELECT * FROM start_assessment($1)', [slug]).then(r => r.rows[0]),
             );
@@ -428,10 +463,14 @@ describe('real DB: stale submits record zero proof', () => {
         const slug = 'e2e-life-stale-f';
         await makeProgram(slug);
         await addRelease(slug, 'live-v1', 'active');
+        await addTrustedItem(slug, 'live-v1', 'lesson-a', 90);
+        await addKnowledgeItem(slug, 'live-v1', 'k1');
+        await addPracticalItem(slug, 'live-v1', 'p1');
         await addQuestionSet(slug, '33333333-4444-4555-8666-777777777777', 'live-v1');
         const uid = newUid();
         await createUser(db, uid);
         try {
+            await readyFinalLive(uid, slug);
             const old = await asRole(db, 'authenticated', uid, () =>
                 db.query('SELECT * FROM start_assessment($1)', [slug]).then(r => r.rows[0]),
             );
@@ -444,8 +483,11 @@ describe('real DB: stale submits record zero proof', () => {
             expect(res.content_stale).toBe(true);
             expect(res.score).toBeNull();
             expect(res.passed).toBe(false);
+            // The stale Final writes no final component (readiness K/P
+            // passes from setup remain untouched).
             const comps = await db.query(
-                `SELECT COUNT(*)::int c FROM credential_component_results WHERE user_id = $1`,
+                `SELECT COUNT(*)::int c FROM credential_component_results
+                 WHERE user_id = $1 AND component = 'final_assessment'`,
                 [uid],
             );
             expect(comps.rows[0].c).toBe(0);

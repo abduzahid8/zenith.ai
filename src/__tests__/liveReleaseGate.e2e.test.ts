@@ -145,6 +145,38 @@ function startFinal(uid: string, slug: string) {
     );
 }
 
+/**
+ * Migration 036 readiness: new Finals require a verified skill plus
+ * live Knowledge/Practical passes. Real passes over live bank rows keep
+ * these release-gate tests honest (no direct component seeding).
+ */
+async function readyFinalLive(uid: string, slug: string): Promise<void> {
+    const t = await asRole(db, 'authenticated', uid, () =>
+        db.query('SELECT * FROM start_trusted_validation($1, $2)', [slug, 'alpha']).then(r => r.rows[0]),
+    );
+    await asRole(db, 'authenticated', uid, () =>
+        db.query('SELECT * FROM submit_trusted_validation($1, $2)', [t.attempt_id, { answer: 'ok' }]),
+    );
+    const k = await asRole(db, 'authenticated', uid, () =>
+        db.query('SELECT * FROM start_knowledge_attempt($1)', [slug]).then(r => r.rows[0]),
+    );
+    const kItems = k.questions as { item_key: string }[];
+    const kAnswers: Record<string, string> = {};
+    for (const it of kItems) kAnswers[it.item_key] = 'ok';
+    await asRole(db, 'authenticated', uid, () =>
+        db.query('SELECT * FROM submit_knowledge_attempt($1, $2)', [k.attempt_id, kAnswers]),
+    );
+    const p = await asRole(db, 'authenticated', uid, () =>
+        db.query('SELECT * FROM start_practical_attempt($1)', [slug]).then(r => r.rows[0]),
+    );
+    const pItems = p.tasks as { item_key: string }[];
+    const pAnswers: Record<string, string> = {};
+    for (const it of pItems) pAnswers[it.item_key] = 'ok';
+    await asRole(db, 'authenticated', uid, () =>
+        db.query('SELECT * FROM submit_practical_attempt($1, $2)', [p.attempt_id, pAnswers]),
+    );
+}
+
 beforeAll(async () => {
     db = adminClient();
     await db.connect();
@@ -304,6 +336,11 @@ describe('real DB: new starts require the live release', () => {
                 `UPDATE credential_content_releases SET status = 'active'
                  WHERE program_slug = '${slug}' AND content_version = 'gate-v2'`,
             );
+            // Readiness for the live release (verified skill + live K/P).
+            await addTrustedItem(slug, 'gate-v2', 'gate-lesson', 90);
+            await addKnowledgeItem(slug, 'gate-v2', 'k-live');
+            await addPracticalItem(slug, 'gate-v2', 'p-live');
+            await readyFinalLive(uid, slug);
             const row = await startFinal(uid, slug);
             const attempt = await db.query(
                 `SELECT question_set_id, bank_version FROM assessment_attempts WHERE id = $1`,
@@ -326,10 +363,16 @@ describe('real DB: new starts require the live release', () => {
         await addQuestionSet(slug, 'c3c3c3c3-3333-4333-8333-333333333333', 'gate-v1');
         const uid = newUid();
         await createUser(db, uid);
+        // A second user holds the in-flight K/P attempts: passing (required
+        // for Final readiness) would submit them, and a live pass blocks new
+        // starts — so rotation coverage keeps its own untouched owner.
+        const uidKp = newUid();
+        await createUser(db, uidKp);
         try {
             const t1 = await startTrusted(uid, slug);
-            const k1 = await startKnowledge(uid, slug);
-            const p1 = await startPractical(uid, slug);
+            const k1 = await startKnowledge(uidKp, slug);
+            const p1 = await startPractical(uidKp, slug);
+            await readyFinalLive(uid, slug);
             const f1 = await startFinal(uid, slug);
             // Rotate the way the loader does: old rows retired, new ACTIVE
             // rows loaded, then the release activates.
@@ -367,10 +410,12 @@ describe('real DB: new starts require the live release', () => {
             expect(tRow.rows[0].content_version).toBe('gate-v1');
             // Knowledge / practical / final supersede the stale attempt and
             // mint a fresh live one (035 replaces resume-across-rotation).
-            const k2 = await startKnowledge(uid, slug);
+            // The Final mint also re-proves readiness on the live release.
+            const k2 = await startKnowledge(uidKp, slug);
             expect(k2.attempt_id).not.toBe(k1.attempt_id);
-            const p2 = await startPractical(uid, slug);
+            const p2 = await startPractical(uidKp, slug);
             expect(p2.attempt_id).not.toBe(p1.attempt_id);
+            await readyFinalLive(uid, slug);
             const f2 = await startFinal(uid, slug);
             expect(f2.attempt_id).not.toBe(f1.attempt_id);
             expect(f2.retake_reason).not.toBe('active_attempt');
@@ -399,6 +444,7 @@ describe('real DB: new starts require the live release', () => {
                 [kNew.attempt_id],
             );
             expect(kNewRow.rows[0].content_version).toBe('gate-v2');
+            await readyFinalLive(uid2, slug);
             const fNew = await startFinal(uid2, slug);
             const fNewRow = await db.query(
                 `SELECT bank_version FROM assessment_attempts WHERE id = $1`,
