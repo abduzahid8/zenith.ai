@@ -3,14 +3,19 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { scale } from '../../constants';
 import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
-import type { CredentialJourney, FinalAssessmentState, JourneyNextAction, KnowledgeState, PracticalState, ProjectState } from '../../hooks/useCredentialJourney';
+import type { CredentialJourney, FinalAssessmentState, JourneyCredential, JourneyNextAction, KnowledgeState, PracticalState, ProjectState } from '../../hooks/useCredentialJourney';
 
 /**
  * Slice 5 — compact credential journey block. Presentational only: every
  * value comes from useCredentialJourney (server truth). No percentages,
  * no dashboards, no local-store reads. One primary CTA. Project is a
- * real stage once unlocked; Credential is a non-interactive teaser after
- * the Project pass — never an action.
+ * real stage once unlocked.
+ *
+ * Slice 6 — the Credential section below renders ONLY the server claim
+ * state (useCredentialJourney.credential, from get_credential_status).
+ * Score/grade/identity are never calculated locally. The claim/issued
+ * CTA itself arrives via the single `primary` prop, owned by the
+ * section's claim machine.
  */
 
 export interface JourneyPrimary {
@@ -132,6 +137,41 @@ export interface CredentialJourneyBlockProps {
     showPracticalTeaser?: boolean;
     /** Safe user-visible notice (e.g. connectivity). Never internal strings. */
     alert?: string | null;
+    /** Slice 6 server claim state. Null/undefined while unknown: no claim UI. */
+    credential?: JourneyCredential | null;
+    /** Mapped claim error copy (already safe). Rendered in the Credential section. */
+    claimError?: string | null;
+}
+
+/** Stable short date for server timestamps (locale-independent). */
+export function shortDate(iso: string | null): string | null {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toISOString().slice(0, 10);
+}
+
+export function gradeLabel(grade: string | null): string | null {
+    if (!grade) return null;
+    return grade.charAt(0).toUpperCase() + grade.slice(1);
+}
+
+function credentialStatusLine(state: NonNullable<JourneyCredential>['state']): string {
+    switch (state) {
+        case 'ready_to_issue':
+            return 'Ready to claim';
+        case 'issued':
+            return 'Issued';
+        case 'revoked':
+            return 'Revoked';
+        case 'expired':
+            return 'Expired';
+        case 'temporarily_unavailable':
+            return 'Temporarily unavailable';
+        case 'locked':
+        default:
+            return '';
+    }
 }
 
 export const CredentialJourneyBlock: React.FC<CredentialJourneyBlockProps> = ({
@@ -140,13 +180,24 @@ export const CredentialJourneyBlock: React.FC<CredentialJourneyBlockProps> = ({
     primary,
     showPracticalTeaser,
     alert,
+    credential,
+    claimError,
 }) => {
     const { colors } = useAppTheme();
-    // Real Project stage once the Final is passed or a submission exists;
-    // Credential teaser only after the Project pass. Neither is ever a CTA.
+    // Real Project stage once the Final is passed or a submission exists.
     const showProject =
         journey.finalAssessment.state === 'passed' || journey.project.submissionId != null;
-    const showCredentialTeaser = journey.project.state === 'passed';
+    // Slice 6: the server claim state drives the Credential section.
+    // locked/null keeps the byte-identical legacy teaser; every other
+    // state renders authoritative server fields only.
+    const credentialState = credential?.state ?? null;
+    const showClaimSection =
+        credentialState === 'ready_to_issue' ||
+        credentialState === 'issued' ||
+        credentialState === 'revoked' ||
+        credentialState === 'expired' ||
+        credentialState === 'temporarily_unavailable';
+    const showLegacyTeaser = !showClaimSection && journey.project.state === 'passed';
     const showLegacyPracticalTeaser =
         showPracticalTeaser === true && journey.knowledge.state === 'passed' && journey.practical.state !== 'passed';
     return (
@@ -230,7 +281,36 @@ export const CredentialJourneyBlock: React.FC<CredentialJourneyBlockProps> = ({
                     )}
                 </View>
             )}
-            {showCredentialTeaser && (
+            {showClaimSection && credential ? (
+                <View>
+                    <Text style={[styles.section, { color: colors.textSecondary }]}>Credential</Text>
+                    {credentialState === 'ready_to_issue' ? (
+                        <Text style={[styles.status, { color: colors.text }]}>
+                            {credentialStatusLine('ready_to_issue')}
+                            {credential.score != null ? ` · Score: ${Math.round(credential.score)}%` : ''}
+                            {gradeLabel(credential.grade) ? ` · ${gradeLabel(credential.grade)}` : ''}
+                        </Text>
+                    ) : credentialState === 'issued' ? (
+                        <Text style={[styles.status, { color: colors.text }]}>
+                            {'✓ '}
+                            {credentialStatusLine('issued')}
+                            {credential.score != null ? ` · Score: ${Math.round(credential.score)}%` : ''}
+                            {gradeLabel(credential.grade) ? ` · ${gradeLabel(credential.grade)}` : ''}
+                            {shortDate(credential.issuedAt) ? ` · Issued ${shortDate(credential.issuedAt)}` : ''}
+                        </Text>
+                    ) : (
+                        <Text style={[styles.status, { color: colors.text }]}>
+                            {credentialState ? credentialStatusLine(credentialState) : ''}
+                        </Text>
+                    )}
+                    {claimError && (
+                        <Text style={[styles.alert, { color: colors.text }]}>
+                            {claimError}
+                        </Text>
+                    )}
+                </View>
+            ) : null}
+            {showLegacyTeaser && (
                 <Text style={[styles.teaser, { color: colors.textSecondary }]}>
                     Credential{'\n'}Next step
                 </Text>

@@ -3,11 +3,18 @@ import type { LearningRecommendation } from '../domain/sessions/nextBestAction';
 import {
     getCredentialProgress,
     getCredentialStageSnapshot,
+    getCredentialStatus,
     getProgramAvailability,
     getProjectJourneySnapshot,
     getSkillVerification,
 } from '../services/trustApi';
-import type { FinalAttemptRow, KnowledgeAttemptRow, PracticalAttemptRow, SkillVerification } from '../services/trustApi';
+import type {
+    CredentialClaimStatus,
+    FinalAttemptRow,
+    KnowledgeAttemptRow,
+    PracticalAttemptRow,
+    SkillVerification,
+} from '../services/trustApi';
 
 /**
  * Slice 5 — canonical credential journey read model.
@@ -80,6 +87,15 @@ export interface JourneyProject {
     reviewedAt: string | null;
 }
 
+/**
+ * Slice 6 — server-authoritative credential claim state. Every field
+ * originates from get_credential_status (migration 038); the client
+ * never calculates readiness, score, grade, or credential identity.
+ * Null when the status read itself failed — the UI must show nothing
+ * claim-related rather than infer from missing data.
+ */
+export type JourneyCredential = CredentialClaimStatus;
+
 export type JourneyNextAction =
     | { kind: 'verify_skill'; skillKey: string; skillName: string }
     | { kind: 'start_knowledge' }
@@ -106,6 +122,8 @@ export interface CredentialJourney {
     practical: JourneyPractical;
     finalAssessment: JourneyFinalAssessment;
     project: JourneyProject;
+    /** Server claim state (Slice 6). Null while unknown — never inferred. */
+    credential: JourneyCredential | null;
     nextAction: JourneyNextAction;
     /** True when the block carries anything worth showing. */
     visible: boolean;
@@ -374,6 +392,7 @@ const HIDDEN_BASE: JourneyBase = {
     practical: { state: 'locked', score: null, attemptId: null },
     finalAssessment: { state: 'locked', score: null, attemptId: null, attemptNumber: null, deadline: null },
     project: { state: 'locked', submissionId: null, score: null, submittedAt: null, reviewedAt: null },
+    credential: null,
 };
 
 interface JourneyBase {
@@ -387,6 +406,7 @@ interface JourneyBase {
     practical: JourneyPractical;
     finalAssessment: JourneyFinalAssessment;
     project: JourneyProject;
+    credential: JourneyCredential | null;
 }
 
 export function useCredentialJourney(
@@ -494,6 +514,16 @@ export function useCredentialJourney(
                     finalPassed: finalAssessment.state === 'passed',
                     unavailable: !snapshot.contentAvailable || projectFailed,
                 });
+                // Slice 6 claim state: isolated like the project read. A
+                // status failure hides claim UI only (credential null) —
+                // the frozen upstream stages stay visible.
+                let credential: JourneyCredential | null = null;
+                try {
+                    credential = await getCredentialStatus(programSlug);
+                } catch {
+                    credential = null;
+                }
+                if (cancelled) return;
                 if (mounted.current) {
                     setBase({
                         available: true,
@@ -508,6 +538,7 @@ export function useCredentialJourney(
                         practical,
                         finalAssessment,
                         project,
+                        credential,
                     });
                 }
             } catch {

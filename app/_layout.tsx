@@ -212,9 +212,12 @@ export default function RootLayout() {
         const inAuthGroup = segments[0] === '(auth)';
         const inAppGroup = segments[0] === '(app)';
         const isPrivacy = segments[0] === ('privacy' as any);
+        // Public credential verification works without authentication
+        // (anon verify_credential RPC) — same exemption shape as privacy.
+        const isVerify = segments[0] === ('verify' as any);
 
         if (!isAuthenticated) {
-            if (!inAuthGroup && !isPrivacy) {
+            if (!inAuthGroup && !isPrivacy && !isVerify) {
                 router.replace(ROUTES.AUTH as any);
             }
         } else {
@@ -302,6 +305,14 @@ export default function RootLayout() {
                             />
                             <Stack.Screen
                                 name="credential/[slug]"
+                                options={{
+                                    presentation: 'card',
+                                    animation: 'slide_from_right',
+                                    title: ''
+                                }}
+                            />
+                            <Stack.Screen
+                                name="verify/[credentialId]"
                                 options={{
                                     presentation: 'card',
                                     animation: 'slide_from_right',

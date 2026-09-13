@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Share, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,13 +15,22 @@ import { useTaskStore } from '../store/taskStore';
 import { ProgressBar, SkillBar } from '../components/credentials/SkillBar';
 import { routeForRecommendation } from '../domain/sessions/sessionRouting';
 import { reasonCopy } from '../utils/learningCopy';
+import { getCredentialStatus } from '../services/trustApi';
+import type { CredentialClaimStatus } from '../services/trustApi';
+import { verifyCredentialPublic } from '../services/credentialVerification';
+import type { PublicCredential } from '../services/credentialVerification';
+import { VERIFY_BASE_URL } from '../domain/credentials/scoring';
+import { gradeLabel, shortDate } from '../components/credentials/CredentialJourneyBlock';
 
 /**
- * Verified-skill detail — progressive disclosure.
- * Shows: verified state, skills, next best action, readiness.
- * Hides until relevant: retake/recovery/project mechanics, credential
- * ID/verification (backend phases). Practice uses the shared swipe
- * session (review-only weak-skill bite).
+ * Slice 6 — credential detail, two separated layers:
+ *
+ * 1. Verified Credential (top): ONLY server-authoritative fields from
+ *    get_credential_status + verify_credential (title, status, holder,
+ *    score/grade, verified skills, dates, credential ID, share/verify
+ *    actions). Never local math, never AsyncStorage.
+ * 2. Learning journey (below): the existing local learning progress —
+ *    clearly labeled, never mixed with issuance state.
  */
 export const CredentialDetailScreen: React.FC = () => {
     const router = useRouter();
@@ -37,6 +46,59 @@ export const CredentialDetailScreen: React.FC = () => {
     const getReadiness = useCredentialStore(s => s.getReadiness);
     const snapshot = useTaskStore(s => s.snapshot);
     const dailyTasks = useTaskStore(s => s.dailyTasks);
+
+    // --- Slice 6 server credential state (never local) ---
+    const [status, setStatus] = useState<CredentialClaimStatus | null>(null);
+    const [verified, setVerified] = useState<PublicCredential | null>(null);
+    const [credLoading, setCredLoading] = useState(true);
+    const [credError, setCredError] = useState(false);
+
+    const loadCredential = useCallback(async () => {
+        if (!slug) return;
+        setCredLoading(true);
+        setCredError(false);
+        try {
+            const next = await getCredentialStatus(slug);
+            setStatus(next);
+            if (next.credentialId) {
+                try {
+                    const pub = await verifyCredentialPublic(next.credentialId);
+                    setVerified(pub.found ? pub.credential : null);
+                } catch {
+                    setVerified(null);
+                }
+            } else {
+                setVerified(null);
+            }
+        } catch {
+            // Neutral failure: no credential rendering from missing data.
+            setStatus(null);
+            setVerified(null);
+            setCredError(true);
+        } finally {
+            setCredLoading(false);
+        }
+    }, [slug]);
+
+    useEffect(() => {
+        void loadCredential();
+    }, [loadCredential]);
+
+    const verificationUrl = status?.credentialId ? `${VERIFY_BASE_URL}/${status.credentialId}` : null;
+
+    const shareCredential = useCallback(async () => {
+        if (!verificationUrl) return;
+        try {
+            await Share.share({ message: verificationUrl });
+        } catch {
+            // Share sheet unavailable: the URL stays visible for manual copy.
+        }
+    }, [verificationUrl]);
+
+    const openVerification = useCallback(() => {
+        if (!status?.credentialId) return;
+        router.push(`/verify/${status.credentialId}` as any);
+    }, [router, status?.credentialId]);
 
     const readiness = useMemo(() => {
         if (!program || !cert.eligible) return null;
@@ -67,6 +129,91 @@ export const CredentialDetailScreen: React.FC = () => {
         (recommendation?.taskId ? (dailyTasks.find(dt => dt.id === recommendation.taskId)?.title ?? null) : null);
     const actionRoute = recommendation ? routeForRecommendation(recommendation, 'quick_session') : null;
 
+    // --- Slice 6 credential card: server fields only. Never local math. ---
+    const renderCredentialCard = () => {
+        if (credLoading) {
+            return (
+                <View style={styles.card}>
+                    <ActivityIndicator size="small" />
+                </View>
+            );
+        }
+        if (credError || !status) {
+            return (
+                <View style={styles.card}>
+                    <Text style={styles.body}>{t('Credential status is unavailable.')}</Text>
+                    <TouchableOpacity style={styles.primaryButton} activeOpacity={0.85} onPress={() => void loadCredential()}>
+                        <Text style={styles.primaryText}>{t('Retry')}</Text>
+                    </TouchableOpacity>
+                </View>
+            );
+        }
+        if (status.state === 'issued' || status.state === 'revoked' || status.state === 'expired') {
+            const headline =
+                status.state === 'issued'
+                    ? t('Issued credential')
+                    : status.state === 'revoked'
+                      ? t('Credential revoked')
+                      : t('Credential expired');
+            return (
+                <View style={styles.heroCard}>
+                    <Text style={styles.heroKicker}>{headline}</Text>
+                    {verified?.holderDisplayName ? (
+                        <Text style={styles.credHolder}>{verified.holderDisplayName}</Text>
+                    ) : null}
+                    <Text style={styles.credScore}>
+                        {status.score != null ? `${Math.round(status.score)}%` : ''}
+                        {gradeLabel(status.grade) ? ` · ${gradeLabel(status.grade)}` : ''}
+                    </Text>
+                    {verified && verified.verifiedSkills.length > 0 && (
+                        <Text style={styles.body}>
+                            {verified.verifiedSkills.map(s => s.name).join(' · ')}
+                        </Text>
+                    )}
+                    <Text style={styles.credMeta}>
+                        {shortDate(status.issuedAt) ? `${t('Issued')} ${shortDate(status.issuedAt)}` : ''}
+                        {status.expiresAt && shortDate(status.expiresAt) ? ` · ${t('Expires')} ${shortDate(status.expiresAt)}` : ''}
+                    </Text>
+                    {status.credentialId ? (
+                        <Text style={styles.credMeta} selectable>
+                            {status.credentialId}
+                        </Text>
+                    ) : null}
+                    {status.state === 'issued' && (
+                        <>
+                            <TouchableOpacity style={styles.primaryButton} activeOpacity={0.85} onPress={openVerification}>
+                                <Text style={styles.primaryText}>{t('Verify credential')}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.85} onPress={() => void shareCredential()}>
+                                <Text style={styles.secondaryText}>{t('Share credential')}</Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
+                </View>
+            );
+        }
+        if (status.state === 'ready_to_issue') {
+            return (
+                <View style={styles.card}>
+                    <Text style={styles.cardTitle}>{t('Ready to claim')}</Text>
+                    <Text style={styles.body}>
+                        {t('Your credential is ready. Claim it from your learning journey.')}
+                        {status.score != null ? ` ${Math.round(status.score)}%` : ''}
+                        {gradeLabel(status.grade) ? ` · ${gradeLabel(status.grade)}` : ''}
+                    </Text>
+                </View>
+            );
+        }
+        if (status.state === 'temporarily_unavailable') {
+            return (
+                <View style={styles.card}>
+                    <Text style={styles.body}>{t('Credential issuance is temporarily unavailable.')}</Text>
+                </View>
+            );
+        }
+        return null;
+    };
+
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
@@ -86,6 +233,8 @@ export const CredentialDetailScreen: React.FC = () => {
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
                 <Text style={styles.title}>{programShortTitle(program.title)}</Text>
 
+                {renderCredentialCard()}
+
                 {!enrolled ? (
                     <View style={styles.card}>
                         <Text style={styles.body}>
@@ -104,6 +253,7 @@ export const CredentialDetailScreen: React.FC = () => {
                     </View>
                 ) : (
                     <>
+                        <Text style={styles.sectionTitle}>{t('Learning journey')}</Text>
                         <View style={styles.heroCard}>
                             <Text style={styles.heroKicker}>{t('Подтверждённый навык')}</Text>
                             <Text style={styles.heroPct}>{pct}%</Text>
@@ -278,6 +428,40 @@ const createStyles = (colors: any) =>
             fontFamily: fonts.heading.bold,
             fontSize: scale(16),
             color: '#FFFFFF',
+        },
+        secondaryButton: {
+            marginTop: scale(12),
+            borderRadius: 9999,
+            borderWidth: 1.5,
+            borderColor: '#0F2147',
+            height: scale(52),
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        secondaryText: {
+            fontFamily: fonts.heading.bold,
+            fontSize: scale(16),
+            color: colors.text,
+        },
+        credHolder: {
+            fontFamily: fonts.heading.bold,
+            fontSize: scale(22),
+            color: '#1E1E2E',
+            marginBottom: scale(4),
+        },
+        credScore: {
+            fontFamily: fonts.heading.bold,
+            fontSize: scale(32),
+            color: '#1E1E2E',
+            marginBottom: scale(8),
+        },
+        credMeta: {
+            fontFamily: fonts.body.regular,
+            fontSize: scale(13),
+            lineHeight: scale(18),
+            color: '#1E1E2E',
+            opacity: 0.75,
+            marginTop: scale(4),
         },
     });
 

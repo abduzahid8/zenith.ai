@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -11,11 +11,16 @@ import { CREDENTIAL_PROGRAMS, programShortTitle } from '../domain/credentials/ca
 import { useCredentialStore } from '../store/credentialStore';
 import { useAllCertificateProgress } from '../hooks/useCertificateProgress';
 import { ProgressBar } from '../components/credentials/SkillBar';
+import { getCredentialStatus, getProgramAvailability } from '../services/trustApi';
+import type { CredentialClaimStatus } from '../services/trustApi';
 
 /**
  * Skills hub — what can I already prove?
  * One canonical overall per program; no XP headers, no extra metrics.
- * Exam/project/issuance UI arrives with the backend phases.
+ *
+ * Slice 6: program availability (issuance_enabled) and the server
+ * claim status decide what each card promises. Programs whose issuance
+ * is disabled never show claim/verification actions — only learning.
  */
 export const CredentialsScreen: React.FC = () => {
     const router = useRouter();
@@ -24,6 +29,43 @@ export const CredentialsScreen: React.FC = () => {
     const t = useT();
     const allCert = useAllCertificateProgress();
     const enroll = useCredentialStore(s => s.enroll);
+    // Server availability + claim status. Unknown while loading: cards
+    // fall back to the learning view, never to claim affordances.
+    const [issuable, setIssuable] = useState<Record<string, boolean> | null>(null);
+    const [claim, setClaim] = useState<Record<string, CredentialClaimStatus>>({});
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const programs = await getProgramAvailability();
+                if (cancelled) return;
+                const map: Record<string, boolean> = {};
+                for (const p of programs) map[p.slug] = p.issuable === true;
+                setIssuable(map);
+                const next: Record<string, CredentialClaimStatus> = {};
+                for (const p of programs) {
+                    if (p.issuable !== true) continue;
+                    try {
+                        next[p.slug] = await getCredentialStatus(p.slug);
+                    } catch {
+                        // Per-program failure: omit the badge, keep learning.
+                    }
+                }
+                if (!cancelled) setClaim(next);
+            } catch {
+                if (!cancelled) setIssuable(null);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const openDetail = (slug: string) => {
+        console.log('[Credentials] Program pressed:', slug);
+        router.push(`/credential/${slug}` as any);
+    };
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -47,9 +89,25 @@ export const CredentialsScreen: React.FC = () => {
                     const cert = allCert[program.slug];
                     const enrolled = cert?.enrolled ?? false;
                     const pct = cert ? Math.round(cert.overall) : 0;
+                    // Disabled issuance must never look issuable. Unknown
+                    // (loading/offline) defaults to the learning view.
+                    const disabled = issuable !== null && issuable[program.slug] !== true;
+                    const state = claim[program.slug]?.state ?? null;
+                    const stateLine =
+                        state === 'issued'
+                            ? `Issued${claim[program.slug].score != null ? ` · ${Math.round(claim[program.slug].score!)}%` : ''}`
+                            : state === 'ready_to_issue'
+                              ? 'Ready to claim'
+                              : state === 'revoked'
+                                ? 'Revoked'
+                                : state === 'expired'
+                                  ? 'Expired'
+                                  : null;
                     return (
                         <View key={program.slug} style={styles.card}>
                             <Text style={styles.cardTitle}>{programShortTitle(program.title)}</Text>
+                            {stateLine && <Text style={styles.stateLine}>{stateLine}</Text>}
+                            {disabled && <Text style={styles.stateLine}>{t('Credential unavailable')}</Text>}
                             {enrolled ? (
                                 <>
                                     <Text style={styles.cardPct}>{pct}%</Text>
@@ -57,10 +115,7 @@ export const CredentialsScreen: React.FC = () => {
                                     <TouchableOpacity
                                         style={styles.secondaryButton}
                                         activeOpacity={0.85}
-                                        onPress={() => {
-                                            console.log('[Credentials] Program pressed:', program.slug);
-                                            router.push(`/credential/${program.slug}` as any);
-                                        }}
+                                        onPress={() => openDetail(program.slug)}
                                     >
                                         <Text style={styles.secondaryText}>{t('Подробнее')}</Text>
                                     </TouchableOpacity>
@@ -70,12 +125,20 @@ export const CredentialsScreen: React.FC = () => {
                                     style={styles.primaryButton}
                                     activeOpacity={0.85}
                                     onPress={() => {
+                                        if (disabled) {
+                                            // No verification can start here:
+                                            // view learning only, enroll nothing.
+                                            openDetail(program.slug);
+                                            return;
+                                        }
                                         console.log('[Credentials] Enroll pressed:', program.slug);
                                         enroll(program.slug);
-                                        router.push(`/credential/${program.slug}` as any);
+                                        openDetail(program.slug);
                                     }}
                                 >
-                                    <Text style={styles.primaryText}>{t('Начать проверку')}</Text>
+                                    <Text style={styles.primaryText}>
+                                        {disabled ? t('Подробнее') : t('Начать проверку')}
+                                    </Text>
                                 </TouchableOpacity>
                             )}
                         </View>
@@ -129,6 +192,12 @@ const createStyles = (colors: any) =>
         cardTitle: {
             fontFamily: fonts.heading.bold,
             fontSize: scale(19),
+            color: colors.text,
+            marginBottom: scale(8),
+        },
+        stateLine: {
+            fontFamily: fonts.heading.medium,
+            fontSize: scale(14),
             color: colors.text,
             marginBottom: scale(8),
         },

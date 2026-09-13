@@ -22,9 +22,11 @@ import {
     ensureEnrollment,
     getCredentialProgress,
     getCredentialStageSnapshot,
+    getCredentialStatus,
     getProgramAvailability,
     getProjectJourneySnapshot,
     getSkillVerification,
+    issueCredential,
     submitProject,
 } from '../services/trustApi';
 
@@ -32,10 +34,12 @@ jest.mock('../services/trustApi', () => ({
     ensureEnrollment: jest.fn(),
     getCredentialProgress: jest.fn(),
     getCredentialStageSnapshot: jest.fn(),
+    getCredentialStatus: jest.fn(),
     getKnowledgeJourneySnapshot: jest.fn(),
     getProgramAvailability: jest.fn(),
     getProjectJourneySnapshot: jest.fn(),
     getSkillVerification: jest.fn(),
+    issueCredential: jest.fn(),
     startAssessment: jest.fn(),
     startKnowledgeAttempt: jest.fn(),
     startPracticalAttempt: jest.fn(),
@@ -44,6 +48,30 @@ jest.mock('../services/trustApi', () => ({
     submitPracticalAttempt: jest.fn(),
     submitProject: jest.fn(),
     isContentUnavailable: jest.fn((m: string) => String(m).includes('credential_content_unavailable')),
+    parseClaimError: jest.fn((m: string) => {
+        const s = String(m);
+        if (
+            s.includes('component_missing_or_failed') ||
+            s.includes('skill_gate_failed') ||
+            s.includes('overall requirement') ||
+            s.includes('enrollment required') ||
+            s.includes('not issuance-ready') ||
+            s.includes('unknown or inactive') ||
+            s.includes('no evidence policy')
+        ) {
+            return { kind: 'not_ready' };
+        }
+        if (s.includes('already')) return { kind: 'already_issued' };
+        if (s.includes('bank not active') || s.includes('credential_content_unavailable')) return { kind: 'unavailable' };
+        return { kind: 'network' };
+    }),
+    CLAIM_NOT_READY_COPY: 'Not ready to claim yet. Your credential status was refreshed.',
+    CLAIM_ALREADY_ISSUED_COPY: 'This credential is already issued.',
+    CLAIM_TEMPORARILY_UNAVAILABLE_COPY: 'Credential issuance is temporarily unavailable. Try again later.',
+    CLAIM_NETWORK_COPY: 'Claim needs an internet connection.',
+    CLAIM_BUTTON_COPY: 'Claim credential',
+    CLAIMING_BUTTON_COPY: 'Claiming…',
+    VIEW_CREDENTIAL_BUTTON_COPY: 'View credential',
     parseRetakeBlock: jest.fn((m: string) => {
         const match = /^retake_blocked:(cooldown|remediation_required)(?::(.*))?$/.exec(String(m));
         if (!match) return null;
@@ -70,6 +98,8 @@ const mockAvailability = getProgramAvailability as jest.Mock;
 const mockProjectSnap = getProjectJourneySnapshot as jest.Mock;
 const mockSkills = getSkillVerification as jest.Mock;
 const mockSubmitProject = submitProject as jest.Mock;
+const mockCredentialStatus = getCredentialStatus as jest.Mock;
+const mockIssueCredential = issueCredential as jest.Mock;
 
 const SKILLS_4_OF_4 = [
     { skillKey: 'rules', skillName: 'Rules', samplesCompleted: 4, samplesRequired: 4, passes: 4, passRate: 1, score: 100, verified: true },
@@ -93,6 +123,8 @@ function mockJourneyServer(opts: {
     projectSubmission?: null | object;
     projectReview?: null | object;
     projectFails?: boolean;
+    /** Slice 6 server claim state. Defaults to locked (no claim UI). */
+    credential?: null | object;
 } = {}) {
     mockAvailability.mockResolvedValue([
         {
@@ -127,6 +159,11 @@ function mockJourneyServer(opts: {
             review: opts.projectReview ?? null,
         });
     }
+    mockCredentialStatus.mockResolvedValue(
+        opts.credential ?? {
+            state: 'locked', credentialId: null, score: null, grade: null, issuedAt: null, expiresAt: null,
+        },
+    );
 }
 
 const K_PASS = {
@@ -606,25 +643,28 @@ describe('project error UX + frozen surfaces', () => {
         expect(deriveNextAction(null, true, 'passed', 'passed')).toEqual({ kind: 'continue_learning' });
     });
 
-    test('42/43. no Claim Credential action, no public verification UI', async () => {
-        mockJourneyServer({ ...FULL_PASS, projectSubmission: SUB1, projectReview: PASS_REV });
+    test('42/43. Slice 6: ready credential shows one Claim CTA backed by the server RPC', async () => {
+        mockJourneyServer({
+            ...FULL_PASS,
+            projectSubmission: SUB1,
+            projectReview: PASS_REV,
+            credential: { state: 'ready_to_issue', credentialId: null, score: 98, grade: 'distinction', issuedAt: null, expiresAt: null },
+        });
         const screen = await render(<CredentialJourneySection {...sectionProps} />);
-        await screen.findByText(/Credential/);
-        expect(screen.queryByText('Claim Credential')).toBeNull();
+        expect(await screen.findByText('Claim credential')).toBeTruthy();
+        // Exactly one primary CTA: the stage action is suppressed.
+        expect(screen.queryByText('Continue learning')).toBeNull();
         expect(screen.queryByText('Issue Credential')).toBeNull();
-        expect(screen.queryByText('Verify Credential')).toBeNull();
         const fs = require('fs');
         const path = require('path');
-        for (const file of [
-            'src/components/credentials/CredentialJourneySection.tsx',
-            'src/components/credentials/CredentialJourneyBlock.tsx',
-            'src/components/credentials/CredentialProjectSubmission.tsx',
-        ]) {
-            const content: string = fs.readFileSync(path.join(process.cwd(), file), 'utf8');
-            expect(content).not.toMatch(/Claim Credential/);
-            expect(content).not.toMatch(/verify_credential/);
-            expect(content).not.toMatch(/Verify Credential/);
-        }
+        // Claim flows through the server RPC only — no local issuance.
+        const section: string = fs.readFileSync(path.join(process.cwd(), 'src/components/credentials/CredentialJourneySection.tsx'), 'utf8');
+        expect(section).toMatch(/issueCredential/);
+        expect(section).not.toMatch(/credentialService/);
+        expect(section).not.toMatch(/tryIssue/);
+        expect(section).not.toMatch(/verifyLocal/);
+        const block: string = fs.readFileSync(path.join(process.cwd(), 'src/components/credentials/CredentialJourneyBlock.tsx'), 'utf8');
+        expect(block).not.toMatch(/credentialService/);
     });
 
     test('44. no Home changes', () => {

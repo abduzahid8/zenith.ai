@@ -15,10 +15,12 @@ import {
     ensureEnrollment,
     getCredentialProgress,
     getCredentialStageSnapshot,
+    getCredentialStatus,
     getProjectJourneySnapshot,
     getKnowledgeJourneySnapshot,
     getProgramAvailability,
     getSkillVerification,
+    issueCredential,
     startKnowledgeAttempt,
     submitKnowledgeAttempt,
 } from '../services/trustApi';
@@ -27,15 +29,41 @@ jest.mock('../services/trustApi', () => ({
     ensureEnrollment: jest.fn(),
     getCredentialProgress: jest.fn(),
     getCredentialStageSnapshot: jest.fn(),
+    getCredentialStatus: jest.fn(),
     getProjectJourneySnapshot: jest.fn(),
     getKnowledgeJourneySnapshot: jest.fn(),
     getProgramAvailability: jest.fn(),
     getSkillVerification: jest.fn(),
+    issueCredential: jest.fn(),
     startKnowledgeAttempt: jest.fn(),
     startPracticalAttempt: jest.fn(),
     submitKnowledgeAttempt: jest.fn(),
     submitPracticalAttempt: jest.fn(),
     isContentUnavailable: jest.fn((m: string) => String(m).includes('credential_content_unavailable')),
+    parseClaimError: jest.fn((m: string) => {
+        const s = String(m);
+        if (
+            s.includes('component_missing_or_failed') ||
+            s.includes('skill_gate_failed') ||
+            s.includes('overall requirement') ||
+            s.includes('enrollment required') ||
+            s.includes('not issuance-ready') ||
+            s.includes('unknown or inactive') ||
+            s.includes('no evidence policy')
+        ) {
+            return { kind: 'not_ready' };
+        }
+        if (s.includes('already')) return { kind: 'already_issued' };
+        if (s.includes('bank not active') || s.includes('credential_content_unavailable')) return { kind: 'unavailable' };
+        return { kind: 'network' };
+    }),
+    CLAIM_NOT_READY_COPY: 'Not ready to claim yet. Your credential status was refreshed.',
+    CLAIM_ALREADY_ISSUED_COPY: 'This credential is already issued.',
+    CLAIM_TEMPORARILY_UNAVAILABLE_COPY: 'Credential issuance is temporarily unavailable. Try again later.',
+    CLAIM_NETWORK_COPY: 'Claim needs an internet connection.',
+    CLAIM_BUTTON_COPY: 'Claim credential',
+    CLAIMING_BUTTON_COPY: 'Claiming…',
+    VIEW_CREDENTIAL_BUTTON_COPY: 'View credential',
 }));
 jest.mock('../theme/useAppTheme', () => ({
     useAppTheme: () => ({
@@ -57,6 +85,8 @@ const mockStage = getCredentialStageSnapshot as jest.Mock;
 const mockProject = getProjectJourneySnapshot as jest.Mock;
 const mockAvailability = getProgramAvailability as jest.Mock;
 const mockSkills = getSkillVerification as jest.Mock;
+const mockCredentialStatus = getCredentialStatus as jest.Mock;
+const mockIssueCredential = issueCredential as jest.Mock;
 const mockStart = startKnowledgeAttempt as jest.Mock;
 const mockSubmit = submitKnowledgeAttempt as jest.Mock;
 
@@ -93,6 +123,8 @@ function mockJourneyServer(opts: {
     projectSubmission?: null | object;
     projectReview?: null | object;
     projectFails?: boolean;
+    /** Slice 6 server claim state. Defaults to locked (no claim UI). */
+    credential?: null | object;
 } = {}) {
     mockAvailability.mockResolvedValue([
         {
@@ -135,6 +167,11 @@ function mockJourneyServer(opts: {
             review: opts.projectReview ?? null,
         });
     }
+    mockCredentialStatus.mockResolvedValue(
+        opts.credential ?? {
+            state: 'locked', credentialId: null, score: null, grade: null, issuedAt: null, expiresAt: null,
+        },
+    );
 }
 
 beforeEach(() => {

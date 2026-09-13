@@ -1,9 +1,23 @@
 import React, { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import type { LearningRecommendation } from '../../domain/sessions/nextBestAction';
 import { getProjectRequirement } from '../../domain/credentials/catalog';
-import { ensureEnrollment, isContentUnavailable, submitProject } from '../../services/trustApi';
+import { ensureEnrollment, isContentUnavailable, issueCredential, parseClaimError, submitProject } from '../../services/trustApi';
+import {
+    CLAIM_ALREADY_ISSUED_COPY,
+    CLAIM_BUTTON_COPY,
+    CLAIM_NETWORK_COPY,
+    CLAIM_NOT_READY_COPY,
+    CLAIM_TEMPORARILY_UNAVAILABLE_COPY,
+    CLAIMING_BUTTON_COPY,
+    VIEW_CREDENTIAL_BUTTON_COPY,
+} from '../../services/trustApi';
 import { useCredentialJourney } from '../../hooks/useCredentialJourney';
+import { useUserProfileStore } from '../../store/userProfileStore';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { scale } from '../../constants';
+import { fonts } from '../../theme';
 import type { KnowledgeSubmitResult, RunnerMode } from './CredentialChallengeRunner';
 import { CredentialChallengeRunner } from './CredentialChallengeRunner';
 import { CredentialJourneyBlock, primaryForAction } from './CredentialJourneyBlock';
@@ -81,6 +95,15 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
     const [sheetOpen, setSheetOpen] = useState(false);
     const [sheetMode, setSheetMode] = useState<'submit' | 'revise'>('submit');
     const [notice, setNotice] = useState<string | null>(null);
+    // Slice 6 claim lifecycle: idle → submitting → server response →
+    // authoritative refresh. No optimistic issuance, ever.
+    const [claimSubmitting, setClaimSubmitting] = useState(false);
+    const [claimError, setClaimError] = useState<string | null>(null);
+    const [holderSheetOpen, setHolderSheetOpen] = useState(false);
+    const [holderDraft, setHolderDraft] = useState('');
+    const router = useRouter();
+    const { colors } = useAppTheme();
+    const profileName = useUserProfileStore(s => s.userName);
 
     const skillNames = useMemo(() => {
         const map: Record<string, string> = {};
@@ -133,6 +156,78 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
         setNotice(null);
         setSheetMode(mode);
         setSheetOpen(true);
+    };
+
+    /**
+     * Slice 6 Claim: exactly one server call (trustApi.issueCredential),
+     * guarded against double-tap locally but correct regardless — the
+     * server is idempotent and any same-identity success counts. Never
+     * sets issued state locally: the authoritative refresh decides.
+     */
+    const runClaim = async (holderName: string) => {
+        if (!programSlug || claimSubmitting) return;
+        setClaimSubmitting(true);
+        setClaimError(null);
+        setNotice(null);
+        try {
+            // Success, first or duplicate: the server returns the
+            // authoritative credential identity either way.
+            await issueCredential(programSlug, holderName);
+            setHolderSheetOpen(false);
+            refresh();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            const block = parseClaimError(message);
+            switch (block.kind) {
+                case 'not_ready':
+                    // The journey moved under us: never fake success,
+                    // re-read the authoritative state and show it.
+                    refresh();
+                    setClaimError(CLAIM_NOT_READY_COPY);
+                    break;
+                case 'already_issued':
+                    refresh();
+                    setClaimError(CLAIM_ALREADY_ISSUED_COPY);
+                    break;
+                case 'unavailable':
+                    refresh();
+                    setClaimError(CLAIM_TEMPORARILY_UNAVAILABLE_COPY);
+                    break;
+                case 'network':
+                default:
+                    // Offline: keep the current view, offer retry. Never
+                    // refresh into a fail-closed hide on a network blip.
+                    setClaimError(CLAIM_NETWORK_COPY);
+                    break;
+            }
+        } finally {
+            setClaimSubmitting(false);
+        }
+    };
+
+    const startClaim = () => {
+        if (!programSlug || claimSubmitting) return;
+        setClaimError(null);
+        // Reuse the trustworthy onboarding display name when present;
+        // otherwise ask for a display name (never identity verification).
+        const known = (profileName ?? '').trim();
+        if (known) {
+            void runClaim(known);
+        } else {
+            setHolderDraft('');
+            setHolderSheetOpen(true);
+        }
+    };
+
+    const confirmHolderName = () => {
+        const name = holderDraft.trim();
+        if (!name) return;
+        void runClaim(name);
+    };
+
+    const viewCredential = () => {
+        if (!programSlug) return;
+        router.push(`/credential/${programSlug}` as any);
     };
 
     const handleRunnerComplete = (_result: KnowledgeSubmitResult) => {
@@ -199,6 +294,22 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
     };
 
     const primary = (() => {
+        // Slice 6: the server claim state owns the single primary CTA.
+        // ready/expired → Claim; issued → View; revoked/unavailable →
+        // no action. Stage CTAs never compete with the claim CTA.
+        const credentialState = journey.credential?.state ?? null;
+        if (credentialState === 'ready_to_issue' || credentialState === 'expired') {
+            if (claimError === CLAIM_NETWORK_COPY) {
+                return { label: 'Try again', onPress: startClaim };
+            }
+            if (claimSubmitting) {
+                return { label: CLAIMING_BUTTON_COPY, onPress: () => {} };
+            }
+            return { label: CLAIM_BUTTON_COPY, onPress: startClaim };
+        }
+        if (credentialState === 'issued') {
+            return { label: VIEW_CREDENTIAL_BUTTON_COPY, onPress: viewCredential };
+        }
         if (prepareError === 'network') {
             return { label: 'Try again', onPress: retryCurrent };
         }
@@ -253,8 +364,10 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
                 journey={{ ...journey, knowledge, practical, finalAssessment }}
                 title={programTitle}
                 primary={starting ? null : primary}
-                showPracticalTeaser={journey.knowledge.state === 'passed' && journey.practical.state === 'locked'}
+                showPracticalTeaser={journey.knowledge.state === 'passed' && journey.practical.state !== 'passed'}
                 alert={alert}
+                credential={journey.credential}
+                claimError={claimError}
             />
             <CredentialChallengeRunner
                 visible={runnerOpen}
@@ -274,8 +387,91 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
                 onSubmit={handleSheetSubmit}
                 onClose={() => setSheetOpen(false)}
             />
+            <Modal visible={holderSheetOpen} transparent animationType="fade" onRequestClose={() => setHolderSheetOpen(false)}>
+                <View style={sheetStyles.backdrop}>
+                    <View style={[sheetStyles.card, { backgroundColor: colors.surfaceLight }]}>
+                        <Text style={[sheetStyles.title, { color: colors.text }]}>Name for your credential</Text>
+                        <Text style={[sheetStyles.body, { color: colors.textSecondary }]}>
+                            This display name appears on your credential. It is not identity verification.
+                        </Text>
+                        <TextInput
+                            style={[sheetStyles.input, { color: colors.text }]}
+                            placeholder="Your name"
+                            value={holderDraft}
+                            onChangeText={setHolderDraft}
+                            autoCapitalize="words"
+                            returnKeyType="done"
+                            onSubmitEditing={confirmHolderName}
+                        />
+                        <TouchableOpacity
+                            style={[sheetStyles.confirm, { backgroundColor: colors.buttonPrimary, opacity: holderDraft.trim() && !claimSubmitting ? 1 : 0.5 }]}
+                            onPress={confirmHolderName}
+                            disabled={!holderDraft.trim() || claimSubmitting}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={[sheetStyles.confirmText, { color: colors.white }]}>
+                                {claimSubmitting ? CLAIMING_BUTTON_COPY : CLAIM_BUTTON_COPY}
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setHolderSheetOpen(false)} activeOpacity={0.7}>
+                            <Text style={[sheetStyles.cancel, { color: colors.textSecondary }]}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
+};
+
+const sheetStyles = {
+    backdrop: {
+        flex: 1,
+        justifyContent: 'center' as const,
+        alignItems: 'center' as const,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        padding: scale(24),
+    },
+    card: {
+        borderRadius: scale(16),
+        padding: scale(20),
+        width: '100%' as const,
+    },
+    title: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(18),
+        marginBottom: scale(8),
+    },
+    body: {
+        fontFamily: fonts.heading.regular,
+        fontSize: scale(14),
+        marginBottom: scale(12),
+    },
+    input: {
+        fontFamily: fonts.heading.regular,
+        fontSize: scale(16),
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: scale(10),
+        paddingHorizontal: scale(12),
+        paddingVertical: scale(10),
+        marginBottom: scale(12),
+    },
+    confirm: {
+        borderRadius: scale(12),
+        paddingVertical: scale(12),
+        alignItems: 'center' as const,
+        marginBottom: scale(8),
+    },
+    confirmText: {
+        fontFamily: fonts.heading.bold,
+        fontSize: scale(16),
+    },
+    cancel: {
+        fontFamily: fonts.heading.regular,
+        fontSize: scale(14),
+        textAlign: 'center' as const,
+        paddingVertical: scale(6),
+    },
 };
 
 export default CredentialJourneySection;

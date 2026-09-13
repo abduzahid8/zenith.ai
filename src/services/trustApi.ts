@@ -24,6 +24,48 @@ export function parseRetakeBlock(message: string): RetakeBlock | null {
     return { blocked: true, reason: m[1] as RetakeReason, detail: m[2] ?? null };
 }
 
+export type ClaimErrorKind = 'not_ready' | 'already_issued' | 'unavailable' | 'network';
+
+export interface ClaimErrorBlock {
+    kind: ClaimErrorKind;
+}
+
+/**
+ * Typed client parsing for issue_credential outcomes. Raw backend
+ * strings never reach the UI. Note the server never errors on a
+ * duplicate Claim — it returns the existing credential identity — so
+ * `already_issued` is a defensive mapping only.
+ */
+export function parseClaimError(message: string): ClaimErrorBlock {
+    if (
+        message.includes('component_missing_or_failed') ||
+        message.includes('skill_gate_failed') ||
+        message.includes('overall requirement') ||
+        message.includes('enrollment required') ||
+        message.includes('not issuance-ready') ||
+        message.includes('unknown or inactive') ||
+        message.includes('no evidence policy')
+    ) {
+        return { kind: 'not_ready' };
+    }
+    if (message.includes('already')) {
+        return { kind: 'already_issued' };
+    }
+    if (message.includes('bank not active') || isContentUnavailable(message)) {
+        return { kind: 'unavailable' };
+    }
+    return { kind: 'network' };
+}
+
+export const CLAIM_NOT_READY_COPY = 'Not ready to claim yet. Your credential status was refreshed.';
+export const CLAIM_ALREADY_ISSUED_COPY = 'This credential is already issued.';
+export const CLAIM_TEMPORARILY_UNAVAILABLE_COPY =
+    'Credential issuance is temporarily unavailable. Try again later.';
+export const CLAIM_NETWORK_COPY = 'Claim needs an internet connection.';
+export const CLAIM_BUTTON_COPY = 'Claim credential';
+export const CLAIMING_BUTTON_COPY = 'Claiming…';
+export const VIEW_CREDENTIAL_BUTTON_COPY = 'View credential';
+
 /**
  * Fail-closed content gate: the server raises `credential_content_unavailable`
  * when no live (active + QA-passed + human-approved) content release exists
