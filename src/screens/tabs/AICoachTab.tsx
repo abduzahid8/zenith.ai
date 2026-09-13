@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
     View,
     Text,
@@ -25,13 +25,22 @@ import { useLearningIntelligence } from '../../hooks/useLearningIntelligence';
 import {
     VerifiedSkillChallenge,
     fetchVerifyContext,
+    shouldShowVerifyChip,
     VerifyChipContext,
 } from '../../components/session/VerifiedSkillChallenge';
 import { CredentialJourneySection } from '../../components/credentials/CredentialJourneySection';
+import { useCredentialJourney } from '../../hooks/useCredentialJourney';
+import {
+    resolveCoachPrimary,
+    buildCanonicalActionLine,
+    CoachPrimary,
+} from '../../domain/sessions/nextActionPrecedence';
+import { routeForRecommendation } from '../../domain/sessions/sessionRouting';
+import { CoachActionBar, CoachActionModel } from '../../components/coach/CoachActionBar';
 import { useGamificationStore } from '../../store/gamificationStore';
 import { useLanguageStore } from '../../store/languageStore';
 import { useGoalStore } from '../../store/goalStore';
-import { GoalSnapshot, DailyGoalContent } from '../../types/goals';
+import { GoalSnapshot } from '../../types/goals';
 import { findNextIncompleteTask } from '../../domain/sessions/sessionCompletion';
 import { sessionRouteForTask } from '../../domain/sessions/sessionRouting';
 import { useTaskStore } from '../../store/taskStore';
@@ -47,12 +56,6 @@ interface DisplayMessage {
     id: string;
     role: 'user' | 'assistant';
     content: string;
-}
-
-interface ActionChip {
-    label: string;
-    icon: string;
-    action: () => void;
 }
 
 const SendIcon = ({ color = "white" }: { color?: string }) => (
@@ -230,6 +233,80 @@ const AICoachTab: React.FC = () => {
 
     const scrollToEnd = () => setTimeout(() => chatListRef.current?.scrollToEnd({ animated: true }), 100);
 
+    const dailyTasks = useTaskStore(s => s.dailyTasks);
+    // Canonical recommendation (frozen engine): shared with the journey
+    // section below so Coach and Credential agree by construction.
+    const { recommendation: proveRec, program: proveProgram } = useLearningIntelligence({ minutes: 30 });
+    // Same server truth the journey section reads: stage/verify actions own
+    // their CTA there, so Coach cedes its primary slot (exactly one
+    // primary on screen). Fail-closed: any read error hides, never invents.
+    const { journey: coachJourney } = useCredentialJourney(proveProgram?.slug ?? null, { recommendation: proveRec });
+
+    /**
+     * THE primary action (Phase 1): resolved by the precedence policy from
+     * server journey state + canonical engine output — never by the LLM.
+     * journey_owned/null => no Coach primary chip (journey owns it / none).
+     * verify_skill => server-gated sheet, else targeted practice fallback.
+     */
+    const coachPrimary: CoachPrimary = useMemo(() => {
+        const resolved = resolveCoachPrimary({
+            journeyAction: coachJourney?.visible ? (coachJourney.nextAction as any) ?? null : null,
+            journeyVisible: !!coachJourney?.visible,
+            recommendation: proveRec,
+            dailyTasks,
+            origin: 'home_start',
+        });
+        if (resolved?.kind === 'verify_skill' && proveRec) {
+            // Same server gate as the journey section: issuance-disabled or
+            // already-verified skills fall back to targeted practice on the
+            // encountered day — never a dead or ungated Verify button.
+            const target = shouldShowVerifyChip(proveRec, verifyCtx);
+            if (!target) {
+                return {
+                    kind: 'session',
+                    source: 'remediation',
+                    label: proveRec.skillName ? `Practice ${proveRec.skillName.substring(0, 22)}` : 'Practice',
+                    route: routeForRecommendation(proveRec, 'home_start'),
+                    reasonCode: proveRec.reasonCode ?? null,
+                } as CoachPrimary;
+            }
+        }
+        return resolved;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [coachJourney, proveRec, dailyTasks, verifyCtx, proveProgram?.slug]);
+
+    const coachActionModel: CoachActionModel = useMemo(() => {
+        let primary: CoachActionModel['primary'] = null;
+        if (coachPrimary?.kind === 'verify_skill' && proveProgram) {
+            const { skillKey, skillName, label } = coachPrimary;
+            primary = {
+                label,
+                icon: '✓',
+                onPress: () => setChallenge({ programSlug: proveProgram.slug, skillKey, skillName }),
+            };
+        } else if (coachPrimary?.kind === 'session') {
+            const route = coachPrimary.route;
+            primary = {
+                label: coachPrimary.label,
+                icon: '▶️',
+                onPress: () => router.push(route as any),
+            };
+        }
+        // Secondaries are info-only: they never imply a competing "do this".
+        const secondaries: CoachActionModel['secondaries'] = [];
+        if (goalSnapshot?.definition.id) {
+            const goalId = goalSnapshot.definition.id;
+            secondaries.push({
+                id: 'plan',
+                label: "Today's plan",
+                icon: '📋',
+                onPress: () => router.push(`/goal-detail?goalId=${goalId}` as any),
+            });
+        }
+        secondaries.push({ id: 'ask', label: 'Ask me', icon: '💬', onPress: () => setShowInput(true) });
+        return { primary, secondaries };
+    }, [coachPrimary, goalSnapshot, proveProgram, router]);
+
     const handleSend = async (text?: string) => {
         const content = (text || inputText).trim();
         if (!content || isLoading) return;
@@ -250,7 +327,12 @@ const AICoachTab: React.FC = () => {
             const verifiedLine = verifyCtx.verifiedSkillKeys.length > 0
                 ? `\n- Server-verified skills: ${verifyCtx.verifiedSkillKeys.join(', ')}`
                 : '';
-            const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined, context + verifiedLine);
+            // The app has ALREADY chosen the next action (precedence
+            // policy); the model only explains/encourages it. The button
+            // itself routes canonically regardless of what the LLM writes.
+            const canonicalLine = buildCanonicalActionLine(coachPrimary);
+            const canonicalBlock = canonicalLine ? `\n- ${canonicalLine}` : '';
+            const response = await aiService.sendMessage(chatMessages, selectedHobby || undefined, context + verifiedLine + canonicalBlock);
             setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: response }]);
         } catch {
             setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: 'Sorry, I hit an error. Try again?' }]);
@@ -260,10 +342,8 @@ const AICoachTab: React.FC = () => {
         }
     };
 
-    const hobby = (selectedHobby || useUserProfileStore.getState().selectedHobby) as HobbyId | null;
-    // Canonical recommendation (frozen engine): the ONLY trigger for the
-    // Verify action. The UI never infers readiness itself.
-    const { recommendation: proveRec, program: proveProgram } = useLearningIntelligence({ minutes: 30 });
+    // (Canonical recommendation + primary action are resolved above,
+    // next to handleSend, so the LLM context and the buttons share them.)
 
     // Canonical journey refresh: bumped after every completed trusted
     // verification (pass OR fail — even a failed sample can move
@@ -333,53 +413,6 @@ const AICoachTab: React.FC = () => {
             router.push('/session-timer' as any);
         }
     };
-    const actionChips: ActionChip[] = useMemo(() => {
-        const chips: ActionChip[] = [];
-        if (goalSnapshot?.definition.id) {
-            const goalId = goalSnapshot.definition.id;
-            chips.push(
-                { label: 'Today\'s plan', icon: '📋', action: () => router.push(`/goal-detail?goalId=${goalId}`) },
-                { label: 'Start session', icon: '▶️', action: startNextTaskSession },
-            );
-            if (hobby === 'reading') {
-                chips.push({ label: 'Reading timer', icon: '⏱', action: () => router.push('/session-timer') });
-            }
-            if (dailyPlan && dailyPlan.steps.length > 0) {
-                dailyPlan.steps.slice(0, 2).forEach(s => {
-                    chips.push({
-                        label: `Step ${s.step}: ${s.title.substring(0, 22)}`,
-                        icon: s.type === 'learn' ? '📖' : s.type === 'practice' ? '🎯' : '📦',
-                        action: () => handleSend(`Tell me more about step ${s.step}: ${s.title}`),
-                    });
-                });
-            }
-            if (dailyPlan && dailyPlan.assets.length > 0) {
-                chips.push({ label: `${dailyPlan.assets.length} assets`, icon: '📦', action: () => router.push(`/goal-detail?goalId=${goalId}&page=assets`) });
-            }
-        }
-        chips.push(
-            {
-                label: 'Done for today', icon: '✓',
-                action: () => {
-                    const hobby = (selectedHobby || useUserProfileStore.getState().selectedHobby) as HobbyId | null;
-                    if (goalSnapshot && hobby) {
-                        useGoalStore.getState().recordDailyAction(hobby, 1, 'completed');
-                        useGoalStore.getState().completeDailyContent(goalSnapshot.definition.id);
-                        const dayNum = goalSnapshot.progress.history.length + 1;
-                        setMessages(prev => [...prev, { id: 'user-done', role: 'user', content: 'Mark today as done' }]);
-                        setMessages(prev => [...prev, {
-                            id: 'coach-celebrate', role: 'assistant',
-                            content: `🎉 **Day ${dayNum} complete!**\n\n🔥 ${goalSnapshot.progress.streak + 1}-day streak!\n📊 ${Math.round(goalSnapshot.percentComplete)}% to goal\n\nYou're building momentum. What's your next focus?`,
-                        }]);
-                    } else {
-                        handleSend('Mark today as done and celebrate progress');
-                    }
-                },
-            },
-            { label: 'Ask me', icon: '💬', action: () => setShowInput(true) },
-        );
-        return chips;
-    }, [goalSnapshot, dailyPlan]);
 
     return (
         <KeyboardAvoidingView
@@ -446,13 +479,7 @@ const AICoachTab: React.FC = () => {
                         </View>
                     ) : messages.length > 0 && !showInput ? (
                         <View>
-                            <View style={styles.chipRow}>
-                                {actionChips.map((chip, i) => (
-                                    <TouchableOpacity key={i} style={styles.chip} onPress={chip.action} activeOpacity={0.7}>
-                                        <Text style={styles.chipLabel}>{chip.icon} {chip.label}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
+                            <CoachActionBar model={coachActionModel} />
                         </View>
                     ) : null
                 }

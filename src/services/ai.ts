@@ -58,7 +58,7 @@ export const aiService = {
         if (userContext) {
             enrichedMessages.push({
                 role: 'system',
-                content: 'Current user app data (use this to answer questions about their activity):\n' + userContext + '\n\nAnswer concisely: explain progress, what it means, what to do next. Not too short, not too long.',
+                content: 'Current user app data (use this to answer questions about their activity):\n' + userContext + '\n\nAnswer concisely: explain progress, what it means, what to do next. Not too short, not too long. The app has already chosen the user\'s next action (see "Canonical next action" in the data when present) — explain and encourage that action; do not invent a different activity.',
             });
         }
         enrichedMessages.push(...messages);

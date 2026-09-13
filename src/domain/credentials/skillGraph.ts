@@ -58,11 +58,12 @@ export function computeSkillGraph(
     assessments: AssessmentEvidenceInput[],
     projectScores: Record<string, number> | null,
 ): SkillGraphResult {
-    // Only tasks from the program's evidence hobbies count. When hobbyId is
-    // unknown (offline/demo tasks), count the task — the engine already scoped
-    // the daily plan to the user's primary hobby.
+    // Fail-closed scoping (Phase 1): only tasks from the program's
+    // evidence hobbies count. Tasks with an unknown/missing hobbyId are
+    // EXCLUDED — never attributed to every program. Ambiguous history may
+    // still exist in the learning log, but it is not credential evidence.
     const relevant = tasks.filter(
-        t => !t.hobbyId || program.evidenceHobbyIds.includes(t.hobbyId),
+        t => !!t.hobbyId && program.evidenceHobbyIds.includes(t.hobbyId),
     );
 
     const skills = program.skills.map(skill => {

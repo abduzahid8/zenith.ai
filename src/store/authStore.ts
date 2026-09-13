@@ -10,6 +10,7 @@ import { useEarningsStore } from './earningsStore';
 import { useContentStore } from './contentStore';
 import { useDeviceScreenTimeStore } from './deviceScreenTimeStore';
 import { useSubscriptionStore } from './subscriptionStore';
+import { resetUserScopedState } from '../services/userScopeReset';
 import { toAppError } from '../shared/errors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -335,16 +336,11 @@ export const useAuthStore = create<AuthState>()(
                 await authService.signOut();
                 console.log('[authStore] signOut success');
 
-                // Reset all stores to clear previous account data
-                useUserProfileStore.getState().resetProfile();
-                useTaskStore.getState().resetTasks();
-                useHobbyTimeStore.getState().reset();
-                useQuizStore.getState().resetQuiz();
-                useScreenTimeStore.getState().reset();
-                useEarningsStore.getState().reset();
-                useContentStore.getState().reset();
-                useDeviceScreenTimeStore.getState().reset();
-                useSubscriptionStore.getState().reset();
+                // Account isolation: clear ALL user-scoped local state so the
+                // next account on this device cannot see this user's goals,
+                // credential enrollments, gamification or tasks. Server data
+                // is untouched. Device prefs (language/theme) are kept.
+                resetUserScopedState();
 
                 set({
                     user: null,
@@ -460,16 +456,8 @@ export const useAuthStore = create<AuthState>()(
                     await get().signOut();
                 } catch (signOutError) {
                     console.warn('[authStore] signOut() after deleteAccount failed (expected if user was removed):', signOutError);
-                    // Manually reset all stores since signOut() threw before doing it
-                    useUserProfileStore.getState().resetProfile();
-                    useTaskStore.getState().resetTasks();
-                    useHobbyTimeStore.getState().reset();
-                    useQuizStore.getState().resetQuiz();
-                    useScreenTimeStore.getState().reset();
-                    useEarningsStore.getState().reset();
-                    useContentStore.getState().reset();
-                    useDeviceScreenTimeStore.getState().reset();
-                    useSubscriptionStore.getState().reset();
+                    // Manually reset all user-scoped stores since signOut() threw before doing it
+                    resetUserScopedState();
                     set({
                         user: null,
                         session: null,

@@ -196,11 +196,10 @@ export default function GoalDetailScreen() {
     const store = useGoalStore.getState();
     switch (action) {
       case 'did_it':
-        store.recordDailyAction(goal.hobby, 1, `delegated: ${today?.doNow?.title || ''}`);
-        store.completeDailyContent(goal.id);
-        if (isSkill && today?.focusReason) {
-          store.adjustDifficulty(goal.hobby, 'completed_easy');
-        }
+        // Containment (Phase 1): a tap is attestation, not validated
+        // learning — UI-only acknowledgement. Validated progress is written
+        // exclusively by the swipe-session finalizer. Numbers on the
+        // finished screen therefore move only when a real session did.
         setFinished(true);
         Animated.timing(xpAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
         break;

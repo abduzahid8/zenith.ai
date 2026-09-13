@@ -129,8 +129,11 @@ export function buildEvidence(
     opts: { anchorDate?: string | null; artifacts?: ArtifactEvidenceInput[] } = {},
 ): LearningEvidence {
     const anchor = opts.anchorDate ?? null;
+    // Fail-closed scoping (Phase 1): a task WITHOUT an explicit hobby_id
+    // is excluded from every program. The old `!t.hobby_id ||` rule counted
+    // hobby-less tasks into ALL programs — cross-program leakage.
     const relevantTasks = allTasks.filter(
-        t => !t.hobby_id || program.evidenceHobbyIds.includes(t.hobby_id),
+        t => !!t.hobby_id && program.evidenceHobbyIds.includes(t.hobby_id),
     );
     const completedTasks = relevantTasks.filter(t => t.status === 'completed').length;
 
@@ -182,7 +185,7 @@ export function toTaskItems(
     anchorDate: string | null,
 ): TaskEvidenceInput[] {
     return allTasks
-        .filter(t => !t.hobby_id || program.evidenceHobbyIds.includes(t.hobby_id))
+        .filter(t => !!t.hobby_id && program.evidenceHobbyIds.includes(t.hobby_id))
         .map(t => ({
             type: t.type,
             status: t.status,

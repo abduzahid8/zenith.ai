@@ -192,6 +192,12 @@ interface GamificationState {
 
   /** Сбросить всё (выход из аккаунта) */
   resetGamification: () => void;
+  /**
+   * Account isolation (Phase 1): explicit user-change contract. Same as
+   * resetGamification today — a named alias so sign-out intent reads
+   * explicitly at the call site and stays stable if the two diverge.
+   */
+  resetForUserChange: () => void;
 }
 
 // ─────────────────────────────────────────────
@@ -204,6 +210,7 @@ const initialState: Omit<GamificationState,
   | 'dismissBadge' | 'startSession' | 'recordCodeRun'
   | 'recordChessSolve' | 'getItemsDueToday' | 'completeRepetition'
   | 'resetGamification' | 'incrementSessionsCompleted' | 'canStartSession'
+  | 'resetForUserChange'
 > = {
   dailyChecklist: { learn: false, do: false, deepen1: false, deepen2: false },
   lastChecklistDate: null,
@@ -548,6 +555,11 @@ export const useGamificationStore = create<GamificationState>()(
 
       // ── resetGamification ─────────────────────────────────────
       resetGamification: () => {
+        set(initialState as any);
+      },
+
+      // ── resetForUserChange (account isolation; see resetGamification) ──
+      resetForUserChange: () => {
         set(initialState as any);
       },
     }),

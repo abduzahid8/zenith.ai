@@ -126,6 +126,12 @@ interface GoalState {
   regeneratePlan: (goalId: string) => Promise<void>;
   /** Persist today's daily plan (steps + assets) */
   setDailyPlan: (goalId: string, plan: import('../types/goals').DailyPlan) => void;
+  /**
+   * Account isolation (Phase 1): drop ALL user-scoped goal state so the
+   * next authenticated account never sees this user's goals/progress.
+   * Server data is untouched — it rehydrates via setGoal on next login.
+   */
+  resetForUserChange: () => void;
 }
 
 export const useGoalStore = create<GoalState>()(
@@ -709,6 +715,10 @@ export const useGoalStore = create<GoalState>()(
           return generated;
         }
         return fallback;
+      },
+
+      resetForUserChange: () => {
+        set({ goals: {}, progress: {}, goalByHobby: {}, executionGoalByHobby: {} });
       },
 }),
 

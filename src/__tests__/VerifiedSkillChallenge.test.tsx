@@ -490,12 +490,24 @@ describe('AICoachTab prove_skill wiring', () => {
     // live footer ELEMENT (never render it detached: a second render would
     // steal RNTL's global screen container and silently disable fireEvent
     // on the main tree). Poll until its subtree contains `text`.
+    // Pure composite chips (CoachActionBar — no hooks) are expanded inline
+    // so their labels stay visible to the walker.
     function footerTextPresent(footer: React.ReactElement | null, text: string | RegExp): boolean {
+        const { CoachActionBar } = require('../components/coach/CoachActionBar') as typeof import('../components/coach/CoachActionBar');
         const contains = (el: unknown): boolean => {
             if (typeof el === 'string') {
                 return typeof text === 'string' ? el.includes(text) : text.test(el);
             }
+            if (Array.isArray(el)) return el.some(contains);
             if (el == null || typeof el !== 'object') return false;
+            const e = el as { type?: unknown; props?: { children?: unknown } };
+            if (e.type === CoachActionBar) {
+                try {
+                    return contains(CoachActionBar((e as React.ReactElement).props as any));
+                } catch {
+                    return false;
+                }
+            }
             const kids = (el as { props?: { children?: unknown } }).props?.children;
             return (Array.isArray(kids) ? kids : [kids]).some(contains);
         };
@@ -552,7 +564,7 @@ describe('AICoachTab prove_skill wiring', () => {
         }
     }
 
-    test('14. Coach remains usable with normal chips when no verification is due', async () => {
+    test('14. Coach remains usable with info-only chips when no verification is due', async () => {
         mockUseIntelligence.mockReturnValue({
             hobbyId: 'chess',
             program: undefined,
@@ -565,7 +577,11 @@ describe('AICoachTab prove_skill wiring', () => {
         // Proactive coach message seeds from the goal (main tree bubbles).
         expect(screen.getAllByText(/Learn chess basics/).length).toBeGreaterThan(0);
         const footer = await liveFooter(screen);
-        expect(footerTextPresent(footer, 'Done for today')).toBe(true);
+        // Phase 1 coherence: the store-writing 'Done for today' bypass is
+        // gone — only info-only secondaries remain (no competing primary,
+        // no unvalidated completion). See coherencePhase1 + CoachActionBar.
+        expect(footerTextPresent(footer, 'Done for today')).toBe(false);
+        expect(footerTextPresent(footer, "Today's plan")).toBe(true);
         expect(footerTextPresent(footer, 'Ask me')).toBe(true);
         expect(footerHasVerifyCard(footer)).toBe(false);
         // No Verify CTA anywhere when no verification is due.

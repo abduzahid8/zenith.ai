@@ -78,6 +78,13 @@ interface CredentialState {
     completeAttempt: (programSlug: string, score: number) => void;
     submitProject: (programSlug: string, score: number, skillScores: Record<string, number>) => void;
     resetProgram: (programSlug: string) => void;
+    /**
+     * Account isolation (Phase 1): drop ALL user-scoped credential state
+     * (enrollments, answers, scores, attempts) so the next authenticated
+     * account never sees this user's local credential progress. Server
+     * truth (attempts, issuance) is untouched and re-reads on next login.
+     */
+    resetForUserChange: () => void;
 
     // Derived (computed from engine data on demand — not persisted)
     getEvidence: (
@@ -246,6 +253,8 @@ export const useCredentialStore = create<CredentialState>()(
                 set(state => ({
                     programs: { ...state.programs, [programSlug]: initialProgramState() },
                 })),
+
+            resetForUserChange: () => set({ programs: {} }),
 
             getEvidence: (programSlug, tasks, sessions) => {
                 const program = getProgram(programSlug);

@@ -12,7 +12,6 @@ import { useHobbyTimeStore } from '../store/hobbyTimeStore';
 import { sessionService } from '../services/supabase/sessions';
 import { useT } from '../store/languageStore';
 import { useGamificationStore } from '../store/gamificationStore';
-import { useGoalStore } from '../store/goalStore';
 import { HobbyId, LessonContent, HOBBY_META } from '../data/lessonContent';
 import { getMaxTasksPerDay } from '../domain/tasks/rules';
 
@@ -70,28 +69,19 @@ export function useTimer(options: UseTimerOptions = {}) {
         }
     }, [selectedHobby, gamificationStore.currentDay, gamificationStore.artifacts]);
 
-    // Session weight by step depth — deeper work counts more
-    const STEP_WEIGHT: Record<string, number> = {
-        learn: 1,
-        do: 2,
-        deepen1: 3,
-        deepen2: 4,
-    };
-    // Difficulty adjustment by step depth — harder steps grow skill faster
-    const STEP_DIFFICULTY: Record<string, 'completed_easy' | 'completed_struggled'> = {
-        do: 'completed_easy',
-        deepen1: 'completed_easy',
-        deepen2: 'completed_easy',
-    };
+    // Session weight/depth tables REMOVED (Phase 1 containment): the legacy
+    // path no longer mints goal progress or difficulty signals. Validated
+    // completion lives in sessionStepEffects.applySessionProgression.
 
     const handleStepComplete = useCallback((step: string, userInput?: string, aiFeedback?: string) => {
         console.log('[useTimer] Completing step:', step);
-        
-        // Track legacy steps in gamification store
-        if (['learn', 'do', 'deepen1', 'deepen2'].includes(step)) {
-            gamificationStore.markStepComplete(step as any);
-        }
 
+        // Containment (Phase 1): this legacy path records the work product
+        // ONLY (artifact; downstream verdict-gated: '' -> 'unknown' -> no
+        // credit). It must NOT advance canonical learning state without a
+        // validated ProgressionDecision: no goal signals, no curriculum
+        // advance, no session count, no streak, no chess credit. The swipe
+        // session + sessionFinalizer is the only validated completion path.
         if (userInput && currentLesson) {
             gamificationStore.saveArtifact({
                 hobbyId: currentLesson.hobby,
@@ -113,42 +103,19 @@ export function useTimer(options: UseTimerOptions = {}) {
             setActiveStep('do'); // Переходим к финальной шахматной задаче
         } else if (step === 'do') {
             if (currentLesson?.hobby === 'chess') {
-                gamificationStore.recordChessSolve();
-                useGoalStore.getState().recordDailyAction('chess' as HobbyId, STEP_WEIGHT[step] || 1, currentLesson.learn.title);
-                useGoalStore.getState().adjustDifficulty('chess' as HobbyId, STEP_DIFFICULTY[step] || 'completed_easy');
-                gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
-                gamificationStore.incrementSessionsCompleted();
                 setActiveStep('complete');
             } else if (isPremium && currentLesson?.deepen1) {
                 setActiveStep('deepen1');
             } else {
-                if (currentLesson?.hobby) {
-                    useGoalStore.getState().recordDailyAction(currentLesson.hobby as HobbyId, STEP_WEIGHT[step] || 1, currentLesson.learn.title);
-                    useGoalStore.getState().adjustDifficulty(currentLesson.hobby as HobbyId, STEP_DIFFICULTY[step] || 'completed_easy');
-                }
-                gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
-                gamificationStore.incrementSessionsCompleted();
                 setActiveStep('complete');
             }
         } else if (step === 'deepen1') {
             if (isPremium && currentLesson?.deepen2) {
                 setActiveStep('deepen2');
             } else {
-                if (currentLesson?.hobby) {
-                    useGoalStore.getState().recordDailyAction(currentLesson.hobby as HobbyId, STEP_WEIGHT[step] || 1, currentLesson.learn.title);
-                    useGoalStore.getState().adjustDifficulty(currentLesson.hobby as HobbyId, STEP_DIFFICULTY[step] || 'completed_easy');
-                }
-                gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
-                gamificationStore.incrementSessionsCompleted();
                 setActiveStep('complete');
             }
         } else if (step === 'deepen2') {
-            if (currentLesson?.hobby) {
-                useGoalStore.getState().recordDailyAction(currentLesson.hobby as HobbyId, STEP_WEIGHT[step] || 1, currentLesson.learn.title);
-                useGoalStore.getState().adjustDifficulty(currentLesson.hobby as HobbyId, STEP_DIFFICULTY[step] || 'completed_easy');
-            }
-            gamificationStore.advanceDay(currentLesson?.hobby as HobbyId);
-            gamificationStore.incrementSessionsCompleted();
             setActiveStep('complete');
         }
     }, [currentLesson, isPremium]);
@@ -366,9 +333,13 @@ export function useTimer(options: UseTimerOptions = {}) {
             );
         });
 
-        // Start gamification session
+        // Start gamification session — legacy containment (Phase 1):
+        // reset the daily checklist WITHOUT the streak bump
+        // (gamification startSession -> updateStreak). Legacy sessions are
+        // unvalidated activity, not learning proof, so they must not move
+        // the streak. Validated sessions go through the swipe finalizer.
         if (selectedHobby) {
-            gamificationStore.startSession(selectedHobby as HobbyId);
+            gamificationStore.resetDailyChecklist();
             loadLessonForSession();
             setActiveStep('learn');
         }

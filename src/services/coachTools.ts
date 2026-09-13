@@ -39,6 +39,11 @@ export interface CoachToolContext {
  * Registry of "things the coach can do" — Folk-style agent capabilities.
  * Each tool is a tuple of static affordance + dynamic resolution so the
  * coach bubble can offer chips that actually open / act on something.
+ *
+ * Routing rule (Phase 1): session tools resolve to the canonical swipe
+ * entry (`/session-timer`, structured-curriculum continue scoped by the
+ * selected hobby). No tool invents its own session URL shape — the
+ * canonical router (`sessionRouting.buildSessionRoute`) owns that.
  */
 export const COACH_TOOLS: CoachTool[] = [
   {
@@ -51,7 +56,7 @@ export const COACH_TOOLS: CoachTool[] = [
       label: 'Start 15-min timer',
       emoji: '⏱',
       intent: 'open_in_app',
-      route: `/session-timer?goalId=${snapshot.definition.id}`,
+      route: '/session-timer',
       reason: 'Lock in a focused block for today\'s task.',
     }),
   },
@@ -67,7 +72,7 @@ export const COACH_TOOLS: CoachTool[] = [
         label: 'Solve today\'s puzzle',
         emoji: '♟️',
         intent: 'open_in_app',
-        route: `/session-timer?goalId=${snapshot.definition.id}&intent=puzzle`,
+        route: '/session-timer',
         reason: '15 min, 1 move, instant feedback.',
       };
     },
@@ -86,7 +91,7 @@ export const COACH_TOOLS: CoachTool[] = [
         label: 'Push for a harder puzzle',
         emoji: '🔥',
         intent: 'open_in_app',
-        route: `/session-timer?goalId=${snapshot.definition.id}&intent=puzzle&hard=1`,
+        route: '/session-timer',
         reason: 'Stretch today if today feels light.',
       };
     },
@@ -103,7 +108,7 @@ export const COACH_TOOLS: CoachTool[] = [
         label: 'Start reading drill',
         emoji: '📖',
         intent: 'open_in_app',
-        route: `/session-timer?goalId=${snapshot.definition.id}&intent=reading`,
+        route: '/session-timer',
         reason: 'A guided block over today\'s passage.',
       };
     },
@@ -121,7 +126,7 @@ export const COACH_TOOLS: CoachTool[] = [
         label: 'Open code-runner',
         emoji: '▶',
         intent: 'open_in_app',
-        route: `/session-timer?goalId=${snapshot.definition.id}&intent=code`,
+        route: '/session-timer',
         reason: 'Spin up the editor and timer together.',
       };
     },
@@ -159,7 +164,7 @@ export const COACH_TOOLS: CoachTool[] = [
       label: 'Swap with an easier task',
       emoji: '🔄',
       intent: 'plan_change',
-      route: '/AICoach',
+      route: '/(app)/ai-coach',
       reason: 'Coach will suggest a smaller version.',
     }),
   },
