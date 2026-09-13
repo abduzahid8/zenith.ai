@@ -3,13 +3,13 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { scale } from '../../constants';
 import { fonts } from '../../theme';
 import { useAppTheme } from '../../theme/useAppTheme';
-import type { CredentialJourney, JourneyNextAction, KnowledgeState, PracticalState } from '../../hooks/useCredentialJourney';
+import type { CredentialJourney, FinalAssessmentState, JourneyNextAction, KnowledgeState, PracticalState } from '../../hooks/useCredentialJourney';
 
 /**
- * Slice 3 — compact credential journey block. Presentational only: every
+ * Slice 4 — compact credential journey block. Presentational only: every
  * value comes from useCredentialJourney (server truth). No percentages,
- * no dashboards, no local-store reads. One primary CTA. Final Assessment
- * is a non-interactive teaser only.
+ * no dashboards, no local-store reads. One primary CTA. Project is a
+ * non-interactive teaser after the Final pass — never an action.
  */
 
 export interface JourneyPrimary {
@@ -32,6 +32,10 @@ export function primaryForAction(
             return { label: 'Start Practical Check', kind: nextAction.kind };
         case 'continue_practical':
             return { label: 'Continue Practical Check', kind: nextAction.kind };
+        case 'start_final':
+            return { label: 'Start Final Assessment', kind: nextAction.kind };
+        case 'continue_final':
+            return { label: 'Continue Final Assessment', kind: nextAction.kind };
         case 'continue_learning':
             return { label: 'Continue learning', kind: nextAction.kind };
         default:
@@ -77,6 +81,25 @@ function practicalStatusLine(state: PracticalState): string {
     }
 }
 
+function finalStatusLine(state: FinalAssessmentState): string {
+    switch (state) {
+        case 'locked':
+            return 'Locked until Practical is passed';
+        case 'ready':
+            return 'Ready';
+        case 'in_progress':
+            return 'In progress';
+        case 'passed':
+            return 'Passed';
+        case 'failed':
+            return 'Not passed yet';
+        case 'temporarily_unavailable':
+            return 'Temporarily unavailable';
+        default:
+            return '';
+    }
+}
+
 export interface CredentialJourneyBlockProps {
     journey: CredentialJourney;
     title: string;
@@ -95,7 +118,7 @@ export const CredentialJourneyBlock: React.FC<CredentialJourneyBlockProps> = ({
     alert,
 }) => {
     const { colors } = useAppTheme();
-    const showFinalTeaser = journey.practical.state === 'passed';
+    const showProjectTeaser = journey.finalAssessment.state === 'passed';
     const showLegacyPracticalTeaser =
         showPracticalTeaser === true && journey.knowledge.state === 'passed' && journey.practical.state !== 'passed';
     return (
@@ -147,9 +170,23 @@ export const CredentialJourneyBlock: React.FC<CredentialJourneyBlockProps> = ({
                     Practical{'\n'}Next step coming next
                 </Text>
             )}
-            {showFinalTeaser && (
+            <Text style={[styles.section, { color: colors.textSecondary }]}>Final Assessment</Text>
+            {journey.finalAssessment.state === 'temporarily_unavailable' ? (
+                <Text style={[styles.status, { color: colors.text }]}>
+                    Final Assessment is temporarily unavailable. Try again later.
+                </Text>
+            ) : (
+                <Text style={[styles.status, { color: colors.text }]}>
+                    {journey.finalAssessment.state === 'passed' ? '✓' : finalStatusLine(journey.finalAssessment.state)}
+                    {journey.finalAssessment.score != null &&
+                    (journey.finalAssessment.state === 'passed' || journey.finalAssessment.state === 'failed')
+                        ? ` · Score: ${Math.round(journey.finalAssessment.score)}%`
+                        : ''}
+                </Text>
+            )}
+            {showProjectTeaser && (
                 <Text style={[styles.teaser, { color: colors.textSecondary }]}>
-                    Final Assessment{'\n'}Next step
+                    Project{'\n'}Next step
                 </Text>
             )}
             {alert && (

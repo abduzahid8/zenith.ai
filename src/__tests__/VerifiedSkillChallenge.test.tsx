@@ -458,6 +458,7 @@ describe('AICoachTab prove_skill wiring', () => {
             contentAvailable: true,
             knowledge: { attempts: [], component: null },
             practical: { attempts: [], component: null },
+            finalAssessment: { attempts: [], component: null },
         });
     });
 

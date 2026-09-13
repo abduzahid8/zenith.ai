@@ -85,6 +85,8 @@ function mockJourneyServer(opts: {
     component?: null | object;
     practicalAttempts?: unknown[];
     practicalComponent?: null | object;
+    finalAttempts?: unknown[];
+    finalComponent?: null | object;
 } = {}) {
     mockAvailability.mockResolvedValue([
         {
@@ -101,9 +103,9 @@ function mockJourneyServer(opts: {
         attempts: opts.attempts ?? [],
         component: opts.component ?? null,
     });
-    // Shared live snapshot: ONE release identity for both stages. The
+    // Shared live snapshot: ONE release identity for every stage. The
     // knowledge slice mirrors the legacy snapshot so Slice 2 assertions
-    // keep passing; practical defaults to locked (no Knowledge PASS).
+    // keep passing; practical/final default to locked.
     mockStage.mockResolvedValue({
         contentAvailable,
         knowledge: {
@@ -113,6 +115,10 @@ function mockJourneyServer(opts: {
         practical: {
             attempts: opts.practicalAttempts ?? [],
             component: opts.practicalComponent ?? null,
+        },
+        finalAssessment: {
+            attempts: opts.finalAttempts ?? [],
+            component: opts.finalComponent ?? null,
         },
     });
 }
@@ -278,6 +284,7 @@ describe('useCredentialJourney read model', () => {
                     contentAvailable: true,
                     knowledge: { attempts: [], component: null },
                     practical: { attempts: [], component: null },
+                    finalAssessment: { attempts: [], component: null },
                 }
                 : {
                     contentAvailable: true,
@@ -286,6 +293,7 @@ describe('useCredentialJourney read model', () => {
                         component: { score: 95, passed: true },
                     },
                     practical: { attempts: [], component: null },
+                    finalAssessment: { attempts: [], component: null },
                 };
         mockStage.mockImplementation((slug: string, version: string) => Promise.resolve(stageFor(version)));
         mockSnapshot.mockImplementation((slug: string, version: string) =>
@@ -564,7 +572,7 @@ describe('CredentialJourneySection', () => {
         expect(result.current.journey!.knowledge.score).toBe(90);
     });
 
-    test('19. Final teaser is plain text, never a CTA (Slice 3)', async () => {
+    test('19. Practical PASS unlocks the Final CTA; Project waits for Final PASS (Slice 4)', async () => {
         mockJourneyServer({
             component: { score: 91, passed: true },
             practicalComponent: { score: 88, passed: true },
@@ -573,11 +581,10 @@ describe('CredentialJourneySection', () => {
         const screen = await render(
             <CredentialJourneySection programSlug="chess-foundations" programTitle="Chess Foundations" recommendation={null} onVerifySkill={() => {}} onContinueLearning={() => {}} />,
         );
-        await screen.findByText(/Final Assessment/);
-        // No pressable Final/Project actions exist anywhere.
-        expect(screen.queryByText('Start Final')).toBeNull();
-        expect(screen.queryByText('Open Final')).toBeNull();
+        // Slice 4: the single CTA moves to the Final; Project stays hidden.
+        expect(await screen.findByText('Start Final Assessment')).toBeTruthy();
         expect(screen.queryByText('Start Project')).toBeNull();
+        expect(screen.queryByText(/Project/)).toBeNull();
         const finalNodes = screen.queryAllByText(/Final Assessment/);
         expect(finalNodes.length).toBeGreaterThan(0);
         for (const node of finalNodes) {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import type { LearningRecommendation } from '../../domain/sessions/nextBestAction';
 import { ensureEnrollment, isContentUnavailable } from '../../services/trustApi';
@@ -8,10 +8,13 @@ import { CredentialChallengeRunner } from './CredentialChallengeRunner';
 import { CredentialJourneyBlock, primaryForAction } from './CredentialJourneyBlock';
 
 /**
- * Slice 3 — credential journey section (container). Owns the journey read
- * model, the runner sheet (knowledge + practical), and server-truth
- * refresh. Rendered inside the Coach experience; returns null unless the
- * program is officially available. One primary CTA only.
+ * Slice 4 — credential journey section (container). Owns the journey read
+ * model, the runner sheet (knowledge + practical + final), and
+ * server-truth refresh. Rendered inside the Coach experience; returns
+ * null unless the program is officially available. One primary CTA only.
+ * Final retake outcomes (cooldown/remediation/not-ready) are server
+ * responses rendered by the runner; remediation reuses the existing
+ * Verify flow and the journey refreshes from server truth.
  */
 
 export interface CredentialJourneySectionProps {
@@ -41,6 +44,14 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
     const [starting, setStarting] = useState(false);
     const [unavailable, setUnavailable] = useState(false);
     const [prepareError, setPrepareError] = useState<null | 'network'>(null);
+
+    const skillNames = useMemo(() => {
+        const map: Record<string, string> = {};
+        for (const skill of journey?.skills ?? []) {
+            map[skill.key] = skill.name;
+        }
+        return map;
+    }, [journey?.skills]);
 
     if (!journey || !journey.visible) return null;
 
@@ -73,6 +84,7 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
 
     const startKnowledge = () => void openRunner('knowledge');
     const startPractical = () => void openRunner('practical');
+    const startFinal = () => void openRunner('final');
 
     const handleRunnerComplete = (_result: KnowledgeSubmitResult) => {
         // Re-read server truth (attempts + component snapshot). Nothing is
@@ -84,6 +96,9 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
         const action = journey.nextAction;
         if (action.kind === 'start_practical' || action.kind === 'continue_practical') {
             return void openRunner('practical');
+        }
+        if (action.kind === 'start_final' || action.kind === 'continue_final') {
+            return void openRunner('final');
         }
         return void openRunner('knowledge');
     };
@@ -107,6 +122,9 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
         if (mapped.kind === 'start_practical' || mapped.kind === 'continue_practical') {
             return { label: mapped.label, onPress: startPractical };
         }
+        if (mapped.kind === 'start_final' || mapped.kind === 'continue_final') {
+            return { label: mapped.label, onPress: startFinal };
+        }
         return { label: mapped.label, onPress: startKnowledge };
     })();
 
@@ -116,17 +134,22 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
     const practical = unavailable
         ? { ...journey.practical, state: 'temporarily_unavailable' as const }
         : journey.practical;
+    const finalAssessment = unavailable
+        ? { ...journey.finalAssessment, state: 'temporarily_unavailable' as const }
+        : journey.finalAssessment;
 
     const alert = prepareError === 'network'
-        ? (journey.nextAction.kind === 'start_practical' || journey.nextAction.kind === 'continue_practical'
-            ? 'Practical check needs an internet connection.'
-            : 'Knowledge check needs an internet connection.')
+        ? (journey.nextAction.kind === 'start_final' || journey.nextAction.kind === 'continue_final'
+            ? 'Final Assessment needs an internet connection.'
+            : journey.nextAction.kind === 'start_practical' || journey.nextAction.kind === 'continue_practical'
+                ? 'Practical check needs an internet connection.'
+                : 'Knowledge check needs an internet connection.')
         : null;
 
     return (
         <View>
             <CredentialJourneyBlock
-                journey={{ ...journey, knowledge, practical }}
+                journey={{ ...journey, knowledge, practical, finalAssessment }}
                 title={programTitle}
                 primary={starting ? null : primary}
                 showPracticalTeaser={journey.knowledge.state === 'passed' && journey.practical.state === 'locked'}
@@ -139,6 +162,8 @@ export const CredentialJourneySection: React.FC<CredentialJourneySectionProps> =
                 programTitle={programTitle}
                 onClose={() => setRunnerOpen(false)}
                 onComplete={handleRunnerComplete}
+                onVerifySkill={onVerifySkill}
+                skillNames={skillNames}
             />
         </View>
     );

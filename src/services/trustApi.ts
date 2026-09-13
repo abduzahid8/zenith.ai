@@ -401,6 +401,21 @@ export interface PracticalComponentRow {
     passed: boolean;
 }
 
+export interface FinalAttemptRow {
+    id: string;
+    attemptNumber: number | null;
+    status: 'started' | 'submitted';
+    score: number | null;
+    passed: boolean | null;
+    deadline: string | null;
+    submittedAt: string | null;
+}
+
+export interface FinalComponentRow {
+    score: number;
+    passed: boolean;
+}
+
 export interface CredentialStageSnapshot {
     /** False when no single live release exists: stage reads fail closed. */
     contentAvailable: boolean;
@@ -419,16 +434,22 @@ export interface CredentialStageSnapshot {
         /** Same reference-resolution rule as knowledge, for practical. */
         component: PracticalComponentRow | null;
     };
+    finalAssessment: {
+        /** Own current-journey attempts only (live bank, current version). */
+        attempts: FinalAttemptRow[];
+        /** Same reference-resolution rule, for the Final component. */
+        component: FinalComponentRow | null;
+    };
 }
 
 /**
  * One canonical credential-stage read-authority snapshot. Resolves the
  * current live content release ONCE from public release metadata
  * (Slice 2 rules: active + QA passed + human approved, exactly one row),
- * then uses that SAME internal live contentVersion for both Knowledge and
- * Practical reads — never inherits state from a retired release and never
- * resolves two independent releases. contentVersion never leaves the
- * adapter.
+ * then uses that SAME internal live contentVersion for Knowledge,
+ * Practical, and Final reads — never inherits state from a retired
+ * release and never resolves two independent releases. contentVersion
+ * never leaves the adapter.
  */
 export const getCredentialStageSnapshot = async (
     programSlug: string,
@@ -452,6 +473,7 @@ export const getCredentialStageSnapshot = async (
             contentAvailable: false,
             knowledge: { attempts: [], component: null },
             practical: { attempts: [], component: null },
+            finalAssessment: { attempts: [], component: null },
         };
     }
     const [
@@ -459,6 +481,8 @@ export const getCredentialStageSnapshot = async (
         { data: pracAttData, error: pracAttError },
         { data: knowCompData, error: knowCompError },
         { data: pracCompData, error: pracCompError },
+        { data: finAttData, error: finAttError },
+        { data: finCompData, error: finCompError },
     ] = await Promise.all([
         supabase
             .from('knowledge_attempts')
@@ -490,11 +514,28 @@ export const getCredentialStageSnapshot = async (
             .eq('component', 'practical')
             .order('created_at', { ascending: false })
             .limit(1),
+        supabase
+            .from('assessment_attempts')
+            .select('id, attempt_number, status, score, passed, deadline, submitted_at, bank_version')
+            .eq('program_slug', programSlug)
+            .eq('question_set_version', programVersion)
+            .in('status', ['started', 'submitted'])
+            .order('started_at', { ascending: false }),
+        supabase
+            .from('credential_component_results')
+            .select('score, passed, reference_id')
+            .eq('program_slug', programSlug)
+            .eq('program_version', programVersion)
+            .eq('component', 'final_assessment')
+            .order('created_at', { ascending: false })
+            .limit(1),
     ]);
     if (knowAttError) throw new Error(knowAttError.message);
     if (pracAttError) throw new Error(pracAttError.message);
     if (knowCompError) throw new Error(knowCompError.message);
     if (pracCompError) throw new Error(pracCompError.message);
+    if (finAttError) throw new Error(finAttError.message);
+    if (finCompError) throw new Error(finCompError.message);
     const filterLive = <T extends { id: unknown; status: unknown; content_version: unknown }>(
         rows: T[],
     ): T[] =>
@@ -526,6 +567,30 @@ export const getCredentialStageSnapshot = async (
         passed: r.passed,
         submittedAt: r.submitted_at,
     }));
+    // Final attempts belong to the current journey only when pinned to the
+    // SAME live bank. Safe projection: no bank_version, set ids, assigned
+    // ids, or breakdowns leave the adapter.
+    const finRows = (Array.isArray(finAttData) ? finAttData : []) as unknown as {
+        id: unknown; attempt_number: unknown; status: unknown; score: number | null;
+        passed: boolean | null; deadline: unknown; submitted_at: string | null;
+        bank_version: unknown;
+    }[];
+    const finalAttempts: FinalAttemptRow[] = finRows
+        .filter(
+            r =>
+                typeof r.id === 'string' &&
+                (r.status === 'started' || r.status === 'submitted') &&
+                r.bank_version === live,
+        )
+        .map(r => ({
+            id: r.id as string,
+            attemptNumber: typeof r.attempt_number === 'number' ? r.attempt_number : null,
+            status: r.status as 'started' | 'submitted',
+            score: r.score == null ? null : Number(r.score),
+            passed: r.passed,
+            deadline: typeof r.deadline === 'string' ? r.deadline : null,
+            submittedAt: r.submitted_at,
+        }));
     const resolveComponent = (
         compData: unknown,
         liveSubmittedIds: Set<string>,
@@ -552,10 +617,15 @@ export const getCredentialStageSnapshot = async (
         pracCompData,
         new Set(practicalAttempts.filter(a => a.status === 'submitted').map(a => a.id)),
     );
+    const finalComponent = resolveComponent(
+        finCompData,
+        new Set(finalAttempts.filter(a => a.status === 'submitted').map(a => a.id)),
+    );
     return {
         contentAvailable: true,
         knowledge: { attempts: knowledgeAttempts, component: knowledgeComponent },
         practical: { attempts: practicalAttempts, component: practicalComponent },
+        finalAssessment: { attempts: finalAttempts, component: finalComponent },
     };
 };
 

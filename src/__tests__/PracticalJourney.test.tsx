@@ -105,6 +105,8 @@ function mockJourneyServer(opts: {
     knowledgeComponent?: null | object;
     practicalAttempts?: unknown[];
     practicalComponent?: null | object;
+    finalAttempts?: unknown[];
+    finalComponent?: null | object;
 } = {}) {
     mockAvailability.mockResolvedValue([
         {
@@ -125,6 +127,10 @@ function mockJourneyServer(opts: {
         practical: {
             attempts: opts.practicalAttempts ?? [],
             component: opts.practicalComponent ?? null,
+        },
+        finalAssessment: {
+            attempts: opts.finalAttempts ?? [],
+            component: opts.finalComponent ?? null,
         },
     });
 }
@@ -210,7 +216,7 @@ describe('practical unlock gate (pure + hook)', () => {
         ).toBe('ready');
     });
 
-    test('6. Practical live component PASS => passed', async () => {
+    test('6. Practical live component PASS => passed (Slice 4: Final unlocks next)', async () => {
         mockJourneyServer({
             knowledgeComponent: { score: 91, passed: true },
             knowledgeAttempts: [{ id: 'k1', status: 'submitted', score: 91, passed: true, submittedAt: '2026-02-01' }],
@@ -220,7 +226,9 @@ describe('practical unlock gate (pure + hook)', () => {
         const { result } = await renderHook(() => useCredentialJourney('chess-foundations', {}));
         await waitFor(() => expect(result.current.journey).not.toBeNull());
         expect(result.current.journey!.practical).toEqual({ state: 'passed', score: 88, attemptId: null });
-        expect(result.current.journey!.nextAction).toEqual({ kind: 'continue_learning' });
+        // Slice 4: a Practical PASS unlocks the Final — the CTA moves on.
+        expect(result.current.journey!.finalAssessment.state).toBe('ready');
+        expect(result.current.journey!.nextAction).toEqual({ kind: 'start_final' });
     });
 
     test('7. old-release Practical PASS => ignored', async () => {
@@ -535,7 +543,7 @@ describe('journey UX: refresh, Final teaser, single CTA', () => {
         expect(mockStage.mock.calls.length).toBeGreaterThan(stageBefore);
     });
 
-    test('24. refreshed server truth controls Practical passed UI', async () => {
+    test('24. refreshed server truth controls Practical passed UI (Slice 4: Final unlocks)', async () => {
         mockJourneyServer({
             knowledgeComponent: { score: 91, passed: true },
             knowledgeAttempts: [{ id: 'k1', status: 'submitted', score: 91, passed: true, submittedAt: '2026-02-01' }],
@@ -549,25 +557,30 @@ describe('journey UX: refresh, Final teaser, single CTA', () => {
         const screen = await render(
             <CredentialJourneySection programSlug="chess-foundations" programTitle="Chess Foundations" recommendation={null} onVerifySkill={() => {}} onContinueLearning={() => {}} />,
         );
-        expect(await screen.findByText('Continue learning')).toBeTruthy();
-        expect(await screen.findByText(/Final Assessment/)).toBeTruthy();
+        // Slice 4: the Practical PASS hands the single CTA to the Final.
+        expect(await screen.findByText('Start Final Assessment')).toBeTruthy();
+        expect(screen.getAllByText(/Final Assessment/).length).toBeGreaterThanOrEqual(2);
     });
 
-    test('25. Final Assessment remains non-interactive', async () => {
+    test('25. Project teaser appears only after Final PASS, stays non-interactive', async () => {
         mockJourneyServer({
             knowledgeComponent: { score: 91, passed: true },
             practicalAttempts: [{ id: 'p1', status: 'submitted', score: 100, passed: true, submittedAt: '2026-02-03' }],
             practicalComponent: { score: 100, passed: true },
+            finalAttempts: [{ id: 'f1', status: 'submitted', score: 92, passed: true, submittedAt: '2026-02-04', attemptNumber: 1, deadline: '2026-02-04T10:30:00Z' }],
+            finalComponent: { score: 92, passed: true },
         });
         const screen = await render(
             <CredentialJourneySection programSlug="chess-foundations" programTitle="Chess Foundations" recommendation={null} onVerifySkill={() => {}} onContinueLearning={() => {}} />,
         );
-        expect(await screen.findByText(/Final Assessment/)).toBeTruthy();
+        expect(await screen.findByText(/Project/)).toBeTruthy();
         expect(await screen.findByText(/Next step/)).toBeTruthy();
-        expect(screen.queryByText('Start Final')).toBeNull();
-        expect(screen.queryByText('Open Final')).toBeNull();
+        expect(await screen.findByText('Continue learning')).toBeTruthy();
         expect(screen.queryByText('Start Project')).toBeNull();
-        expect(screen.queryByText('Continue Practical Check')).toBeNull();
+        expect(screen.queryByText('Open Project')).toBeNull();
+        expect(screen.queryByText('Submit Project')).toBeNull();
+        expect(screen.queryByText('Start Final Assessment')).toBeNull();
+        expect(screen.queryByText('Continue Final Assessment')).toBeNull();
     });
 
     test('26. one primary official CTA remains', async () => {
@@ -581,8 +594,9 @@ describe('journey UX: refresh, Final teaser, single CTA', () => {
         expect(ready.queryByText('Continue Knowledge Check')).toBeNull();
         expect(ready.queryByText('Continue Practical Check')).toBeNull();
         expect(ready.queryByText('Continue learning')).toBeNull();
+        expect(ready.queryByText('Start Final Assessment')).toBeNull();
 
-        // Practical passed: exactly Continue learning.
+        // Practical passed: exactly Start Final Assessment.
         mockJourneyServer({
             knowledgeComponent: { score: 91, passed: true },
             practicalAttempts: [{ id: 'p1', status: 'submitted', score: 100, passed: true, submittedAt: '2026-02-03' }],
@@ -591,9 +605,10 @@ describe('journey UX: refresh, Final teaser, single CTA', () => {
         const done = await render(
             <CredentialJourneySection programSlug="chess-foundations" programTitle="Chess Foundations" recommendation={null} onVerifySkill={() => {}} onContinueLearning={() => {}} />,
         );
-        await done.findByText('Continue learning');
+        await done.findByText('Start Final Assessment');
         expect(done.queryByText('Start Practical Check')).toBeNull();
         expect(done.queryByText('Start Knowledge Check')).toBeNull();
+        expect(done.queryByText('Continue learning')).toBeNull();
     });
 
     test('27. Knowledge behavior remains unchanged', async () => {

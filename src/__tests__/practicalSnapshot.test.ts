@@ -120,6 +120,7 @@ describe('shared live release identity', () => {
             contentAvailable: false,
             knowledge: { attempts: [], component: null },
             practical: { attempts: [], component: null },
+            finalAssessment: { attempts: [], component: null },
         });
         expect(calls.map(c => c.table)).toEqual(['credential_content_releases']);
     });
@@ -132,6 +133,7 @@ describe('shared live release identity', () => {
         expect(snap2.contentAvailable).toBe(false);
         expect(snap2.knowledge).toEqual({ attempts: [], component: null });
         expect(snap2.practical).toEqual({ attempts: [], component: null });
+        expect(snap2.finalAssessment).toEqual({ attempts: [], component: null });
     });
 
     test('both attempt tables are read under the SAME live version', async () => {
