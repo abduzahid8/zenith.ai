@@ -45,6 +45,27 @@ function computeSnapshot(goal: GoalDefinition | null | undefined, progressData: 
   };
 }
 
+/**
+ * XP truth: which history entries count toward XP.
+ *
+ * The de-facto XP authority is `history.length * 50`, so every entry pushed
+ * here mints display XP. Only entries representing a real XP-worthy
+ * completion may count:
+ * - completions and check-ins count (check-ins are capped to one per day
+ *   inside recordCheckin);
+ * - difficulty adjustments (`type: 'task'`, `description: 'difficulty: …'`)
+ *   are goal/difficulty signals, never XP — not even on failure;
+ * - bottleneck reports are troubleshooting state, never XP.
+ * The excluded entries stay in history: difficulty tracking
+ * (dailyFocusEngine) and bottleneck tracking (goalHandlers) read them.
+ */
+export function countsTowardXp(entry: GoalProgressEntry): boolean {
+  if (!entry) return false;
+  if (entry.type === 'bottleneck') return false;
+  if (entry.type === 'task' && (entry.description ?? '').startsWith('difficulty:')) return false;
+  return true;
+}
+
 export function getInitialProgress(goalId: string, startingValue: number): GoalProgress {
   return {
     goalId,
@@ -253,7 +274,18 @@ export const useGoalStore = create<GoalState>()(
         // (fixes troubleshoot off-by-one — the current checkin counts as
         // the follow-up and should unblock immediately).
         const newHistory: GoalProgressEntry = { date: today, value: newValue, description, type: 'checkin' };
-        const updatedHistory = [...existing.history, newHistory];
+        // XP idempotency (same model as completeDailyContent's
+        // `history[last] !== today` guard): the first valid check-in of the
+        // day appends the single XP-counted entry; a repeat same-day
+        // check-in still updates value/mode/milestones below but appends
+        // nothing, so it mints no additional XP. The first entry already in
+        // history keeps computeNextMode/computeStreak seeing today's entry.
+        const alreadyCheckedInToday = existing.history.some(
+          h => h.date === today && h.type === 'checkin',
+        );
+        const updatedHistory = alreadyCheckedInToday
+          ? existing.history
+          : [...existing.history, newHistory];
 
         // Mode transitions now live in one documented, pure function
         // (see goalHandlers.computeNextMode) instead of an inline ternary.

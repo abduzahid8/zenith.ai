@@ -5,7 +5,7 @@ import Svg, { Polygon } from 'react-native-svg';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { scale } from '../constants';
 import { fonts } from '../theme';
-import { useGoalStore, getInitialProgress } from '../store/goalStore';
+import { useGoalStore, getInitialProgress, countsTowardXp } from '../store/goalStore';
 import { GoalSnapshot, DailyGoalContent, StepInstruction, BuiltAsset } from '../types/goals';
 import { ROUTES, buildRoute } from '../config/routes';
 import { orchestrateDailyPlan } from '../services/agentOrchestrator';
@@ -29,7 +29,7 @@ interface PageProps {
     description: string; barPct: number; currentVal: number; targetVal: number;
     unit: string; streak: number; dailyActions: number; daysIn: number;
     level: number; xpInLevel: number; xpProgress: number; levelColor: string;
-    totalXP: number; daysRemaining: number; dayNum: number; totalDays: number;
+    totalXP: number; todayXp: number; daysRemaining: number; dayNum: number; totalDays: number;
     learnTitle: string; learnBody: string; doTitle: string; doInstructions: string;
     doMinutes: number; focusReason: string; bodyLines: string[]; instrLines: string[];
     hasContent: boolean; milestones: any[]; currentMilestoneIndex: number;
@@ -373,7 +373,7 @@ function RewardsPage({ data, assets, theme }: PageProps) {
           <Text style={{ fontFamily: fonts.body.regular, fontSize: scale(7), color: '#64748B' }}>streak</Text>
         </View>
         <View style={{ flex: 1, backgroundColor: '#1E293B', borderRadius: scale(8), padding: scale(10), alignItems: 'center' }}>
-          <Text style={{ fontFamily: fonts.heading.bold, fontSize: scale(16), color: '#F1F5F9' }}>+{XP_PER_DAY}</Text>
+          <Text style={{ fontFamily: fonts.heading.bold, fontSize: scale(16), color: '#F1F5F9' }}>+{data.todayXp}</Text>
           <Text style={{ fontFamily: fonts.body.regular, fontSize: scale(7), color: '#64748B' }}>today XP</Text>
         </View>
         <View style={{ flex: 1, backgroundColor: '#1E293B', borderRadius: scale(8), padding: scale(10), alignItems: 'center' }}>
@@ -734,7 +734,10 @@ export default function GoalJourneyScreen() {
   // with the starting-value offset). Clamped for display only.
   const barPct = Math.min(100, Math.max(0, snapshot.percentComplete));
   const unit = goal.unitLabel || (goal.category === 'skill' ? 'pts' : 'units');
-  const daysIn = progress.history.length;
+  // XP truth: only XP-counted history entries (real completions) drive
+  // daysIn/totalXP. Difficulty/bottleneck entries stay in history for
+  // their own readers but mint no XP.
+  const daysIn = progress.history.filter(countsTowardXp).length;
   const totalXP = daysIn * XP_PER_DAY;
   const { level, xpInLevel, xpProgress, levelColor } = calcLevel(totalXP);
   const today = todayContent;
@@ -750,11 +753,16 @@ export default function GoalJourneyScreen() {
   const totalDays = Math.max(1, Math.ceil((new Date(deadline).getTime() - new Date(startDate).getTime()) / 86400000));
   const dayNum = Math.min(totalDays, daysIn + 1);
   const daysRemaining = snapshot.daysRemaining;
+  // Rewards "today XP": actual XP-counted entries stamped today — never a
+  // hardcoded promise. Attestation taps write nothing, so they show +0.
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayXp =
+    progress.history.filter(e => e.date === todayStr && countsTowardXp(e)).length * XP_PER_DAY;
 
   const pageData = {
     description, barPct, currentVal, targetVal, unit, streak: progress.streak,
     dailyActions: progress.dailyActions, daysIn, level, xpInLevel, xpProgress, levelColor,
-    totalXP, daysRemaining, dayNum, totalDays, learnTitle, learnBody, doTitle, doInstructions,
+    totalXP, todayXp, daysRemaining, dayNum, totalDays, learnTitle, learnBody, doTitle, doInstructions,
     doMinutes, focusReason: today?.focusReason || '', bodyLines, instrLines: [],
     hasContent, milestones: progress.milestones, currentMilestoneIndex: progress.currentMilestoneIndex,
     focusBadge, agentActions: [], allDone: false, commitmentText: '', finished,
@@ -779,11 +787,13 @@ export default function GoalJourneyScreen() {
             <Text style={{ fontSize: scale(36) }}>🎉</Text>
           </View>
           <Text style={{ fontFamily: fonts.heading.bold, fontSize: scale(24), color: '#08132A', marginBottom: scale(8) }}>Day {dayNum} Complete</Text>
+          {/* Attestation-only celebration: authoritative totals, no
+              anticipatory +50 (these taps write no history). */}
           <Text style={{ fontFamily: fonts.body.regular, fontSize: scale(14), color: '#666', textAlign: 'center', marginBottom: scale(24) }}>
-            {level > 1 ? `Level ${level} · ` : ''}{xpInLevel + XP_PER_DAY}/{XP_PER_LEVEL} XP
+            {level > 1 ? `Level ${level} · ` : ''}{xpInLevel}/{XP_PER_LEVEL} XP
           </Text>
           <View style={[ss.xpBarOuter, { width: '80%', marginBottom: scale(24) }]}>
-            <View style={[ss.xpBarFill, { width: `${Math.min(100, ((xpInLevel + XP_PER_DAY) / XP_PER_LEVEL) * 100)}%`, backgroundColor: levelColor }]} />
+            <View style={[ss.xpBarFill, { width: `${Math.min(100, xpProgress)}%`, backgroundColor: levelColor }]} />
           </View>
           <View style={{ flexDirection: 'row', gap: scale(12), marginBottom: scale(32) }}>
             <View style={ss.doneStat}><Text style={ss.doneStatVal}>{Math.round(barPct)}%</Text><Text style={ss.doneStatLbl}>goal</Text></View>

@@ -5,7 +5,7 @@ import Svg, { Circle, Defs, LinearGradient, Stop, Line, G } from 'react-native-s
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { scale } from '../constants';
 import { fonts, lightColors as C } from '../theme';
-import { useGoalStore, getInitialProgress } from '../store/goalStore';
+import { useGoalStore, getInitialProgress, countsTowardXp } from '../store/goalStore';
 import { GoalSnapshot, DailyGoalContent } from '../types/goals';
 import { getCoachToolsForContext, CoachToolContext } from '../services/coachTools';
 import { ROUTES, buildRoute } from '../config/routes';
@@ -166,7 +166,7 @@ export default function GoalDetailScreen() {
   const barPct = Math.min(100, Math.max(0, snapshot.percentComplete));
   const isSkill = goal.category === 'skill';
   const unit = goal.unitLabel || (isSkill ? 'pts' : 'units');
-  const daysIn = progress.history.length;
+  const daysIn = progress.history.filter(countsTowardXp).length;
   const totalXP = daysIn * XP_PER_DAY;
   const { level, xpInLevel, xpProgress } = calcLevel(totalXP);
 
@@ -243,17 +243,16 @@ export default function GoalDetailScreen() {
       <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }}>
         <ScrollView contentContainerStyle={ss.scroll}>
           <View style={{ alignItems: 'center', paddingTop: scale(60) }}>
-            <View style={ss.xpEarned}>
-              <Text style={ss.xpEarnedIcon}>⚡</Text>
-              <Text style={ss.xpEarnedVal}>+{XP_PER_DAY} XP</Text>
-            </View>
+            {/* Attestation-only celebration: reflects authoritative totals.
+                No anticipatory +50 — XP appears here only when a validated
+                completion has actually appended history (see daysIn). */}
             <Text style={ss.doneTitle}>Day {daysIn} complete</Text>
             <View style={ss.doneBody}>
               <Text style={ss.doneBodyText}>
-                {level > 1 ? `Level ${level} · ` : ''}{xpInLevel + XP_PER_DAY}/{XP_PER_LEVEL} XP to Level {level + 1}
+                {level > 1 ? `Level ${level} · ` : ''}{xpInLevel}/{XP_PER_LEVEL} XP to Level {level + 1}
               </Text>
               <View style={[ss.xpBarOuter, { marginTop: scale(8), width: '100%' }]}>
-                <View style={[ss.xpBarFill, { width: `${Math.min(100, ((xpInLevel + XP_PER_DAY) / XP_PER_LEVEL) * 100)}%` }]} />
+                <View style={[ss.xpBarFill, { width: `${Math.min(100, xpProgress)}%` }]} />
               </View>
             </View>
             <View style={ss.doneStats}>
@@ -457,7 +456,7 @@ export default function GoalDetailScreen() {
           >
             <Text style={[ss.ctaText, { color: allDone ? '#FFF' : '#999' }]}>
               {allDone
-                ? `Complete → +${XP_PER_DAY} XP`
+                ? `Complete`
                 : 'Complete each step above'}
             </Text>
           </TouchableOpacity>

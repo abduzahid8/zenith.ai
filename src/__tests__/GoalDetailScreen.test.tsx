@@ -152,12 +152,17 @@ describe('GoalDetailScreen – coaching message layout', () => {
             await fireEvent.press(step);
         }
 
-        expect(screen.getByText('Complete → +50 XP')).toBeTruthy();
+        expect(screen.getByText('Complete')).toBeTruthy();
 
-        await fireEvent.press(screen.getByText('Complete → +50 XP'));
+        const historyBefore = useGoalStore.getState().progress['test-goal-1'].history.length;
+        await fireEvent.press(screen.getByText('Complete'));
 
         expect(screen.getByText('Day 7 complete')).toBeTruthy();
-        expect(screen.getByText('+50 XP')).toBeTruthy();
+        // Attestation celebrates authoritative totals only: no anticipatory
+        // +50 (the tap writes no history) — Level 2 · 50/300 from 7 entries.
+        expect(screen.getByText('Level 2 · 50/300 XP to Level 3')).toBeTruthy();
+        expect(screen.queryByText('+50 XP')).toBeNull();
+        expect(useGoalStore.getState().progress['test-goal-1'].history.length).toBe(historyBefore);
         expect(screen.getByText('🔥5')).toBeTruthy();
     });
 
