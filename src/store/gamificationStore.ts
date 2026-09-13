@@ -258,7 +258,12 @@ export const useGamificationStore = create<GamificationState>()(
           set({ currentSessionHobby: hobby });
         }
 
-        get().updateStreak();
+        // Streak truth: opening a session must NOT advance the streak
+        // (not even on first mount of the day). updateStreak() runs only
+        // from the validated progression path (applySessionProgression),
+        // gated on the policy's own count/advance outcome — so abandoned,
+        // failed, errored and weightless (discovery) sessions never mint
+        // streak days or burn the freeze.
       },
 
       // ── markStepComplete ──────────────────────────────────────

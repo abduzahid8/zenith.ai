@@ -114,6 +114,18 @@ export function applySessionProgression(input: SessionProgressionInput): Session
         return { progressed: false, advancedDay: false };
     }
     const g = useGamificationStore.getState();
+    // Streak advances ONLY on valid/rewarding progression — never on mount,
+    // never on failure. The gate is the policy's own count/advance outcome:
+    // discovery, fail, unknown and skipped never set either flag, while
+    // every counted session (structured, micro, strict-partial, review
+    // bite) advances at most one day via updateStreak's same-day guard.
+    if (decision.countSession || decision.advanceCurriculum) {
+        try {
+            g.updateStreak();
+        } catch (err) {
+            console.error('[sessionStepEffects] streak update failed:', err);
+        }
+    }
     try {
         g.markStepComplete('learn');
         g.markStepComplete('do');
