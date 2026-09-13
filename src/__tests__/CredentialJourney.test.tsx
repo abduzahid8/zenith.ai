@@ -811,7 +811,7 @@ describe('CredentialChallengeRunner (knowledge only)', () => {
         }
     });
 
-    test('migrations. no backend changes: nothing beyond 037', () => {
+    test('migrations. no backend changes: nothing beyond 038', () => {
         const fs = require('fs');
         const path = require('path');
         const dir = path.join(process.cwd(), 'supabase', 'migrations');
@@ -819,7 +819,7 @@ describe('CredentialChallengeRunner (knowledge only)', () => {
         expect(files.length).toBeGreaterThan(0);
         const beyond = files.filter(f => {
             const m = /^(\d+)_/.exec(f);
-            return m != null && Number(m[1]) > 37;
+            return m != null && Number(m[1]) > 38;
         });
         expect(beyond).toEqual([]);
     });

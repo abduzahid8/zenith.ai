@@ -4,6 +4,13 @@
  * Holds per-program enrollment state and recomputes progress/readiness from
  * the EXISTING engine data (tasks + sessions) via credentialService — the
  * chain stays live: every completed daily task moves certification progress.
+ *
+ * AUTHORITY RULE (pre-Slice-6 hardening): this store NEVER issues or
+ * verifies credentials. Authoritative issuance is the server RPC
+ * `issue_credential` (see services/trustApi.issueCredential); status reads
+ * are `get_credential_status`; public verification is
+ * `verifyCredentialPublic`. No function here may manufacture an object
+ * that looks like a server-issued credential.
  */
 
 import { create } from 'zustand';
@@ -12,7 +19,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     CertificationProgress,
     CredentialAttempt,
-    IssuedCredential,
     LearningEvidence,
     ReadinessBreakdown,
     RecoveryPlan,
@@ -28,7 +34,6 @@ import {
     buildEvidence,
     buildProgress,
     EngineTaskInput,
-    issueCredential,
     SessionInput,
     StoredAnswerInput,
     toTaskItems,
@@ -48,8 +53,6 @@ export interface ProgramState {
     projectSkillScores: Record<string, number> | null;
     attempts: CredentialAttempt[];
     remediationDone: Record<string, number>;
-    issued: IssuedCredential | null;
-    identityVerified: boolean;
 }
 
 const initialProgramState = (): ProgramState => ({
@@ -62,15 +65,11 @@ const initialProgramState = (): ProgramState => ({
     projectSkillScores: null,
     attempts: [],
     remediationDone: {},
-    issued: null,
-    identityVerified: false,
 });
 
 interface CredentialState {
     programs: Record<string, ProgramState>;
-    holderName: string;
 
-    setHolderName: (name: string) => void;
     enroll: (programSlug: string) => void;
     unenroll: (programSlug: string) => void;
     recordAssessmentAnswers: (programSlug: string, answers: StoredAnswerInput[]) => void;
@@ -78,7 +77,6 @@ interface CredentialState {
     startAttempt: (programSlug: string) => void;
     completeAttempt: (programSlug: string, score: number) => void;
     submitProject: (programSlug: string, score: number, skillScores: Record<string, number>) => void;
-    setIdentityVerified: (programSlug: string, verified: boolean) => void;
     resetProgram: (programSlug: string) => void;
 
     // Derived (computed from engine data on demand — not persisted)
@@ -101,14 +99,6 @@ interface CredentialState {
     ) => ReadinessBreakdown | null;
     getRetake: (programSlug: string, tasks: EngineTaskInput[], sessions: SessionInput[]) => RetakeDecision | null;
     getRecoveryPlan: (programSlug: string, tasks: EngineTaskInput[], sessions: SessionInput[]) => RecoveryPlan | null;
-    tryIssue: (
-        programSlug: string,
-        userId: string,
-        tasks: EngineTaskInput[],
-        sessions: SessionInput[],
-    ) => IssuedCredential | null;
-    verifyLocal: (credentialId: string) => IssuedCredential | null;
-    getPassport: () => IssuedCredential[];
     enrolledPrograms: () => string[];
 }
 
@@ -145,9 +135,6 @@ export const useCredentialStore = create<CredentialState>()(
     persist(
         (set, get) => ({
             programs: {},
-            holderName: '',
-
-            setHolderName: (name: string) => set({ holderName: name }),
 
             enroll: (programSlug: string) =>
                 set(state => {
@@ -255,14 +242,6 @@ export const useCredentialStore = create<CredentialState>()(
                     };
                 }),
 
-            setIdentityVerified: (programSlug: string, verified: boolean) =>
-                set(state => {
-                    const prev = programState(state, programSlug);
-                    return {
-                        programs: { ...state.programs, [programSlug]: { ...prev, identityVerified: verified } },
-                    };
-                }),
-
             resetProgram: (programSlug: string) =>
                 set(state => ({
                     programs: { ...state.programs, [programSlug]: initialProgramState() },
@@ -323,66 +302,6 @@ export const useCredentialStore = create<CredentialState>()(
                 return buildRecoveryPlan(program, progress);
             },
 
-            tryIssue: (programSlug, userId, tasks, sessions) => {
-                const program = getProgram(programSlug);
-                if (!program) return null;
-                const prev = programState(get(), programSlug);
-                if (!prev.enrolled || prev.issued) return prev.issued;
-                if (program.requiresIdentityVerification && !prev.identityVerified) return null;
-                const evidence = get().getEvidence(programSlug, tasks, sessions);
-                if (!evidence) return null;
-                const progress = buildProgress(
-                    program,
-                    evidence,
-                    prev.projectSkillScores,
-                    toTaskItems(program, tasks, anchorForProgram(prev)),
-                );
-                const issued = issueCredential(
-                    programSlug,
-                    userId,
-                    get().holderName || 'Zenyth Learner',
-                    {
-                        knowledge:
-                            evidence.assessmentAnswers.length > 0
-                                ? Math.round(
-                                      (evidence.assessmentAnswers.filter(a => a.correct).length /
-                                          evidence.assessmentAnswers.length) *
-                                          1000,
-                                  ) / 10
-                                : null,
-                        practical: evidence.practicalScore,
-                        finalAssessment: evidence.finalAssessmentScore,
-                        project: program.requiresProject ? evidence.projectScore : null,
-                    },
-                    progress,
-                    evidence,
-                );
-                if (issued) {
-                    set(state => ({
-                        programs: {
-                            ...state.programs,
-                            [programSlug]: { ...programState(state, programSlug), issued },
-                        },
-                    }));
-                }
-                return issued;
-            },
-
-            verifyLocal: (credentialId: string) => {
-                const normalized = credentialId.trim().toUpperCase();
-                const all = Object.values(get().programs)
-                    .map(p => p.issued)
-                    .filter((c): c is IssuedCredential => c !== null);
-                return all.find(c => c.credentialId.toUpperCase() === normalized) ?? null;
-            },
-
-            getPassport: () => {
-                const issued = Object.values(get().programs)
-                    .map(p => p.issued)
-                    .filter((c): c is IssuedCredential => c !== null);
-                return issued.sort((a, b) => (a.issuedAt < b.issuedAt ? 1 : -1));
-            },
-
             enrolledPrograms: () => {
                 const { programs } = get();
                 return CREDENTIAL_PROGRAMS.filter(p => programs[p.slug]?.enrolled).map(p => p.slug);
@@ -391,7 +310,23 @@ export const useCredentialStore = create<CredentialState>()(
         {
             name: 'credential-storage',
             storage: createJSONStorage(() => AsyncStorage),
-            partialize: state => ({ programs: state.programs, holderName: state.holderName }) as CredentialState,
+            // v2 quarantine: legacy local issuance keys (issued flags,
+            // identity flags, holder name) are dropped on rehydrate so a
+            // stale locally-minted "credential" can never be read back as
+            // truth. Server RPCs own issuance/verification.
+            version: 2,
+            migrate: persisted => {
+                const state = (persisted ?? {}) as Record<string, unknown>;
+                const programs = (state.programs ?? {}) as Record<string, Record<string, unknown>>;
+                const clean: Record<string, Record<string, unknown>> = {};
+                for (const [slug, prev] of Object.entries(programs)) {
+                    if (!prev || typeof prev !== 'object') continue;
+                    const { issued: _issued, identityVerified: _identity, ...rest } = prev;
+                    clean[slug] = rest;
+                }
+                return { programs: clean };
+            },
+            partialize: state => ({ programs: state.programs }) as CredentialState,
         },
     ),
 );

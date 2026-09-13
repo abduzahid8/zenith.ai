@@ -26,7 +26,6 @@ import {
     buildProgress,
     deterministicProjectScore,
     gradeAttempt,
-    issueCredential,
     lessonDayToSkillKey,
     toTaskItems,
 } from '../services/credentialService';
@@ -316,41 +315,28 @@ describe('assessment bank', () => {
     });
 });
 
-describe('issuance', () => {
-    it('issues only when bank-week graph and final score both pass', () => {
+describe('issuance gate math (display only — authority is server-side)', () => {
+    it('passes local gate math only when bank-week graph and final score both pass', () => {
         const tasks = weekTasks('reading');
         const evidence = buildEvidence(rdg, tasks, [], allCorrect('reading-mastery'), 88, 91, 86, {
             anchorDate: '2026-08-01',
         });
         const projectScores: Record<string, number> = Object.fromEntries(rdg.skills.map(s => [s.key, 86]));
         const progress = buildProgress(rdg, evidence, projectScores, toTaskItems(rdg, tasks, '2026-08-01'));
-        const issued = issueCredential(
-            'reading-mastery',
-            'user-123',
-            'John Smith',
-            { knowledge: 90, practical: 91, finalAssessment: 88, project: 86 },
-            progress,
-            evidence,
-            '2026-09-09T00:00:00.000Z',
-        );
-        expect(issued).not.toBeNull();
-        expect(issued!.credentialId).toMatch(/^ZNY-RDG-26-/);
-        expect(issued!.programVersion).toBe('1.0');
-        expect(issued!.status).toBe('active');
+        // Local math is DISPLAY ONLY: authoritative issuance is the server
+        // RPC `issue_credential` (trustApi). These assertions pin the local
+        // gate inputs, not an issued credential.
+        const breakdown = computeFinalScore(rdg, { knowledge: 90, practical: 91, finalAssessment: 88, project: 86 });
+        expect(breakdown.passed).toBe(true);
+        expect(progress.skillGraph.passed).toBe(true);
     });
 
-    it('refuses issuance when checks fail', () => {
+    it('fails local gate math when checks fail', () => {
         const evidence = buildEvidence(rdg, [], [], []);
         const progress = buildProgress(rdg, evidence);
-        const issued = issueCredential(
-            'reading-mastery',
-            'user-123',
-            'John Smith',
-            { knowledge: 40, practical: 40, finalAssessment: 40, project: 40 },
-            progress,
-            evidence,
-        );
-        expect(issued).toBeNull();
+        const breakdown = computeFinalScore(rdg, { knowledge: 40, practical: 40, finalAssessment: 40, project: 40 });
+        expect(breakdown.passed).toBe(false);
+        expect(progress.skillGraph.passed).toBe(false);
     });
 
     it('scores projects deterministically offline', () => {

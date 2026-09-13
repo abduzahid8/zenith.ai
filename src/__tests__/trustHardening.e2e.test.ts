@@ -64,9 +64,23 @@ beforeAll(async () => {
         `INSERT INTO trusted_validation_items
             (program_slug, program_version, hobby_id, curriculum_day, skill_key, lesson_id,
              content_version, status, payload, answer_key)
-         VALUES ('${TEST_PROGRAM}', '1.0', 'chess', 90, 'alpha', 'e2e-lesson', 'test-v1', 'active', '{}', '{"answer":"ok"}')
-         ON CONFLICT DO NOTHING`,
+          VALUES ('${TEST_PROGRAM}', '1.0', 'chess', 90, 'alpha', 'e2e-lesson', 'test-v1', 'active', '{}', '{"answer":"ok"}')
+          ON CONFLICT DO NOTHING`,
     );
+    // K/P banks for authoritative component flows (038: issuance requires
+    // reference-backed passes, so the harness proves through real RPCs).
+    for (const i of [1, 2]) {
+        await db.query(
+            `INSERT INTO knowledge_items (program_slug, program_version, skill_key, item_key, content_version, status, payload, answer_key)
+              VALUES ('${TEST_PROGRAM}', '1.0', 'alpha', 'hk-${i}', 'test-v1', 'active', '{}', '{"answer":"yes"}')
+              ON CONFLICT DO NOTHING`,
+        );
+        await db.query(
+            `INSERT INTO practical_items (program_slug, program_version, skill_key, item_key, content_version, status, payload, answer_key)
+              VALUES ('${TEST_PROGRAM}', '1.0', 'alpha', 'hp-${i}', 'test-v1', 'active', '{}', '{"answer":"done"}')
+              ON CONFLICT DO NOTHING`,
+        );
+    }
 });
 
 afterAll(async () => {
@@ -80,6 +94,10 @@ afterAll(async () => {
          (SELECT id FROM trusted_validation_items WHERE program_slug = '${TEST_PROGRAM}')`,
     );
     await db.query(`DELETE FROM trusted_validation_items WHERE program_slug = '${TEST_PROGRAM}'`);
+    await db.query(`DELETE FROM knowledge_attempts WHERE program_slug = '${TEST_PROGRAM}'`);
+    await db.query(`DELETE FROM knowledge_items WHERE program_slug = '${TEST_PROGRAM}'`);
+    await db.query(`DELETE FROM practical_attempts WHERE program_slug = '${TEST_PROGRAM}'`);
+    await db.query(`DELETE FROM practical_items WHERE program_slug = '${TEST_PROGRAM}'`);
     await db.query(`DELETE FROM project_certification_results WHERE program_slug = '${TEST_PROGRAM}'`);
     await db.query(`DELETE FROM credential_component_results WHERE program_slug = '${TEST_PROGRAM}'`);
     await db.query(`DELETE FROM user_credential_progress WHERE program_slug = '${TEST_PROGRAM}'`);
@@ -380,9 +398,10 @@ describe('real DB: server-scored validation flow', () => {
 
 /**
  * Migration 036 readiness: new Final attempts require a verified skill
- * plus live Knowledge/Practical passes. The harness banks no K/P items,
- * so those components are seeded directly (NULL references stay
- * authoritative under the 035 sticky rule); the skill pass is real.
+ * plus live Knowledge/Practical passes. Since 038, issuance additionally
+ * requires those components to be reference-backed (NULL references fail
+ * closed), so the harness proves K/P through the real server-scored RPCs;
+ * the skill pass is real too.
  */
 async function readyFinalAuth(uid: string): Promise<void> {
     const v = await asRole(db, 'authenticated', uid, () =>
@@ -391,11 +410,21 @@ async function readyFinalAuth(uid: string): Promise<void> {
     await asRole(db, 'authenticated', uid, () =>
         db.query('SELECT * FROM submit_trusted_validation($1, $2)', [v.attempt_id, { answer: 'ok' }]),
     );
-    await db.query(
-        `INSERT INTO credential_component_results (user_id, program_slug, program_version, component, score, passed, authority_source)
-         VALUES ($1, '${TEST_PROGRAM}', '1.0', 'knowledge', 85, TRUE, 'server_e2e'),
-                ($1, '${TEST_PROGRAM}', '1.0', 'practical', 88, TRUE, 'server_e2e')
-         ON CONFLICT DO NOTHING`, [uid],
+    const k = await asRole(db, 'authenticated', uid, () =>
+        db.query('SELECT * FROM start_knowledge_attempt($1)', [TEST_PROGRAM]).then(r => r.rows[0]),
+    );
+    const kAns: Record<string, string> = {};
+    for (const it of k.questions as { item_key: string }[]) kAns[it.item_key] = 'yes';
+    await asRole(db, 'authenticated', uid, () =>
+        db.query('SELECT * FROM submit_knowledge_attempt($1, $2)', [k.attempt_id, kAns]),
+    );
+    const p = await asRole(db, 'authenticated', uid, () =>
+        db.query('SELECT * FROM start_practical_attempt($1)', [TEST_PROGRAM]).then(r => r.rows[0]),
+    );
+    const pAns: Record<string, string> = {};
+    for (const it of p.tasks as { item_key: string }[]) pAns[it.item_key] = 'done';
+    await asRole(db, 'authenticated', uid, () =>
+        db.query('SELECT * FROM submit_practical_attempt($1, $2)', [p.attempt_id, pAns]),
     );
 }
 
@@ -537,18 +566,9 @@ describe('real DB: issuance gates + verification', () => {
         await createUser(db, uid);
         // Enroll + full components + one server proof per required skill (alpha).
         // Readiness (verified skill + live K/P) precedes the Final start.
-        const v = await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM start_trusted_validation($1, $2)', [TEST_PROGRAM, 'alpha']).then(r => r.rows[0]),
-        );
-        await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM submit_trusted_validation($1, $2)', [v.attempt_id, { answer: 'ok' }]),
-        );
-        await db.query(
-            `INSERT INTO credential_component_results (user_id, program_slug, program_version, component, score, passed, authority_source)
-             VALUES ($1, '${TEST_PROGRAM}', '1.0', 'knowledge', 85, TRUE, 'server_e2e'),
-                    ($1, '${TEST_PROGRAM}', '1.0', 'practical', 88, TRUE, 'server_e2e')
-             ON CONFLICT DO NOTHING`, [uid],
-        );
+        // K/P passes are reference-backed through the real server-scored
+        // RPCs (038 backstop: NULL references fail closed).
+        await readyFinalAuth(uid);
         const started = await asRole(db, 'authenticated', uid, () =>
             db.query('SELECT * FROM start_assessment($1)', [TEST_PROGRAM]).then(r => r.rows[0]),
         );
@@ -583,19 +603,9 @@ describe('real DB: issuance gates + verification', () => {
     test('verification shape is safe; revoked stays revoked', async () => {
         const uid = newUid();
         await createUser(db, uid);
-        // Readiness precedes the Final start (verified skill + live K/P).
-        const v = await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM start_trusted_validation($1, $2)', [TEST_PROGRAM, 'alpha']).then(r => r.rows[0]),
-        );
-        await asRole(db, 'authenticated', uid, () =>
-            db.query('SELECT * FROM submit_trusted_validation($1, $2)', [v.attempt_id, { answer: 'ok' }]),
-        );
-        await db.query(
-            `INSERT INTO credential_component_results (user_id, program_slug, program_version, component, score, passed, authority_source)
-             VALUES ($1, '${TEST_PROGRAM}', '1.0', 'knowledge', 85, TRUE, 'server_e2e'),
-                    ($1, '${TEST_PROGRAM}', '1.0', 'practical', 88, TRUE, 'server_e2e')
-             ON CONFLICT DO NOTHING`, [uid],
-        );
+        // Readiness precedes the Final start (verified skill + live K/P,
+        // reference-backed per the 038 backstop).
+        await readyFinalAuth(uid);
         const started = await asRole(db, 'authenticated', uid, () =>
             db.query('SELECT * FROM start_assessment($1)', [TEST_PROGRAM]).then(r => r.rows[0]),
         );

@@ -667,7 +667,7 @@ describe('journey UX: refresh, Final teaser, single CTA', () => {
         }
     });
 
-    test('29. no migrations beyond 037 / backend RPC changes', () => {
+    test('29. no migrations beyond 038 / backend RPC changes', () => {
         const fs = require('fs');
         const path = require('path');
         const dir = path.join(process.cwd(), 'supabase', 'migrations');
@@ -675,7 +675,7 @@ describe('journey UX: refresh, Final teaser, single CTA', () => {
         expect(files.length).toBeGreaterThan(0);
         const beyond = files.filter(f => {
             const m = /^(\d+)_/.exec(f);
-            return m != null && Number(m[1]) > 37;
+            return m != null && Number(m[1]) > 38;
         });
         expect(beyond).toEqual([]);
         // Client uses only the pre-existing practical RPCs (no new RPCs).

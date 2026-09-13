@@ -16,10 +16,10 @@ import { canonicalAnchorForEnrollment } from '../domain/credentials/anchor';
 import {
     buildEvidence,
     buildProgress,
-    issueCredential,
     taskSkillKey,
     toTaskItems,
 } from '../services/credentialService';
+import { computeFinalScore } from '../domain/credentials/scoring';
 import {
     buildSessionBlueprint,
     normalizeKind,
@@ -143,7 +143,7 @@ describe('A — today-only data cannot redefine the certificate', () => {
 });
 
 describe('gates unchanged', () => {
-    it('100% tasks + failed checks => not certified, no issuance', () => {
+    it('100% tasks + failed checks => not certified, local gate math fails', () => {
         const tasks = historyAcrossSkills('reading');
         const wrong = rdg.skills.flatMap(s =>
             Array.from({ length: 4 }, () => ({ skillKey: s.key, correct: false, kind: 'knowledge' as const })),
@@ -152,12 +152,10 @@ describe('gates unchanged', () => {
         const progress = buildProgress(rdg, evidence, null, toTaskItems(rdg, tasks, '2026-08-01'));
         expect(progress.learningCompletion).toBe(100);
         expect(progress.skillGraph.passed).toBe(false);
-        const issued = issueCredential(
-            'reading-mastery', 'user-123', 'Learner',
-            { knowledge: 20, practical: 90, finalAssessment: 60, project: null },
-            progress, evidence,
-        );
-        expect(issued).toBeNull();
+        // Local gate math is display-only; authoritative issuance is the
+        // server RPC. A failed graph/scores must fail local math too.
+        const breakdown = computeFinalScore(rdg, { knowledge: 20, practical: 90, finalAssessment: 60, project: null });
+        expect(breakdown.passed).toBe(false);
     });
 });
 

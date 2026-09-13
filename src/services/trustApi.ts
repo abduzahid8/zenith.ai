@@ -345,6 +345,51 @@ export const issueCredential = (programSlug: string, holderName: string) =>
         return { credentialId: row.credential_id, created: row.created };
     });
 
+export type CredentialClaimState =
+    | 'locked'
+    | 'ready_to_issue'
+    | 'issued'
+    | 'revoked'
+    | 'expired'
+    | 'temporarily_unavailable';
+
+export interface CredentialClaimStatus {
+    state: CredentialClaimState;
+    credentialId: string | null;
+    score: number | null;
+    grade: string | null;
+    issuedAt: string | null;
+    expiresAt: string | null;
+}
+
+/**
+ * Canonical Claim status (migration 038 `get_credential_status`).
+ *
+ * The ONLY server-authoritative answer to "can this user claim now, and
+ * what do they already hold". Evaluated by the SAME SQL authority as
+ * `issue_credential` (shared `assess_credential_eligibility` helper) —
+ * never from local skills/components math. Future Claim UI calls this to
+ * decide visibility, then `issueCredential` on tap; both agree by
+ * construction.
+ */
+export const getCredentialStatus = (programSlug: string) =>
+    rpc<CredentialClaimStatus>('get_credential_status', {
+        p_program_slug: programSlug,
+    }).then(r => {
+        const row = r as unknown as {
+            state: CredentialClaimState; credential_id: string | null; score: number | null;
+            grade: string | null; issued_at: string | null; expires_at: string | null;
+        };
+        return {
+            state: row.state,
+            credentialId: row.credential_id,
+            score: row.score == null ? null : Number(row.score),
+            grade: row.grade,
+            issuedAt: row.issued_at,
+            expiresAt: row.expires_at,
+        };
+    });
+
 export interface EnrollmentResult {
     enrolled: boolean;
     alreadyEnrolled: boolean;

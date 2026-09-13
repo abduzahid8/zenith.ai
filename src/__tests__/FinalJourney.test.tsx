@@ -905,7 +905,7 @@ describe('final journey UX: refresh, Project teaser, single CTA', () => {
         expect(files.length).toBeGreaterThan(0);
         const beyond = files.filter(f => {
             const m = /^(\d+)_/.exec(f);
-            return m != null && Number(m[1]) > 37;
+            return m != null && Number(m[1]) > 38;
         });
         expect(beyond).toEqual([]);
         const api: string = fs.readFileSync(path.join(process.cwd(), 'src/services/trustApi.ts'), 'utf8');

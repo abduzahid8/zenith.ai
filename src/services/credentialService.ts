@@ -7,7 +7,14 @@
  * - gradeAttempt(): scores prepared questions → per-skill answers.
  * - evaluateProject(): strict-rubric project scoring — deterministic checks
  *   first, AI (Gemini via worker proxy) second, never AI alone (§9).
- * - issue(): builds the official IssuedCredential record (§11).
+ *
+ * AUTHORITY RULE (pre-Slice-6 hardening): this service NEVER issues
+ * credentials. There is intentionally no issueCredential here — the ONLY
+ * authoritative issuance path is the server RPC `issue_credential`
+ * (see services/trustApi.issueCredential), gated by the SQL authority in
+ * supabase/migrations/038. Local score math (computeFinalScore in
+ * domain/credentials/scoring) remains for DISPLAY ONLY and must never be
+ * presented as an issued credential.
  *
  * All functions are pure except evaluateProject (network) — easy to test.
  */
@@ -17,22 +24,15 @@ import {
     CertificationProgress,
     CredentialProgram,
     EnrollmentStatus,
-    IssuedCredential,
     LearningEvidence,
 } from '../domain/credentials/types';
-import {
-    buildCredentialId,
-    computeFinalScore,
-    FinalScoreInput,
-    verificationUrlFor,
-} from '../domain/credentials/scoring';
+import { getProgramForHobby } from '../domain/credentials/catalog';
 import {
     computeLearningCompletion,
     computeSkillGraph,
     curriculumDayForDate,
     TaskEvidenceInput,
 } from '../domain/credentials/skillGraph';
-import { getProgram, getProgramForHobby } from '../domain/credentials/catalog';
 import { PreparedQuestion, scoreAnswer } from '../data/assessmentBank';
 import { aiService } from './ai';
 
@@ -371,45 +371,11 @@ export async function evaluateProject(
 }
 
 // ---------------------------------------------------------------------------
-// Issuance (§11)
+// Issuance (§11) — REMOVED (pre-Slice-6 hardening).
+//
+// The legacy local issueCredential() lived here. It is intentionally gone:
+// no client-side function may manufacture an "issued credential". The ONLY
+// authoritative issuance path is the server RPC `issue_credential` via
+// services/trustApi.issueCredential. Local ZNY-* ids never verify against
+// verify_credential()/verifyCredentialPublic().
 // ---------------------------------------------------------------------------
-
-export function issueCredential(
-    programSlug: string,
-    userId: string,
-    holderName: string,
-    finalInput: FinalScoreInput,
-    progress: CertificationProgress,
-    evidence: LearningEvidence,
-    issuedAt: string = new Date().toISOString(),
-): IssuedCredential | null {
-    const program = getProgram(programSlug);
-    if (!program) return null;
-    const breakdown = computeFinalScore(program, finalInput);
-    if (!breakdown.passed || !progress.skillGraph.passed) return null;
-
-    const credentialId = buildCredentialId(program.code, userId, issuedAt);
-    return {
-        credentialId,
-        programSlug: program.slug,
-        programTitle: program.title,
-        programVersion: program.version,
-        level: program.level,
-        holderName,
-        userId,
-        finalScore: breakdown.total,
-        grade: breakdown.grade,
-        skills: progress.skillGraph.skills.map(s => ({ key: s.skillKey, name: s.name, score: s.score })),
-        issuedAt,
-        expiresAt: null,
-        status: 'active',
-        verificationUrl: verificationUrlFor(credentialId),
-        evidence: {
-            learningHours: Math.round((evidence.practiceMinutes / 60) * 10) / 10,
-            tasksCompleted: evidence.completedTasks,
-            assessmentsTaken: evidence.assessmentAnswers.length,
-            practicalAssignments: evidence.practicalScore !== null ? 1 : 0,
-            projectsCompleted: evidence.projectScore !== null ? 1 : 0,
-        },
-    };
-}
