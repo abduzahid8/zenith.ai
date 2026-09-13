@@ -259,7 +259,11 @@ export const CredentialChallengeRunner: React.FC<CredentialChallengeRunnerProps>
     const [cooldownUntil, setCooldownUntil] = useState<string>('');
     const [remediationKeys, setRemediationKeys] = useState<string[]>([]);
     const mounted = useRef(true);
-    const reconciledRef = useRef(false);
+    // Timer-zero auto-reconcile fires at most ONCE per (attemptId,
+    // deadline) per runner session. A same-identity resume must not
+    // re-arm it (client/server clock skew would otherwise RPC-storm);
+    // a genuinely new identity gets its own single reconciliation.
+    const reconciledKeyRef = useRef<string | null>(null);
 
     useEffect(() => {
         mounted.current = true;
@@ -291,7 +295,8 @@ export const CredentialChallengeRunner: React.FC<CredentialChallengeRunnerProps>
             setQuestions([]);
             setTasks([]);
             setDeadline(started.deadline);
-            reconciledRef.current = false;
+            // Deliberately no reconcile re-arm here: the key stays recorded
+            // for a same-identity resume (see the timer effect).
             if (!opts?.keepAnswers) {
                 setAnswers({});
                 setIndex(0);
@@ -349,7 +354,7 @@ export const CredentialChallengeRunner: React.FC<CredentialChallengeRunnerProps>
         setDeadline(null);
         setCooldownUntil('');
         setRemediationKeys([]);
-        reconciledRef.current = false;
+        reconciledKeyRef.current = null;
         try {
             if (mode === 'final') {
                 const started = await startAssessment(programSlug);
@@ -411,15 +416,19 @@ export const CredentialChallengeRunner: React.FC<CredentialChallengeRunnerProps>
         return () => clearInterval(timer);
     }, [visible, mode, deadline, phase]);
 
-    // Countdown zero reconciles with the server exactly once: the server
-    // finalizes expiry (or applies rotation authority). Nothing is marked
-    // locally and no second attempt is minted client-side.
+    // Countdown zero reconciles with the server at most ONCE per
+    // (attemptId, deadline): the server finalizes expiry (or applies
+    // rotation authority). Nothing is marked locally and no second attempt
+    // is minted client-side. A same-identity resume keeps rendering with
+    // the timer at 0; only a genuinely new identity re-arms.
     useEffect(() => {
         if (!visible || mode !== 'final' || deadline == null) return;
         if (phase !== 'answering' && phase !== 'submitting') return;
         const remaining = remainingSeconds(deadline, nowMs);
-        if (remaining !== 0 || reconciledRef.current) return;
-        reconciledRef.current = true;
+        if (remaining !== 0) return;
+        const key = `${attemptId ?? ''}|${deadline}`;
+        if (reconciledKeyRef.current === key) return;
+        reconciledKeyRef.current = key;
         (async () => {
             try {
                 const started = await startAssessment(programSlug);
@@ -431,7 +440,7 @@ export const CredentialChallengeRunner: React.FC<CredentialChallengeRunnerProps>
             }
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [nowMs, deadline, phase, visible, mode, programSlug]);
+    }, [nowMs, deadline, phase, visible, mode, programSlug, attemptId]);
 
     const submit = useCallback(async () => {
         if (!attemptId || phase === 'submitting') return;

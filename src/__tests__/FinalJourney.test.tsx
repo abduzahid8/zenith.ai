@@ -463,8 +463,9 @@ describe('final runner: server-deadline timer', () => {
         const screen = await render(<CredentialChallengeRunner {...baseProps} />);
         // Initial start + exactly one auto-reconcile.
         await waitFor(() => expect(mockStartFinal.mock.calls.length).toBe(2));
-        // Several client timer ticks pass: no further automatic calls.
-        await new Promise(resolve => setTimeout(resolve, 2600));
+        // At least 3 client timer ticks pass: no further automatic calls.
+        // (Real timers: the 1s countdown interval must fire repeatedly.)
+        await new Promise(resolve => setTimeout(resolve, 3200));
         expect(mockStartFinal.mock.calls.length).toBe(2);
         // No local failure invented; the attempt keeps rendering.
         expect(await screen.findByText('Final Q1?')).toBeTruthy();
@@ -479,6 +480,36 @@ describe('final runner: server-deadline timer', () => {
         await fireEvent.press(screen.getByText('Submit Final Assessment'));
         expect(mockSubmitFinal).toHaveBeenCalledWith('att-f1', { fq1: 'A1', fq2: 'A2' });
         expect(await screen.findByText('Final Assessment passed')).toBeTruthy();
+    });
+
+    test('timer skew: different identity gets its own one-time reconcile', async () => {
+        // Reconcile #1 returns a DIFFERENT attempt + deadline (also already
+        // past on the client clock): the new identity may reconcile once,
+        // then expiry resolves it.
+        const pastA = new Date(Date.now() - 5000).toISOString();
+        const pastB = new Date(Date.now() - 3000).toISOString();
+        mockStartFinal
+            .mockResolvedValueOnce(finalStart({ attemptId: 'att-a', deadline: pastA }))
+            .mockResolvedValueOnce(
+                finalStart({ attemptId: 'att-b', deadline: pastB, retakeReason: 'active_attempt' }),
+            )
+            .mockResolvedValue({
+                attemptId: 'att-b',
+                attemptNumber: 2,
+                questionSetVersion: 'v2',
+                timeLimitMinutes: 30,
+                questions: [],
+                deadline: pastB,
+                retakeReason: 'expired_finalized',
+            });
+        const screen = await render(<CredentialChallengeRunner {...baseProps} />);
+        // Initial start + reconcile(att-A) + reconcile(att-B) = 3 total.
+        await waitFor(() => expect(mockStartFinal.mock.calls.length).toBe(3));
+        expect(await screen.findByText('Time expired')).toBeTruthy();
+        // Settled: no fourth call across further ticks.
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        expect(mockStartFinal.mock.calls.length).toBe(3);
+        expect(mockSubmitFinal).not.toHaveBeenCalled();
     });
 });
 
