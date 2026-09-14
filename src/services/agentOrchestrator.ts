@@ -1,5 +1,6 @@
 import { GoalDefinition, GoalProgress, DailyGoalContent, StepInstruction, BuiltAsset, DailyPlan } from '../types/goals';
 import { computeDailyFocus } from './dailyFocusEngine';
+import { getHandler } from './goalHandlers';
 import aiService from './ai';
 
 // ───── Step generation ─────
@@ -38,7 +39,7 @@ function generateSteps(
   } else {
     steps.push({
       step: 2, type: 'practice', assetRefs: [],
-      title: `${Math.round((progress.currentValue / Math.max(1, goal.target)) * 100)}% to goal — keep going`,
+      title: `${getHandler(goal.category).computeProgress(goal, progress).percentComplete}% to goal — keep going`,
       description: `Current: ${progress.currentValue} / ${goal.target} ${goal.unitLabel || 'units'}`,
       duration: '10 min',
     });
